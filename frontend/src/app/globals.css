@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * Tokens do design system do projeto (ver skill design-system) - paleta
+ * fixa, sem alternância claro/escuro (fora do escopo da skill hoje, por
+ * isso sem @media prefers-color-scheme aqui, diferente do template padrão
+ * do create-next-app).
+ */
+@theme {
+  --color-background: #f4f4f2;
+  --color-surface: #ffffff;
+  --color-ink: #0a0a0a;
+  --color-muted: #8c8c8c;
+  --color-primary: #4640de;
+  --color-primary-light: #c7cbfa;
+
+  --radius-card: 1.5rem;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-ink);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}

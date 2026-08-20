@@ -1,0 +1,322 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SyncLogStatus {
+  EM_ANDAMENTO
+  SUCESSO
+  ERRO
+
+  @@map("sync_log_status")
+}
+
+model SyncEntity {
+  id                  String    @id @default(uuid())
+  nome                String    @unique
+  ativo               Boolean   @default(true)
+  // Inicio da janela [ultimaSincronizacao, agora] da proxima execucao -
+  // gravado pelo SyncService so quando a busca no ERP (strategy.fetch)
+  // completa sem erro, mesmo que registros individuais tenham falhado
+  // depois (ver SyncService.executar).
+  ultimaSincronizacao DateTime? @map("ultima_sincronizacao")
+  criadoEm            DateTime  @default(now()) @map("criado_em")
+  atualizadoEm        DateTime  @updatedAt @map("atualizado_em")
+
+  logs SyncLog[]
+
+  @@map("sync_entities")
+}
+
+model SyncLog {
+  id                   String        @id @default(uuid())
+  syncEntityId         String        @map("sync_entity_id")
+  status               SyncLogStatus @default(EM_ANDAMENTO)
+  iniciadoEm           DateTime      @default(now()) @map("iniciado_em")
+  finalizadoEm         DateTime?     @map("finalizado_em")
+  registrosProcessados Int           @default(0) @map("registros_processados")
+  registrosComErro     Int           @default(0) @map("registros_com_erro")
+  erro                 Json?
+  // Avisos nao-fatais (ex: suspeita de truncamento silencioso numa
+  // sub-janela de paginacao - ver skill wk-radar-client, secao
+  // "Paginacao"). Lista de strings; null quando nao ha nenhum.
+  avisos               Json?
+
+  syncEntity SyncEntity @relation(fields: [syncEntityId], references: [id])
+
+  @@index([syncEntityId])
+  @@map("sync_logs")
+}
+
+// Sincronizado do WK Radar (GET /empresarial/v1/cliente) - so leitura, ver
+// skill wk-radar-client. codigoIntegrador existe desde ja para quando
+// houver escrita de volta no ERP (fora de escopo nesta OS).
+model Cliente {
+  id               String   @id @default(uuid())
+  idExternoErp     String   @unique @map("id_externo_erp")
+  codigoIntegrador String?  @map("codigo_integrador")
+  cpfCnpj          String?  @map("cpf_cnpj")
+  razaoSocial      String?  @map("razao_social")
+  nomeFantasia     String?  @map("nome_fantasia")
+  inativo          Boolean  @default(false)
+  // Enderecos nao tem id/codigoIntegrador proprio no WK Radar (ao contrario
+  // de contatos) - sem identidade propria pra preservar, JSONB e suficiente.
+  enderecos        Json     @default("[]")
+  // true quando esta linha foi criada como stub por PedidoSyncStrategy (OS
+  // 07, pedido referenciando um cliente ainda nao sincronizado) - clienteSync
+  // sempre grava false ao completar os dados de verdade, seja criando ou
+  // atualizando.
+  incompleto       Boolean  @default(false)
+  sincronizadoEm   DateTime @map("sincronizado_em")
+
+  contatos ContatoCliente[]
+  pedidos  Pedido[]
+
+  @@map("clientes")
+}
+
+// Contatos tem identidade propria no WK Radar (id + codigoIntegrador
+// proprios), por isso viram tabela relacionada em vez de ficarem
+// embutidos no JSON do cliente (decisao desta OS, ver README do sync).
+model ContatoCliente {
+  id               String   @id @default(uuid())
+  idExternoErp     String   @unique @map("id_externo_erp")
+  codigoIntegrador String?  @map("codigo_integrador")
+  clienteId        String   @map("cliente_id")
+  nome             String?
+  email            String?
+  telefoneDdd      String?  @map("telefone_ddd")
+  telefoneNumero   String?  @map("telefone_numero")
+  funcao           String?
+  sincronizadoEm   DateTime @map("sincronizado_em")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@map("contatos_clientes")
+}
+
+enum TipoProduto {
+  INVALIDO
+  CLASSE
+  PROPRIO
+  TERCEIROS
+  KIT
+
+  @@map("tipo_produto")
+}
+
+// Sincronizado do WK Radar (GET /empresarial/v1/produto) - so leitura, ver
+// skill wk-radar-client. kit[] e blocos fiscais extensos (ipi,
+// aliquotasICMS, produtoPISCOFINS) ficam fora por enquanto (OS 06) - so
+// mapear se/quando o sistema precisar exibir isso.
+//
+// Decisao de grade (OS 06): idGrade1/2/3 (dimensoes, ex: cor/tamanho) e
+// referenciasGrade[] (combinacoes especificas) NAO tem id/codigoIntegrador
+// proprio no WK Radar - igual a "enderecos" em Cliente, sem identidade
+// propria pra preservar. Por isso cada combinacao de grade NAO vira linha
+// propria; fica embutida como JSONB no produto base. A chave de upsert
+// continua sendo so id_externo_erp (id do produto base no WK Radar), sem
+// incluir niveis de grade.
+model Produto {
+  id               String       @id @default(uuid())
+  idExternoErp     String       @unique @map("id_externo_erp")
+  codigoIntegrador String?      @map("codigo_integrador")
+  codigo           String?
+  nome             String?
+  descricao        String?
+  tipo             TipoProduto?
+  inativo          Boolean      @default(false)
+  precoVenda       Decimal?     @map("preco_venda") @db.Decimal(18, 6)
+  gtin             String?
+  idGrade1         String?      @map("id_grade_1")
+  idGrade2         String?      @map("id_grade_2")
+  idGrade3         String?      @map("id_grade_3")
+  referenciasGrade Json         @default("[]") @map("referencias_grade")
+  // true quando esta linha foi criada como stub por PedidoSyncStrategy (OS
+  // 07, item de pedido referenciando um produto ainda nao sincronizado) -
+  // produtoSync sempre grava false ao completar os dados de verdade.
+  incompleto       Boolean      @default(false)
+  sincronizadoEm   DateTime     @map("sincronizado_em")
+
+  itensPedido PedidoItem[]
+
+  @@map("produtos")
+}
+
+enum TipoSituacaoPedido {
+  EM_ANALISE
+  BLOQUEADO
+  PENDENTE
+  CANCELADO
+  PARCIALMENTE_FATURADO
+  FATURADO
+  PARCIALMENTE_ATENDIDO
+  ATENDIDO
+
+  @@map("tipo_situacao_pedido")
+}
+
+enum SituacaoItemPedido {
+  NENHUM
+  CANCELADO
+  FATURADO
+  PARCIALMENTE_FATURADO
+  ATENDIDO
+  PARCIALMENTE_ATENDIDO
+  PENDENTE
+
+  @@map("situacao_item_pedido")
+}
+
+// Sincronizado do WK Radar (GET /comercial/v1/pedido) - so leitura, ver
+// skill wk-radar-client. Blocos extensos de tributos/rateios/liberacoes de
+// estoque por item ficam fora (OS 07) - so mapear se/quando o sistema
+// precisar exibir isso, mesmo criterio ja aplicado a produto.
+//
+// Referencia a cliente (OS 07): idCliente e opcional (nullable) porque um
+// pedido pode chegar antes do cliente correspondente ter sido sincronizado
+// (ordem de sync nao e garantida entre entidades independentes, so a ordem
+// de dependencia LOGICA foi pensada nas OSs - ver dependencias da OS 07).
+// Em vez de pular o pedido (o que o perderia permanentemente: o cursor de
+// sync avanca mesmo com erro pontual - ver SyncService - entao um pedido
+// pulado nunca mais apareceria numa janela futura), PedidoSyncStrategy cria
+// um Cliente STUB (incompleto=true) com so o id_externo_erp, satisfazendo a
+// FK imediatamente. Quando cliente.sync.ts sincronizar esse cliente de
+// verdade (em qualquer execucao futura), o upsert por id_externo_erp
+// completa os dados e zera incompleto - sem exigir nenhuma acao retroativa
+// no pedido. Mesma logica pra ProdutoSyncStrategy resolvendo produto: em
+// PedidoItem.produtoId.
+model Pedido {
+  id                      String              @id @default(uuid())
+  idExternoErp            String              @unique @map("id_externo_erp")
+  codigoIntegrador        String?             @map("codigo_integrador")
+  numero                  String?
+  situacao                TipoSituacaoPedido?
+  dataHoraUltimaAlteracao DateTime?           @map("data_hora_ultima_alteracao")
+  clienteId               String?             @map("cliente_id")
+  valorTotal              Decimal?            @map("valor_total") @db.Decimal(18, 6)
+  // true quando esta linha foi criada como stub por NotaFiscalSyncStrategy
+  // (OS 09, nota fiscal referenciando um pedido ainda nao sincronizado) -
+  // pedidoSync sempre grava false ao completar os dados de verdade. Mesmo
+  // padrao ja usado em Cliente/Produto (OS 07).
+  incompleto              Boolean             @default(false)
+  sincronizadoEm          DateTime            @map("sincronizado_em")
+
+  cliente      Cliente?           @relation(fields: [clienteId], references: [id])
+  itens        PedidoItem[]
+  notasFiscais NotaFiscalPedido[]
+
+  @@index([clienteId])
+  @@map("pedidos")
+}
+
+// Itens de pedido NAO tem id/codigoIntegrador proprio no WK Radar (so
+// `numero`, a posicao do item dentro do pedido) - diferente de contatos,
+// sem identidade externa pra usar como chave de upsert. A chave de upsert e
+// o par (pedidoId, numero).
+//
+// Referencia a produto (OS 07, ver nota da skill wk-radar-client sobre
+// "Sistema de grade"): produtoServico do WK Radar identifica o item pela
+// combinacao id + idItemGrade1/2/3, nao so pelo id do produto base. Como a
+// OS 06 decidiu nao criar uma linha por combinacao de grade (referenciasGrade
+// fica embutido como JSONB em Produto), o FK produtoId aponta pro produto
+// BASE (Produto.idExternoErp = produtoServico.id) e idItemGrade1/2/3 ficam
+// gravados aqui so como colunas descritivas (qual combinacao foi pedida),
+// nao como parte da chave de relacionamento.
+model PedidoItem {
+  id              String              @id @default(uuid())
+  pedidoId        String              @map("pedido_id")
+  numero          Int
+  produtoId       String?             @map("produto_id")
+  idItemGrade1    String?             @map("id_item_grade_1")
+  idItemGrade2    String?             @map("id_item_grade_2")
+  idItemGrade3    String?             @map("id_item_grade_3")
+  quantidadeVenda Decimal?            @map("quantidade_venda") @db.Decimal(18, 6)
+  valorUnitario   Decimal?            @map("valor_unitario") @db.Decimal(18, 6)
+  valorTotal      Decimal?            @map("valor_total") @db.Decimal(18, 6)
+  situacao        SituacaoItemPedido?
+  sincronizadoEm  DateTime            @map("sincronizado_em")
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto Produto? @relation(fields: [produtoId], references: [id])
+
+  @@unique([pedidoId, numero])
+  @@index([produtoId])
+  @@map("pedido_itens")
+}
+
+enum TipoNotaFiscal {
+  ENTRADA
+  SAIDA
+
+  @@map("tipo_nota_fiscal")
+}
+
+enum StatusNfe {
+  ERRO_VALIDACAO
+  AGUARDANDO_AUTORIZACAO
+  AUTORIZADA
+  DENEGADA
+  REJEITADA
+  CANCELADA
+  INUTILIZADA
+
+  @@map("status_nfe")
+}
+
+// Sincronizado do WK Radar (GET /comercial/v1/nota-fiscal) - so leitura, ver
+// skill wk-radar-client. Blocos fiscais extensos por item (tributos
+// detalhados) e itens[] ficam fora (OS 09) - so mapear se/quando o sistema
+// precisar exibir isso, mesmo criterio ja aplicado a produto/pedido.
+//
+// ATENCAO - esta strategy e estruturalmente diferente das outras (OS 09):
+// nota-fiscal so tem DataEmissaoInicial/Final (data de EMISSAO, nao de
+// ALTERACAO) - nao ha como pedir "o que mudou desde X" (ver skill
+// wk-radar-client, secao "Nota Fiscal"). Por isso NotaFiscalSyncStrategy
+// IGNORA o cursor incremental (SyncEntity.ultimaSincronizacao) que as
+// outras strategies usam, e sempre reprocessa os ultimos 60 dias inteiros
+// a cada execucao (uma vez por dia, de madrugada - ver SyncScheduler). Isso
+// e uma troca deliberada: uma nota que mudar (ex: cancelamento) depois
+// desses 60 dias nao e capturada - decisao aceita, nao um bug.
+model NotaFiscal {
+  id                   String          @id @default(uuid())
+  idExternoErp         String          @unique @map("id_externo_erp")
+  codigoIntegrador     String?         @map("codigo_integrador")
+  // Chave de acesso da NF-e/NFS-e - idempotencia adicional, alem do
+  // id_externo_erp (ver criterios de aceite da OS 09).
+  chave                String?         @unique
+  tipo                 TipoNotaFiscal?
+  numero               Int?
+  serie                String?
+  dataEmissao          DateTime?       @map("data_emissao")
+  statusNfe            StatusNfe?      @map("status_nfe")
+  nfseGerada           Boolean?        @map("nfse_gerada")
+  nfseCancelada        Boolean?        @map("nfse_cancelada")
+  valorTotalNotaFiscal Decimal?        @map("valor_total_nota_fiscal") @db.Decimal(18, 6)
+  sincronizadoEm       DateTime        @map("sincronizado_em")
+
+  pedidos NotaFiscalPedido[]
+
+  @@map("notas_fiscais")
+}
+
+// Tabela de ligacao N:N entre nota fiscal e pedido - uma nota pode
+// referenciar mais de um pedido (campo `pedidos[]` do WK Radar). Sem dados
+// proprios alem das duas FKs, so a associacao em si.
+model NotaFiscalPedido {
+  notaFiscalId String @map("nota_fiscal_id")
+  pedidoId     String @map("pedido_id")
+
+  notaFiscal NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  pedido     Pedido     @relation(fields: [pedidoId], references: [id])
+
+  @@id([notaFiscalId, pedidoId])
+  @@index([pedidoId])
+  @@map("nota_fiscal_pedidos")
+}

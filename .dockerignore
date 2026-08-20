@@ -1,0 +1,11 @@
+backend/node_modules
+frontend/node_modules
+backend/dist
+backend/generated
+backend/coverage
+backend/.env
+backend/.env.local
+frontend/.next
+frontend/.env.local
+**/*.log
+.git

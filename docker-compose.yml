@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: copperline
+    volumes:
+      - copperline-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      # A imagem (Dockerfile) fixa NODE_ENV=production, o que liga
+      # cookie.secure=true na sessao (ver src/main.ts) - correto quando ha
+      # TLS de verdade na frente, mas essa stack local nao tem (tudo em
+      # http://localhost simples). Com secure:true sobre http puro, o
+      # navegador/curl recusa guardar o cookie e o login nunca completa
+      # (state sempre "expira"). Sobrescrito aqui so pra esta verificacao
+      # local - numa implantacao real atras de TLS, nao definir isso.
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copperline?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3000
+      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_DOMAIN:
+      # IDP_URL (servidor-a-servidor) usa host.docker.internal pra alcancar
+      # o IdP rodando fora dessa stack, exposto na porta 3000 do host.
+      # IDP_AUTHORIZE_URL/IDP_REDIRECT_URI (navegador) usam localhost, que e
+      # o que o navegador do usuario realmente enxerga.
+      IDP_URL: http://host.docker.internal:3000
+      IDP_AUTHORIZE_URL: http://localhost:3000
+      IDP_CLIENT_ID: ${IDP_CLIENT_ID}
+      IDP_CLIENT_SECRET: ${IDP_CLIENT_SECRET}
+      IDP_REDIRECT_URI: http://localhost:3010/auth/callback
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      WK_RADAR_API_URL: ${WK_RADAR_API_URL}
+      WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}
+      WK_RADAR_USUARIO: ${WK_RADAR_USUARIO}
+      WK_RADAR_SENHA: ${WK_RADAR_SENHA}
+      WK_RADAR_ID_INTEGRADOR: ${WK_RADAR_ID_INTEGRADOR}
+      WK_RADAR_REQUEST_TIMEOUT_MS: 30000
+      WK_RADAR_JANELA_CLIENTE_MS: 86400000
+      WK_RADAR_JANELA_PRODUTO_MS: 21600000
+      WK_RADAR_MIN_REQUEST_INTERVAL_MS: 300
+      WK_RADAR_JANELA_PEDIDO_MS: 7200000
+      WK_RADAR_JANELA_NOTA_FISCAL_MS: 86400000
+      WK_RADAR_CLIENTE_DATA_INICIO_CARGA: ${WK_RADAR_CLIENTE_DATA_INICIO_CARGA}
+      WK_RADAR_PRODUTO_DATA_INICIO_CARGA: ${WK_RADAR_PRODUTO_DATA_INICIO_CARGA}
+      WK_RADAR_PEDIDO_DATA_INICIO_CARGA: ${WK_RADAR_PEDIDO_DATA_INICIO_CARGA}
+      WK_BI_URL: ${WK_BI_URL}
+      WK_BI_BASE: ${WK_BI_BASE}
+      WK_BI_USUARIO: ${WK_BI_USUARIO}
+      WK_BI_SENHA: ${WK_BI_SENHA}
+      WK_BI_HASH_SALDO_ESTOQUE: ${WK_BI_HASH_SALDO_ESTOQUE}
+    ports:
+      - "3010:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      # Hostname interno do compose - chamadas servidor-a-servidor do
+      # Next.js pro NestJS nao passam pelo host.
+      API_URL: http://backend:3000
+      # O que o NAVEGADOR do usuario efetivamente acessa (login/logout).
+      API_PUBLIC_URL: http://localhost:3010
+    ports:
+      - "3020:3000"
+    depends_on:
+      - backend
+
+volumes:
+  copperline-postgres-data:

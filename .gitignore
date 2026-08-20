@@ -1,0 +1,11 @@
+# Segredos usados pelo docker-compose (SESSION_SECRET, IDP_CLIENT_SECRET,
+# credenciais do WK Radar) - nunca commitar, ver .env.example.
+.env
+
+# Biblioteca interna compartilhada entre varios projetos (nao exclusiva
+# deste) - versionada em repositorio proprio, so existe aqui como
+# dependencia local (file:../idp-client no backend/package.json).
+/idp-client/
+# Pasta vazia criada por engano numa sessao anterior (nome com ";C" -
+# provavel efeito colateral de um comando mal escapado).
+/idp-client;C/
