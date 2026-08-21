@@ -33,8 +33,12 @@ export class WkBiClientService {
       Usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
       Senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
     };
+    // 60s (nao 30s) por padrao - confirmado na pratica: uma consulta de um
+    // unico produto ja estourou 30s contra o ambiente real (o WK BI tem
+    // desempenho inconsistente - o relatorio completo sem filtro nem em 4
+    // minutos respondeu, ver skill wk-radar-bi-client).
     this.requestTimeoutMs = Number(
-      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 30_000,
+      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
     );
   }
 

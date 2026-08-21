@@ -13,7 +13,7 @@ export async function SiteHeader() {
 
   return (
     <header className="flex items-center justify-between gap-4 bg-surface px-6 py-4 shadow-sm">
-      <Link href={user ? "/clientes" : "/"} className="text-base font-bold text-ink">
+      <Link href={user ? "/painel" : "/"} className="text-base font-bold text-ink">
         Copperline
       </Link>
       {user && <SiteNav />}

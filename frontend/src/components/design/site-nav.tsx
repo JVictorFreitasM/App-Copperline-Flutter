@@ -10,10 +10,12 @@ import { usePathname } from "next/navigation";
 // Client Component só por causa do usePathname() (destaque do item ativo)
 // - o resto do header (SiteHeader) continua Server Component.
 const ITENS = [
+  { href: "/painel", rotulo: "Painel" },
   { href: "/clientes", rotulo: "Clientes" },
   { href: "/produtos", rotulo: "Produtos" },
   { href: "/pedidos", rotulo: "Pedidos" },
   { href: "/estoque", rotulo: "Estoque" },
+  { href: "/notas-fiscais", rotulo: "Notas fiscais" },
 ];
 
 export function SiteNav() {

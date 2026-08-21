@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { consultarEstoque, type ResultadoConsultaEstoque } from "./actions";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
 import { Card } from "@/components/design/card";
@@ -21,17 +21,33 @@ const ESTADO_INICIAL: ResultadoConsultaEstoque = { status: "idle" };
 // vocabulário visual (Card/ListItem), nenhum estilo improvisado por
 // estado; loading usa o LoadingSkeleton confirmado pela referência em vez
 // de texto solto.
-export function BuscaEstoque() {
+//
+// `identificadorInicial` (vindo do atalho "Ver estoque" na tela de
+// detalhe do produto, via query string) preenche o campo e dispara a
+// busca sozinho ao montar - sem isso, o atalho so preencheria o campo,
+// exigindo mais um clique.
+export function BuscaEstoque({ identificadorInicial }: { identificadorInicial?: string }) {
   const [estado, formAction, pending] = useActionState(consultarEstoque, ESTADO_INICIAL);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (identificadorInicial) {
+      formRef.current?.requestSubmit();
+    }
+    // Só na montagem - disparar de novo a cada render re-executaria a
+    // busca sem o usuário pedir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <form action={formAction} className="flex gap-3">
+        <form ref={formRef} action={formAction} className="flex gap-3">
           <input
             type="text"
             name="identificador"
             placeholder="Código ou ID do produto"
+            defaultValue={identificadorInicial}
             required
             className="flex-1 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-primary-light"
           />

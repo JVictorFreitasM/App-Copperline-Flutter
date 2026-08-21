@@ -43,5 +43,6 @@ export const config = {
     "/produtos/:path*",
     "/pedidos/:path*",
     "/estoque/:path*",
+    "/notas-fiscais/:path*",
   ],
 };

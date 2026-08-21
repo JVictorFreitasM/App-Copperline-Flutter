@@ -13,6 +13,7 @@ import { ProdutosModule } from './produtos/produtos.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
     PedidosModule,
     EstoqueModule,
     NotasFiscaisModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

@@ -7,6 +7,7 @@ import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
+import { SecondaryButton } from "@/components/design/button";
 
 // Tela de detalhe do produto (OS-WEB-15) - mostra o que a listagem não
 // mostrava: grade (idGrade1/2/3 + referenciasGrade). Sem "blocos fiscais"
@@ -51,9 +52,16 @@ export default async function ProdutoDetalhePage({
       ) : (
         produto && (
           <>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-ink">{produto.nome ?? "—"}</h1>
-              <BadgeAtivoInativo inativo={produto.inativo} />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-ink">{produto.nome ?? "—"}</h1>
+                <BadgeAtivoInativo inativo={produto.inativo} />
+              </div>
+              {produto.codigo && (
+                <SecondaryButton href={`/estoque?identificador=${encodeURIComponent(produto.codigo)}`}>
+                  Ver estoque
+                </SecondaryButton>
+              )}
             </div>
 
             <Card>
