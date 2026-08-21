@@ -12,8 +12,10 @@ export class EstoqueController {
   // RateLimitGuard so age em cima de um usuario ja autenticado
   // (request.user), por isso vem depois de requireAuth no pipeline -
   // limite por usuario, nao global, pra nao punir todo mundo por causa de
-  // um so cliente com retry sem backoff contra o Executivo.svc (servico
-  // legado, sem throttle proprio documentado - ver skill wk-radar-bi-client).
+  // um so cliente com uso abusivo. Desde a sincronizacao de saldo de
+  // estoque, este endpoint le so a tabela local (SaldoEstoque) - o limite
+  // deixou de proteger o Executivo.svc (nao e mais chamado aqui) e passou
+  // a ser so uma protecao generica de API, mantida por precaucao.
   @Get(':identificador')
   @UseGuards(RateLimitGuard)
   @RateLimit({ prefixo: 'estoque', limite: 30, janelaSegundos: 60 })

@@ -320,3 +320,33 @@ model NotaFiscalPedido {
   @@index([pedidoId])
   @@map("nota_fiscal_pedidos")
 }
+
+// Sincronizado do Estoque.svc (SOAP/WCF, operacao BuscarSaldoProduto) - so
+// Estoque Proprio (EP), sem quebra por local de estocagem/filial (decisao
+// de escopo desta OS, item "fora de escopo" com o gestor). Chave de upsert
+// e codigoProduto (nao ha id proprio no retorno do servico) - casado por
+// VALOR contra Produto.codigo, igual a logica que EstoqueService ja usava
+// pra resolver identificador antes desta OS (nao e FK: Estoque.svc pode
+// retornar um codigo sem produto sincronizado ainda, e nao deve bloquear a
+// gravacao do saldo por isso).
+model SaldoEstoque {
+  id                   String   @id @default(uuid())
+  codigoProduto        String   @unique @map("codigo_produto")
+  quantidadeDisponivel Decimal  @map("quantidade_disponivel") @db.Decimal(18, 6)
+  atualizadoEm         DateTime @default(now()) @updatedAt @map("atualizado_em")
+
+  @@map("saldos_estoque")
+}
+
+// Tabela singleton (o service garante 1 linha so) - intervalo de
+// sincronizacao de saldo de estoque, editavel em runtime via
+// GET/PATCH /estoque/admin/configuracao-sincronizacao (atras de
+// ApiKeyGuard), sem precisar de redeploy pra mudar a cadencia do job
+// BullMQ repeatable correspondente (ver SaldoEstoqueSyncStrategy).
+model ConfiguracaoEstoque {
+  id                            String   @id @default(uuid())
+  intervaloSincronizacaoMinutos Int      @default(30) @map("intervalo_sincronizacao_minutos")
+  atualizadoEm                  DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_estoque")
+}

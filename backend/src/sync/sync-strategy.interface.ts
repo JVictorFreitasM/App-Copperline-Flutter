@@ -28,8 +28,19 @@ export interface SyncFetchResultado<TBruto> {
 //   janela retroativa fixa a cada execucao, ignorando o cursor incremental
 //   - usado por recursos sem filtro de "alterado desde" (ver
 //   NotaFiscalSyncStrategy, OS 09, pra motivacao completa).
+// - CONFIGURAVEL: nenhum @Cron do SyncScheduler dispara essa strategy -
+//   ela e' disparada por um BullMQ repeatable job proprio (fora do
+//   SyncScheduler), com intervalo editavel em runtime (ver
+//   SaldoEstoqueSyncStrategy/ConfiguracaoSyncEstoqueService). Precisa ser
+//   um valor EXPLICITO (nao a ausencia do campo) porque `agendamento`
+//   omitido e' tratado como 'INCREMENTAL' por agendarIncrementais() - sem
+//   isso a strategy rodaria tanto pelo cron fixo de 30min quanto pelo job
+//   configuravel.
 export type SyncScheduling =
-  'INCREMENTAL' | 'INCREMENTAL_NOTURNO' | 'JANELA_FIXA_DIARIA';
+  | 'INCREMENTAL'
+  | 'INCREMENTAL_NOTURNO'
+  | 'JANELA_FIXA_DIARIA'
+  | 'CONFIGURAVEL';
 
 // Contrato que toda strategy de sincronizacao implementa (ver skill nestjs,
 // secao "Arquitetura de Sincronizacao com ERP"). Adicionar uma nova entidade

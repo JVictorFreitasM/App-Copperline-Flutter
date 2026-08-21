@@ -1,76 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildWkBiReportConfig } from '../wk-bi-client/build-wk-bi-report-config';
-import { WkBiClientService } from '../wk-bi-client/wk-bi-client.service';
-import {
-  paraEstoqueItemDto,
-  type EstoqueConsultaDto,
-} from './dto/estoque-response.dto';
+import type { EstoqueConsultaDto } from './dto/estoque-response.dto';
 
-// Parametros do relatorio "Saldo de Produtos por Local de Estocagem - BOT"
-// (Modulo=ES, Relatorio=GerencialSaldoEstoque) confirmados contra o
-// workflow n8n ja em producao - fixos, nao ha motivo de negocio pra
-// variarem por chamada (so CodProdutos e Hash mudam de fato, e Empresa
-// deriva do WK_BI_BASE). Nao usar "True"/"False" - o WK Radar espera "0"/"1"
-// nesses campos, e DataFinal/DataVencimento* usam o literal "00/00/0000"
-// (nao uma data real) quando o filtro nao se aplica.
-const PARAMETROS_FIXOS_SALDO_ESTOQUE = {
-  ArquivoExportacao:
-    'C:\\WKRadar\\BI\\Registros\\ExpAuto_Gerenciais_Saldo_do_Estoque.txt',
-  Separador: ';',
-  EliminarCaracteres: '',
-  GerarSemAspas: '0',
-  ExpCabecalhoColunas: '1',
-  SimboloDecimal: ',',
-  SimboloAgrupamento: '',
-  Modulo: 'ES',
-  Modelo: 'Saldo de Produtos por Local de Estocagem - BOT',
-  Relatorio: 'GerencialSaldoEstoque',
-  Versao: '1',
-  DataFinal: '00/00/0000',
-  Filial: '',
-  Locais: '',
-  TipoEstoque: '0',
-  ImprimirSaldosZerados: '0',
-  TabPrecos: '',
-  ListarApenasNaoMovimentados: '0',
-  DataListarApenasNaoMovimentados: '00/00/0000',
-  NaoImprimeProdutosInativos: '0',
-  DataVencimentoInicial: '00/00/0000',
-  DataVencimentoFinal: '00/00/0000',
-  ImprimirTotalizacao: '0',
-  ImprimirLinhaEmBrancoTotalizacao: '0',
-  Ordenacao: '0',
-  CodItensGradeProduto1: '',
-  CodItensGradeProduto2: '',
-  CodItensGradeProduto3: '',
-  CodGrades: '',
-  CodItensGrades: '',
-  ListarSubordinados: '0',
-} as const;
-
-// So leitura sobre dado ja sincronizado (validacao do produto) + consulta
-// em tempo real ao WK BI (saldo) - sem regra de negocio nossa, sem entidade
-// de dominio (ver skill nest-endpoint, criterio de DDD).
+// So leitura sobre dado ja sincronizado (validacao do produto + saldo, ver
+// SaldoEstoqueSyncStrategy) - sem regra de negocio nossa, sem entidade de
+// dominio (ver skill nest-endpoint, criterio de DDD). Ate a sincronizacao
+// de saldo de estoque, este service consultava o WK BI (Executivo.svc) em
+// tempo real a cada requisicao - trocado por leitura da tabela local
+// (SaldoEstoque) pra eliminar a dependencia sincrona do servico legado a
+// cada consulta do app comercial. A validacao de existencia do produto
+// abaixo NAO mudou nesta troca (pedido explicito da OS de sync de saldo).
 @Injectable()
 export class EstoqueService {
-  private readonly hashSaldoEstoque: string;
-  // Empresa do relatorio = mesmo valor do login.Base do WK BI, em
-  // maiusculas - confirmado no workflow de referencia (nao e um dado
-  // independente, nao ha motivo pra configurar separado).
-  private readonly empresa: string;
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly wkBiClient: WkBiClientService,
-    configService: ConfigService,
-  ) {
-    this.hashSaldoEstoque = configService.getOrThrow<string>(
-      'WK_BI_HASH_SALDO_ESTOQUE',
-    );
-    this.empresa = configService.getOrThrow<string>('WK_BI_BASE').toUpperCase();
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   async consultarPorIdentificador(
     identificador: string,
@@ -87,26 +29,37 @@ export class EstoqueService {
 
     if (!produto.codigo) {
       // Caso raro: stub incompleto criado por PedidoSyncStrategy (OS 07)
-      // ainda sem codigo real - nao da pra filtrar CodProdutos sem ele.
+      // ainda sem codigo real - Estoque.svc so identifica produto por
+      // CodigoProduto, sem ele nao ha o que buscar.
       throw new NotFoundException(
         `Produto '${identificador}' ainda não possui código sincronizado`,
       );
     }
 
-    const config = buildWkBiReportConfig({
-      ...PARAMETROS_FIXOS_SALDO_ESTOQUE,
-      Empresa: this.empresa,
-      CodProdutos: produto.codigo,
-      Hash: this.hashSaldoEstoque,
+    const saldo = await this.prisma.saldoEstoque.findUnique({
+      where: { codigoProduto: produto.codigo },
     });
 
-    const linhas =
-      await this.wkBiClient.buscarRelatorioExportacaoAutomatica(config);
+    if (!saldo) {
+      // Produto existe mas nunca teve saldo sincronizado (fora do filtro
+      // Estoque Proprio, ou a sincronizacao ainda nao rodou pra ele) -
+      // itens vazio, nao erro (mesmo contrato ja usado pra "sem saldo").
+      return { produtoId: produto.id, codigo: produto.codigo, itens: [], atualizadoEm: null };
+    }
 
     return {
       produtoId: produto.id,
       codigo: produto.codigo,
-      itens: linhas.map(paraEstoqueItemDto),
+      itens: [
+        {
+          localCodigo: null,
+          localNome: null,
+          lote: null,
+          fabricadoEm: null,
+          quantidade: saldo.quantidadeDisponivel.toString(),
+        },
+      ],
+      atualizadoEm: saldo.atualizadoEm.toISOString(),
     };
   }
 }
