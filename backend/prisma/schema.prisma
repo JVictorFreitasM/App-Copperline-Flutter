@@ -338,15 +338,33 @@ model SaldoEstoque {
   @@map("saldos_estoque")
 }
 
-// Tabela singleton (o service garante 1 linha so) - intervalo de
-// sincronizacao de saldo de estoque, editavel em runtime via
-// GET/PATCH /estoque/admin/configuracao-sincronizacao (atras de
-// ApiKeyGuard), sem precisar de redeploy pra mudar a cadencia do job
-// BullMQ repeatable correspondente (ver SaldoEstoqueSyncStrategy).
-model ConfiguracaoEstoque {
-  id                            String   @id @default(uuid())
-  intervaloSincronizacaoMinutos Int      @default(30) @map("intervalo_sincronizacao_minutos")
-  atualizadoEm                  DateTime @updatedAt @map("atualizado_em")
+enum TipoCadenciaSync {
+  INCREMENTAL
+  INCREMENTAL_NOTURNO
+  JANELA_FIXA_DIARIA
+  CONFIGURAVEL
 
-  @@map("configuracao_estoque")
+  @@map("tipo_cadencia_sync")
+}
+
+// Config editavel em runtime pra QUALQUER entidade sincronizada (OS
+// BACKEND-15 - generaliza o que a OS anterior criou so pra saldo_estoque,
+// ver SyncConfigService/AdminSyncController). 1 linha por nomeEntidade -
+// entidade sem linha aqui cai no fallback fixo (@Cron de SyncScheduler,
+// ver sync.scheduler.ts). tipoCadencia decide quais dos outros campos sao
+// usados (intervaloMinutos para INCREMENTAL/CONFIGURAVEL, horarioFixo/
+// diasSemana para INCREMENTAL_NOTURNO/JANELA_FIXA_DIARIA) - ver
+// construir-repeat-options.ts pra conversao pro formato do BullMQ.
+model ConfiguracaoSync {
+  id               String           @id @default(uuid())
+  nomeEntidade     String           @unique @map("nome_entidade")
+  tipoCadencia     TipoCadenciaSync @map("tipo_cadencia")
+  intervaloMinutos Int?             @map("intervalo_minutos")
+  // Formato "HH:mm".
+  horarioFixo      String?          @map("horario_fixo")
+  // 0=domingo..6=sabado; vazio = todos os dias.
+  diasSemana       Int[]            @map("dias_semana")
+  atualizadoEm     DateTime         @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_sync")
 }

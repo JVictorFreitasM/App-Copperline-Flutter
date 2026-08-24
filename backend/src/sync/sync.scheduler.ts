@@ -2,6 +2,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Queue } from 'bullmq';
+import { PrismaService } from '../prisma/prisma.service';
 import { SYNC_JOB_NAME, SYNC_QUEUE, SYNC_STRATEGIES } from './sync.constants';
 import type { SyncStrategy } from './sync-strategy.interface';
 
@@ -10,6 +11,13 @@ import type { SyncStrategy } from './sync-strategy.interface';
 // entidade - adicionar uma nova entidade sincronizada (qualquer cadencia)
 // nao exige tocar neste arquivo, so declarar `agendamento` na propria
 // strategy.
+//
+// FALLBACK (OS-BACKEND-15): entidades com uma linha em ConfiguracaoSync
+// tem seu proprio BullMQ Job Scheduler (ver SyncConfigService), registrado
+// com a cadencia que o admin configurou - os @Cron fixos aqui so cobrem
+// quem AINDA nao tem config salva. `enfileirar()` sempre consulta o banco
+// e exclui essas entidades, senao ficariam enfileiradas duas vezes (aqui
+// E pelo Job Scheduler proprio).
 @Injectable()
 export class SyncScheduler {
   private readonly logger = new Logger(SyncScheduler.name);
@@ -17,6 +25,7 @@ export class SyncScheduler {
   constructor(
     @InjectQueue(SYNC_QUEUE) private readonly queue: Queue,
     @Inject(SYNC_STRATEGIES) private readonly strategies: SyncStrategy[],
+    private readonly prisma: PrismaService,
   ) {}
 
   // Cadencia padrao (INCREMENTAL) - baixo volume (cliente): cobre
@@ -62,15 +71,31 @@ export class SyncScheduler {
   }
 
   private async enfileirar(strategies: SyncStrategy[]): Promise<void> {
-    for (const strategy of strategies) {
+    const semConfigSalva = await this.filtrarSemConfigSalva(strategies);
+
+    for (const strategy of semConfigSalva) {
       await this.queue.add(SYNC_JOB_NAME, {
         nomeEntidade: strategy.nomeEntidade,
       });
     }
-    if (strategies.length > 0) {
+    if (semConfigSalva.length > 0) {
       this.logger.log(
-        `Enfileirada(s) ${strategies.length} entidade(s) para sincronizacao`,
+        `Enfileirada(s) ${semConfigSalva.length} entidade(s) para sincronizacao`,
       );
     }
+  }
+
+  private async filtrarSemConfigSalva(
+    strategies: SyncStrategy[],
+  ): Promise<SyncStrategy[]> {
+    if (strategies.length === 0) {
+      return strategies;
+    }
+    const configuradas = await this.prisma.configuracaoSync.findMany({
+      where: { nomeEntidade: { in: strategies.map((s) => s.nomeEntidade) } },
+      select: { nomeEntidade: true },
+    });
+    const nomesConfigurados = new Set(configuradas.map((c) => c.nomeEntidade));
+    return strategies.filter((s) => !nomesConfigurados.has(s.nomeEntidade));
   }
 }

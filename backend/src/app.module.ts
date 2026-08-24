@@ -14,6 +14,7 @@ import { PedidosModule } from './pedidos/pedidos.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AdminSyncModule } from './admin-sync/admin-sync.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     EstoqueModule,
     NotasFiscaisModule,
     DashboardModule,
+    AdminSyncModule,
   ],
 })
 export class AppModule {}
