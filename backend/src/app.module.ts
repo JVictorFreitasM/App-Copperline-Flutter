@@ -15,6 +15,7 @@ import { EstoqueModule } from './estoque/estoque.module';
 import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AdminSyncModule } from './admin-sync/admin-sync.module';
+import { BuscaModule } from './busca/busca.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { AdminSyncModule } from './admin-sync/admin-sync.module';
     NotasFiscaisModule,
     DashboardModule,
     AdminSyncModule,
+    BuscaModule,
   ],
 })
 export class AppModule {}
