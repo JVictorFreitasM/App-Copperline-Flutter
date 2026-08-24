@@ -5,11 +5,14 @@ import type { PaginatedResult } from '../common/pagination';
 import { FavoritosService } from '../notificacoes/favoritos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { ProdutosService } from './produtos.service';
+import { ProdutosRupturaService } from './produtos-ruptura.service';
+import type { ProdutoRupturaPrevistaDto } from './produtos-ruptura.service';
 import type {
   ProdutoDetalheDto,
   ProdutoResumoDto,
 } from './dto/produto-response.dto';
 import { ListarProdutosQueryDto } from './dto/listar-produtos-query.dto';
+import { RupturaPrevistaQueryDto } from './dto/ruptura-prevista-query.dto';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver produtos.module.ts).
 @Controller('produtos')
@@ -18,6 +21,7 @@ export class ProdutosController {
     private readonly produtosService: ProdutosService,
     private readonly favoritosService: FavoritosService,
     private readonly usuariosService: UsuariosService,
+    private readonly produtosRupturaService: ProdutosRupturaService,
   ) {}
 
   @Get()
@@ -56,6 +60,15 @@ export class ProdutosController {
   ): Promise<void> {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     await this.favoritosService.desfavoritar(usuario.id, id);
+  }
+
+  // Literal, ANTES de `:id` - mesmo motivo de 'favoritos' acima
+  // (OS-BACKEND-20).
+  @Get('ruptura-prevista')
+  obterRupturaPrevista(
+    @Query() query: RupturaPrevistaQueryDto,
+  ): Promise<ProdutoRupturaPrevistaDto[]> {
+    return this.produtosRupturaService.calcular(query.dias);
   }
 
   @Get(':id')

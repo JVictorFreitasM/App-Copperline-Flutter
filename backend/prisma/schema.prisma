@@ -469,3 +469,23 @@ model EventoNotificacao {
   @@index([status])
   @@map("eventos_notificacao")
 }
+
+// Tabela singleton (1 linha, service garante) - config do provedor de LLM
+// (OS-BACKEND-20), editavel em runtime via PATCH /admin/llm/configuracao.
+// DESVIO DELIBERADO do padrao "credencial de servico externo = env var"
+// usado no resto do projeto (WK_RADAR_*/WK_BI_*/FIREBASE_SERVICE_ACCOUNT_JSON)
+// - pedido explicito do usuario ("deixe uma opcao de configuracao"), nao
+// trocar por env var sem re-confirmar. apiKey NUNCA e' retornada em GET
+// (so um booleano `apiKeyConfigurada`, ver ConfiguracaoLlmService).
+model ConfiguracaoLlm {
+  id           String   @id @default(uuid())
+  // "openrouter" por enquanto (gateway OpenAI-compatible cobrindo
+  // Claude/GPT/etc via o campo `modelo`) - string livre, nao enum, pra
+  // nao exigir migration se um provedor novo entrar depois.
+  provedor     String   @default("openrouter")
+  apiKey       String?  @map("api_key")
+  modelo       String   @default("anthropic/claude-opus-5")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_llm")
+}

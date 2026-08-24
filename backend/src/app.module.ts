@@ -18,6 +18,7 @@ import { AdminSyncModule } from './admin-sync/admin-sync.module';
 import { BuscaModule } from './busca/busca.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
+import { LlmClientModule } from './llm-client/llm-client.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     BuscaModule,
     UsuariosModule,
     NotificacoesModule,
+    LlmClientModule,
   ],
 })
 export class AppModule {}
