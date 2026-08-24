@@ -9,6 +9,7 @@ import { PedidoSyncStrategy } from './strategies/pedido.sync';
 import { ProdutoSyncStrategy } from './strategies/produto.sync';
 import { SaldoEstoqueSyncStrategy } from './strategies/saldo-estoque.sync';
 import { SyncConfigService } from './sync-config.service';
+import { SyncObservabilityService } from './sync-observability.service';
 import { SYNC_QUEUE, SYNC_STRATEGIES } from './sync.constants';
 import { SyncProcessor } from './sync.processor';
 import { SyncScheduler } from './sync.scheduler';
@@ -55,10 +56,11 @@ import { SyncService } from './sync.service';
     SyncProcessor,
     SyncScheduler,
     SyncConfigService,
+    SyncObservabilityService,
   ],
-  // SyncConfigService exportado pra AdminSyncModule (OS-BACKEND-15) montar
-  // o endpoint de configuracao/disparo manual sem duplicar o acesso a
+  // Exportados pra AdminSyncModule (OS-BACKEND-15/16) montar os endpoints
+  // de configuracao/disparo manual/observabilidade sem duplicar o acesso a
   // SYNC_STRATEGIES/fila/Prisma que este modulo ja monta.
-  exports: [SyncConfigService],
+  exports: [SyncConfigService, SyncObservabilityService],
 })
 export class SyncModule {}
