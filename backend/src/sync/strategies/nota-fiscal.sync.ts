@@ -5,6 +5,7 @@ import type {
   TipoNotaFiscal,
 } from '../../../generated/prisma/client';
 import { ErpClientService } from '../../erp-client/erp-client.service';
+import { registrarEventoNotificacao } from '../../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buscarPorJanelas } from '../paginacao-por-janela';
 import type {
@@ -147,6 +148,16 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
     const sincronizadoEm = new Date();
 
     await this.prisma.$transaction(async (tx) => {
+      // Buscado ANTES do upsert - unico jeito de comparar "status anterior
+      // x novo" (o upsert em si nao devolve o valor de antes). Diferente
+      // de Pedido/Produto, NotaFiscal nao tem conceito de stub
+      // (`incompleto`) - null aqui so significa "nota realmente nova" (ver
+      // notificarSeEntrouEmRejeitada abaixo, OS-BACKEND-19).
+      const existente = await tx.notaFiscal.findUnique({
+        where: { idExternoErp: mapeado.idExternoErp },
+        select: { statusNfe: true },
+      });
+
       const notaFiscal = await tx.notaFiscal.upsert({
         where: { idExternoErp: mapeado.idExternoErp },
         create: {
@@ -178,6 +189,13 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
         },
       });
 
+      await this.notificarSeEntrouEmRejeitada(
+        tx,
+        notaFiscal.id,
+        existente?.statusNfe ?? null,
+        notaFiscal.statusNfe,
+      );
+
       // Vinculo N:N com pedido - a lista de pedidos de uma nota emitida
       // raramente muda, mas recriar do zero a cada sync e mais simples e
       // correto do que tentar diffar contra o estado anterior.
@@ -194,6 +212,29 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
           data: { notaFiscalId: notaFiscal.id, pedidoId },
         });
       }
+    });
+  }
+
+  // OS-BACKEND-19: dispara so quando o status ENTRA em REJEITADA (nao em
+  // qualquer mudanca de status - diferente do alerta de pedido, que e'
+  // generico pra qualquer transicao). statusAnterior null (nota nova) ou
+  // ja rejeitada antes nao geram evento de novo.
+  private async notificarSeEntrouEmRejeitada(
+    tx: PrismaTx,
+    notaFiscalId: string,
+    statusAnterior: StatusNfe | null,
+    statusNovo: StatusNfe | null,
+  ): Promise<void> {
+    if (statusAnterior === null || statusAnterior === 'REJEITADA' || statusNovo !== 'REJEITADA') {
+      return;
+    }
+
+    await registrarEventoNotificacao(tx, {
+      tipo: 'NOTA_FISCAL_REJEITADA',
+      referenciaId: notaFiscalId,
+      titulo: 'Nota fiscal rejeitada',
+      corpo: 'Uma nota fiscal foi rejeitada e precisa de atenção.',
+      dados: { notaFiscalId },
     });
   }
 

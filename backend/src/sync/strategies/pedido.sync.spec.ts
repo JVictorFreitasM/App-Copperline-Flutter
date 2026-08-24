@@ -84,3 +84,81 @@ describe('PedidoSyncStrategy.map', () => {
     expect(mapeado.itens[0].produtoServicoId).toBeNull();
   });
 });
+
+function prismaFake(pedidoExistente: { id: string; situacao: string | null } | null) {
+  const tx = {
+    cliente: { upsert: jest.fn().mockResolvedValue({ id: 'cliente-1', incompleto: false }) },
+    produto: { upsert: jest.fn().mockResolvedValue({ id: 'produto-1', incompleto: false }) },
+    pedido: {
+      findUnique: jest.fn().mockResolvedValue(pedidoExistente),
+      upsert: jest.fn().mockImplementation(({ create }) => ({
+        id: pedidoExistente?.id ?? 'pedido-1',
+        ...create,
+      })),
+    },
+    pedidoItem: { upsert: jest.fn().mockResolvedValue(undefined) },
+    eventoNotificacao: { create: jest.fn().mockResolvedValue(undefined) },
+  };
+  return {
+    tx,
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
+  };
+}
+
+const MAPEADO_BASE = {
+  idExternoErp: '789',
+  codigoIntegrador: null,
+  numero: 'PED-1',
+  situacao: 'FATURADO' as const,
+  dataHoraUltimaAlteracao: new Date(),
+  idClienteExterno: null,
+  valorTotal: 150.5,
+  itens: [],
+};
+
+describe('PedidoSyncStrategy.upsert (OS-BACKEND-19, alerta de mudanca de situacao)', () => {
+  const configServiceFake = { get: () => undefined } as never;
+
+  it('registra evento quando a situacao muda de um valor real pra outro', async () => {
+    const prisma = prismaFake({ id: 'pedido-1', situacao: 'EM_ANALISE' });
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, situacao: 'FATURADO' });
+
+    expect(prisma.tx.eventoNotificacao.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tipo: 'PEDIDO_SITUACAO_ALTERADA',
+          referenciaId: 'pedido-1',
+        }),
+      }),
+    );
+  });
+
+  it('nao registra evento quando a situacao nao mudou', async () => {
+    const prisma = prismaFake({ id: 'pedido-1', situacao: 'FATURADO' });
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, situacao: 'FATURADO' });
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+
+  it('nao registra evento na primeira sincronizacao (pedido novo)', async () => {
+    const prisma = prismaFake(null);
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, situacao: 'FATURADO' });
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+
+  it('nao registra evento quando so existia como stub (situacao anterior null)', async () => {
+    const prisma = prismaFake({ id: 'pedido-1', situacao: null });
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, situacao: 'FATURADO' });
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+});

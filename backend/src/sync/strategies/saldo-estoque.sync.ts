@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { parseDecimalBr } from '../../common/parse-decimal-br';
 import { EstoqueSvcClientService } from '../../estoque-svc-client/estoque-svc-client.service';
 import type { SaldoProdutoBruto } from '../../estoque-svc-client/estoque-svc-client.types';
+import { registrarEventoNotificacao } from '../../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type {
   SyncFetchResultado,
@@ -33,8 +34,8 @@ export interface SaldoEstoqueMapeado {
 //
 // agendamento='CONFIGURAVEL' (ver sync-strategy.interface.ts) - nenhum
 // @Cron do SyncScheduler dispara isso; o agendamento de verdade vive em
-// ConfiguracaoSyncEstoqueService (BullMQ repeatable job proprio, mesma
-// fila/processor). Continua registrada em SYNC_STRATEGIES normalmente
+// SyncConfigService (BullMQ Job Scheduler proprio, mesma fila/processor,
+// ver OS-BACKEND-15). Continua registrada em SYNC_STRATEGIES normalmente
 // (sync.module.ts) porque SyncService.executar() precisa encontra-la ali
 // - so o SyncScheduler que a ignora, filtrando por este campo.
 @Injectable()
@@ -64,10 +65,49 @@ export class SaldoEstoqueSyncStrategy
   }
 
   async upsert(mapeado: SaldoEstoqueMapeado): Promise<void> {
-    await this.prisma.saldoEstoque.upsert({
-      where: { codigoProduto: mapeado.codigoProduto },
-      create: mapeado,
-      update: { quantidadeDisponivel: mapeado.quantidadeDisponivel },
+    await this.prisma.$transaction(async (tx) => {
+      // Buscado ANTES do upsert - unico jeito de comparar "quantidade
+      // anterior x nova" (OS-BACKEND-19: alerta de "produto reabastecido").
+      const existente = await tx.saldoEstoque.findUnique({
+        where: { codigoProduto: mapeado.codigoProduto },
+        select: { quantidadeDisponivel: true },
+      });
+
+      const saldo = await tx.saldoEstoque.upsert({
+        where: { codigoProduto: mapeado.codigoProduto },
+        create: mapeado,
+        update: { quantidadeDisponivel: mapeado.quantidadeDisponivel },
+      });
+
+      // `existente === null` (primeira vez que este codigo aparece em
+      // SaldoEstoque) NAO conta como "saiu de zero" - mesmo criterio ja
+      // aplicado em pedido/nota-fiscal (ver notificarSeSituacaoMudou em
+      // pedido.sync.ts): e' o saldo aparecendo pela primeira vez, nao uma
+      // mudanca que alguem devesse ser avisado.
+      const saiuDeZero =
+        existente !== null &&
+        existente.quantidadeDisponivel.toNumber() <= 0 &&
+        saldo.quantidadeDisponivel.toNumber() > 0;
+
+      if (saiuDeZero) {
+        // So notifica se ja existir Produto sincronizado com esse codigo -
+        // sem produto local nao ha id pra registrar o favorito/referencia
+        // contra (SaldoEstoque nao tem FK pra Produto, ver schema.prisma).
+        const produto = await tx.produto.findFirst({
+          where: { codigo: mapeado.codigoProduto },
+          select: { id: true },
+        });
+
+        if (produto) {
+          await registrarEventoNotificacao(tx, {
+            tipo: 'PRODUTO_REABASTECIDO',
+            referenciaId: produto.id,
+            titulo: 'Produto reabastecido',
+            corpo: `O produto ${mapeado.codigoProduto} voltou a ter saldo em estoque.`,
+            dados: { produtoId: produto.id, codigoProduto: mapeado.codigoProduto },
+          });
+        }
+      }
     });
   }
 }

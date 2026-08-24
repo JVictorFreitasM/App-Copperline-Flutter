@@ -79,6 +79,9 @@ services:
       # Estoque.svc (SOAP/WCF) - sincronizacao periodica de saldo de
       # estoque, reaproveita as credenciais WK_BI_* acima.
       WK_RADAR_ESTOQUE_SVC_URL: ${WK_RADAR_ESTOQUE_SVC_URL}
+      # Firebase Cloud Messaging - vazio ate ser configurado (fail-closed
+      # so no envio, nao no boot - ver PushNotificationClientService).
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
     ports:
       - "3010:3000"
     depends_on:

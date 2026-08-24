@@ -79,3 +79,100 @@ describe('NotaFiscalSyncStrategy.fetch', () => {
     expect(paramsUsados.DataEmissaoFinal).toBe('2026-08-18');
   });
 });
+
+function prismaFake(notaExistente: { statusNfe: string | null } | null) {
+  const tx = {
+    notaFiscal: {
+      findUnique: jest.fn().mockResolvedValue(notaExistente),
+      upsert: jest.fn().mockImplementation(({ create }) => ({ id: 'nota-1', ...create })),
+    },
+    notaFiscalPedido: {
+      deleteMany: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn().mockResolvedValue(undefined),
+    },
+    pedido: { upsert: jest.fn().mockResolvedValue({ id: 'pedido-1', incompleto: false }) },
+    eventoNotificacao: { create: jest.fn().mockResolvedValue(undefined) },
+  };
+  return {
+    tx,
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
+  };
+}
+
+const MAPEADO_BASE = {
+  idExternoErp: '321',
+  codigoIntegrador: null,
+  chave: null,
+  tipo: null,
+  numero: 123,
+  serie: '1',
+  dataEmissao: new Date(),
+  statusNfe: 'REJEITADA' as const,
+  nfseGerada: null,
+  nfseCancelada: null,
+  valorTotalNotaFiscal: null,
+  pedidosExternoIds: [],
+};
+
+describe('NotaFiscalSyncStrategy.upsert (OS-BACKEND-19, alerta de nota rejeitada)', () => {
+  const configServiceFake = { get: () => undefined } as never;
+
+  it('registra evento quando o status ENTRA em REJEITADA', async () => {
+    const prisma = prismaFake({ statusNfe: 'AGUARDANDO_AUTORIZACAO' });
+    const strategy = new NotaFiscalSyncStrategy(
+      undefined as never,
+      prisma as never,
+      configServiceFake,
+    );
+
+    await strategy.upsert(MAPEADO_BASE);
+
+    expect(prisma.tx.eventoNotificacao.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tipo: 'NOTA_FISCAL_REJEITADA',
+          referenciaId: 'nota-1',
+        }),
+      }),
+    );
+  });
+
+  it('nao registra evento se ja estava rejeitada antes (nao duplica em re-sync)', async () => {
+    const prisma = prismaFake({ statusNfe: 'REJEITADA' });
+    const strategy = new NotaFiscalSyncStrategy(
+      undefined as never,
+      prisma as never,
+      configServiceFake,
+    );
+
+    await strategy.upsert(MAPEADO_BASE);
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+
+  it('nao registra evento se o novo status nao e REJEITADA', async () => {
+    const prisma = prismaFake({ statusNfe: 'AGUARDANDO_AUTORIZACAO' });
+    const strategy = new NotaFiscalSyncStrategy(
+      undefined as never,
+      prisma as never,
+      configServiceFake,
+    );
+
+    await strategy.upsert({ ...MAPEADO_BASE, statusNfe: 'AUTORIZADA' });
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+
+  it('nao registra evento na primeira sincronizacao (nota nova)', async () => {
+    const prisma = prismaFake(null);
+    const strategy = new NotaFiscalSyncStrategy(
+      undefined as never,
+      prisma as never,
+      configServiceFake,
+    );
+
+    await strategy.upsert(MAPEADO_BASE);
+
+    expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+});

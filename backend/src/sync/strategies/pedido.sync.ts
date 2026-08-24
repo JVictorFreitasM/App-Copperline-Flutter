@@ -5,6 +5,7 @@ import type {
   TipoSituacaoPedido,
 } from '../../../generated/prisma/client';
 import { ErpClientService } from '../../erp-client/erp-client.service';
+import { registrarEventoNotificacao } from '../../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   contagemSuspeitaDeTruncamento,
@@ -161,6 +162,16 @@ export class PedidoSyncStrategy implements SyncStrategy<
         ? await this.resolverOuCriarClienteStub(tx, mapeado.idClienteExterno)
         : null;
 
+      // Buscado ANTES do upsert - unico jeito de comparar "situacao
+      // anterior x nova" (o upsert em si nao devolve o valor de antes).
+      // null quando o pedido ainda nao existia (primeira sincronizacao) -
+      // nesse caso NAO e' uma "mudanca", e' o pedido aparecendo pela
+      // primeira vez (ver notificarSeSituacaoMudou abaixo, OS-BACKEND-19).
+      const existente = await tx.pedido.findUnique({
+        where: { idExternoErp: mapeado.idExternoErp },
+        select: { id: true, situacao: true },
+      });
+
       // incompleto:false tambem no update - "completa" um eventual stub
       // criado por NotaFiscalSyncStrategy (OS 09) quando o pedido de
       // verdade chega aqui.
@@ -189,6 +200,8 @@ export class PedidoSyncStrategy implements SyncStrategy<
         },
       });
 
+      await this.notificarSeSituacaoMudou(tx, pedido.id, existente?.situacao ?? null, pedido.situacao);
+
       for (const item of mapeado.itens) {
         const produtoId = item.produtoServicoId
           ? await this.resolverOuCriarProdutoStub(tx, item.produtoServicoId)
@@ -214,6 +227,31 @@ export class PedidoSyncStrategy implements SyncStrategy<
           update: campos,
         });
       }
+    });
+  }
+
+  // OS-BACKEND-19: so notifica mudanca de situacao REAL - `situacaoAnterior`
+  // vem do findUnique feito ANTES do upsert (ver upsert() acima). null ali
+  // cobre tanto "pedido novo de verdade" quanto "so existia como stub
+  // incompleto de NotaFiscalSyncStrategy" (stub nunca tem situacao) - em
+  // nenhum dos dois casos e' uma "mudanca" que alguem devesse ser avisado,
+  // e' o pedido aparecendo pela primeira vez.
+  private async notificarSeSituacaoMudou(
+    tx: PrismaTx,
+    pedidoId: string,
+    situacaoAnterior: TipoSituacaoPedido | null,
+    situacaoNova: TipoSituacaoPedido | null,
+  ): Promise<void> {
+    if (!situacaoAnterior || situacaoAnterior === situacaoNova) {
+      return;
+    }
+
+    await registrarEventoNotificacao(tx, {
+      tipo: 'PEDIDO_SITUACAO_ALTERADA',
+      referenciaId: pedidoId,
+      titulo: 'Pedido mudou de situação',
+      corpo: `Situação alterada de ${situacaoAnterior} para ${situacaoNova ?? '—'}.`,
+      dados: { pedidoId },
     });
   }
 

@@ -145,6 +145,7 @@ model Produto {
   sincronizadoEm   DateTime     @map("sincronizado_em")
 
   itensPedido PedidoItem[]
+  favoritos   ProdutoFavorito[]
 
   @@map("produtos")
 }
@@ -367,4 +368,104 @@ model ConfiguracaoSync {
   atualizadoEm     DateTime         @updatedAt @map("atualizado_em")
 
   @@map("configuracao_sync")
+}
+
+// Identidade local minima (OS-BACKEND-19) - ate aqui o backend so conhecia
+// o usuario via claims do JWT do IdP (sub/email/name, ver @CurrentUser()),
+// sem tabela propria. DispositivoUsuario/ProdutoFavorito precisam de FK de
+// verdade, nao de uma string solta - upsert por `sub` na primeira vez que
+// o usuario bate num endpoint desta OS (ver UsuariosService).
+model Usuario {
+  id           String   @id @default(uuid())
+  sub          String   @unique
+  email        String
+  nome         String
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  dispositivos DispositivoUsuario[]
+  favoritos    ProdutoFavorito[]
+
+  @@map("usuarios")
+}
+
+enum PlataformaDispositivo {
+  ANDROID
+  IOS
+  WEB
+
+  @@map("plataforma_dispositivo")
+}
+
+// Token de push (FCM) - chave de upsert e' o token em si (nao
+// usuarioId+plataforma), porque cada instalacao do app/aparelho tem um
+// token proprio e distinto; um mesmo usuario pode ter varios (celular +
+// tablet).
+model DispositivoUsuario {
+  id           String                @id @default(uuid())
+  usuarioId    String                @map("usuario_id")
+  token        String                @unique
+  plataforma   PlataformaDispositivo
+  atualizadoEm DateTime              @updatedAt @map("atualizado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("dispositivos_usuario")
+}
+
+// Pre-requisito minimo pro alerta de "produto reabastecido" fazer sentido
+// (ver SaldoEstoqueSyncStrategy/NotificacaoDispatchService) - sem isso nao
+// haveria como saber quem quer ser avisado sobre qual produto.
+model ProdutoFavorito {
+  usuarioId String   @map("usuario_id")
+  produtoId String   @map("produto_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, produtoId])
+  @@map("produtos_favoritos")
+}
+
+enum TipoEventoNotificacao {
+  PEDIDO_SITUACAO_ALTERADA
+  NOTA_FISCAL_REJEITADA
+  PRODUTO_REABASTECIDO
+
+  @@map("tipo_evento_notificacao")
+}
+
+enum StatusEventoNotificacao {
+  PENDENTE
+  ENVIADO
+  ERRO
+
+  @@map("status_evento_notificacao")
+}
+
+// Gravado pelas strategies de sync (pedido/nota-fiscal/saldo-estoque) ao
+// detectar uma mudanca relevante (comparacao explicita com o valor
+// anterior, dentro da mesma transacao do upsert - ver
+// EventoNotificacaoService). Processado depois, de forma assincrona, por
+// NotificacaoDispatchService (fila propria, separada da fila de sync, pra
+// nao atrasar o cursor incremental).
+model EventoNotificacao {
+  id           String                   @id @default(uuid())
+  tipo         TipoEventoNotificacao
+  // id LOCAL (nao idExternoErp) do Pedido/NotaFiscal/Produto conforme o
+  // tipo - quem le decide como interpretar, nao ha FK polimorfica no Prisma.
+  referenciaId String                   @map("referencia_id")
+  titulo       String
+  corpo        String
+  // Dados extra pro deep-link do app (ex: {"pedidoId": "..."}).
+  dados        Json?
+  status       StatusEventoNotificacao  @default(PENDENTE)
+  criadoEm     DateTime                 @default(now()) @map("criado_em")
+  processadoEm DateTime?                @map("processado_em")
+  erro         Json?
+
+  @@index([status])
+  @@map("eventos_notificacao")
 }
