@@ -18,6 +18,8 @@ import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dt
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
 import type { PaginatedResult } from '../common/pagination';
+import { VisitasService } from '../visitas/visitas.service';
+import type { VisitaDto } from '../visitas/dto/visita-response.dto';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver clientes.module.ts,
 // mesmo padrao da OS 03). GET /clientes e /:id sao escopados por vendedor
@@ -31,6 +33,7 @@ export class ClientesController {
     private readonly clienteEstatisticasService: ClienteEstatisticasService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly visitasService: VisitasService,
   ) {}
 
   @Get()
@@ -86,6 +89,18 @@ export class ClientesController {
   ): Promise<ClienteEstatisticasDto> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clienteEstatisticasService.obter(id, query.meses, escopo);
+  }
+
+  // OS-BACKEND-28 - historico de visitas, pra exibir junto das
+  // estatisticas (OS-BACKEND-26). Mesmo raciocinio de rota mais especifica
+  // que "/:id" das rotas acima.
+  @Get(':id/visitas')
+  async listarVisitas(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VisitaDto[]> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.visitasService.listarPorCliente(id, escopo);
   }
 
   private async resolverEscopo(idpUser: IdpUser): Promise<EscopoClientes> {

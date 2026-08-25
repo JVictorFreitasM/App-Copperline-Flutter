@@ -77,6 +77,7 @@ model Cliente {
   contatos   ContatoCliente[]
   pedidos    Pedido[]
   vendedores ClienteVendedor[]
+  visitas    Visita[]
 
   @@map("clientes")
 }
@@ -627,6 +628,7 @@ model Vendedor {
   solicitacoesParaAprovar SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
   solicitacoesDecididas   SolicitacaoDesconto[] @relation("SolicitacaoAprovador")
   pedidosCriados          Pedido[]
+  visitas                 Visita[]
 
   @@map("vendedores")
 }
@@ -723,4 +725,36 @@ model LocalizacaoUsuario {
 
   @@index([usuarioId, capturadoEm])
   @@map("localizacoes_usuario")
+}
+
+// Check-in/checkout de visita (OS-BACKEND-28) - evento DELIBERADO do
+// vendedor ("estou numa visita agora"), diferente do rastreio continuo e
+// passivo de LocalizacaoUsuario (OS-BACKEND-27, ver comentario la). Sem
+// vinculo automatico com Pedido criado depois (Escopo/Fora de escopo desta
+// OS - correlacao fica visual/manual, nunca inferida aqui).
+//
+// checkoutEm null = visita em aberto. Um vendedor so pode ter UMA visita
+// aberta por vez (criterio de aceite, decisao confirmada com o usuario:
+// novo check-in com visita aberta e' BLOQUEADO com erro claro, nunca
+// fecha a anterior sozinho - ver VisitasService.checkin).
+model Visita {
+  id          String    @id @default(uuid())
+  clienteId   String    @map("cliente_id")
+  vendedorId  String    @map("vendedor_id")
+  checkinEm   DateTime  @map("checkin_em")
+  checkinLat  Decimal   @map("checkin_lat") @db.Decimal(9, 6)
+  checkinLng  Decimal   @map("checkin_lng") @db.Decimal(9, 6)
+  checkoutEm  DateTime? @map("checkout_em")
+  checkoutLat Decimal?  @map("checkout_lat") @db.Decimal(9, 6)
+  checkoutLng Decimal?  @map("checkout_lng") @db.Decimal(9, 6)
+  // Nota livre - pode ser preenchida no check-in e/ou sobrescrita no
+  // checkout (VisitasService.checkout so atualiza se uma nova nota vier).
+  nota        String?
+
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+  vendedor Vendedor @relation(fields: [vendedorId], references: [id])
+
+  @@index([clienteId])
+  @@index([vendedorId, checkoutEm])
+  @@map("visitas")
 }

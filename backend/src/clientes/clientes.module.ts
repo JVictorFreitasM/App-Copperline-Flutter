@@ -7,6 +7,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
+import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
@@ -15,8 +16,16 @@ import { ClientesService } from './clientes.service';
 @Module({
   // LlmClientModule/RedisModule importados so pelo GET /clientes/:id/resumo
   // (OS-BACKEND-20). UsuariosModule/VendedoresModule (OS-BACKEND-23) pro
-  // escopo por vendedor (VendedorEscopoService).
-  imports: [PrismaModule, LlmClientModule, RedisModule, UsuariosModule, VendedoresModule],
+  // escopo por vendedor (VendedorEscopoService). VisitasModule (OS-BACKEND-28)
+  // pro GET /clientes/:id/visitas.
+  imports: [
+    PrismaModule,
+    LlmClientModule,
+    RedisModule,
+    UsuariosModule,
+    VendedoresModule,
+    VisitasModule,
+  ],
   controllers: [ClientesController],
   providers: [ClientesService, ClienteResumoLlmService, ClienteEstatisticasService],
 })
