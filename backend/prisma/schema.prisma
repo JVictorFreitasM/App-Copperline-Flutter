@@ -245,7 +245,13 @@ enum SituacaoItemPedido {
 // PedidoItem.produtoId.
 model Pedido {
   id                      String              @id @default(uuid())
-  idExternoErp            String              @unique @map("id_externo_erp")
+  // Nullable (OS-BACKEND-25) - so os pedidos SINCRONIZADOS do ERP tem
+  // idExternoErp desde a criacao da linha; um pedido criado LOCALMENTE
+  // (POST /pedidos) comeca sem ele (ainda nao existe no Radar) e so ganha
+  // valor apos o envio confirmar sucesso. Postgres permite varios NULL
+  // numa coluna @unique, entao isso nao quebra a unicidade pros pedidos
+  // que ja tem id real.
+  idExternoErp            String?             @unique @map("id_externo_erp")
   codigoIntegrador        String?             @map("codigo_integrador")
   numero                  String?
   situacao                TipoSituacaoPedido?
@@ -255,17 +261,40 @@ model Pedido {
   // true quando esta linha foi criada como stub por NotaFiscalSyncStrategy
   // (OS 09, nota fiscal referenciando um pedido ainda nao sincronizado) -
   // pedidoSync sempre grava false ao completar os dados de verdade. Mesmo
-  // padrao ja usado em Cliente/Produto (OS 07).
+  // padrao ja usado em Cliente/Produto (OS 07). NAO e' o mesmo conceito de
+  // um pedido criado localmente (ver vendedorId/statusLocal abaixo) - um
+  // pedido local tem dado completo do nosso lado, so ainda nao tem
+  // situacao/numero do Radar.
   incompleto              Boolean             @default(false)
   sincronizadoEm          DateTime            @map("sincronizado_em")
 
+  // Origem local (OS-BACKEND-25, POST /pedidos) - null pra pedidos que so
+  // existem por sincronizacao (nunca criados pelo nosso sistema).
+  // vendedorId e' quem criou; statusLocal controla o gate de aprovacao de
+  // desconto (ver CriarPedidoService) - PENDENTE nunca foi enviado ao ERP,
+  // ENVIADO ja foi confirmado (idExternoErp preenchido). Sem status
+  // "ERRO_ENVIO" de proposito: se o envio falha, a linha inteira e'
+  // descartada (nunca persistida) em vez de marcada com erro - ver
+  // criterio de aceite "sem deixar registro orfao no banco local".
+  vendedorId                   String?            @map("vendedor_id")
+  percentualDescontoSolicitado Decimal?           @map("percentual_desconto_solicitado") @db.Decimal(5, 2)
+  statusLocal                  StatusPedidoLocal? @map("status_local")
+
   cliente              Cliente?              @relation(fields: [clienteId], references: [id])
+  vendedor             Vendedor?             @relation(fields: [vendedorId], references: [id])
   itens                PedidoItem[]
   notasFiscais         NotaFiscalPedido[]
   solicitacoesDesconto SolicitacaoDesconto[]
 
   @@index([clienteId])
   @@map("pedidos")
+}
+
+enum StatusPedidoLocal {
+  AGUARDANDO_APROVACAO
+  ENVIADO
+
+  @@map("status_pedido_local")
 }
 
 // Itens de pedido NAO tem id/codigoIntegrador proprio no WK Radar (so
@@ -596,6 +625,7 @@ model Vendedor {
   solicitacoesSolicitadas SolicitacaoDesconto[] @relation("SolicitacaoVendedorSolicitante")
   solicitacoesParaAprovar SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
   solicitacoesDecididas   SolicitacaoDesconto[] @relation("SolicitacaoAprovador")
+  pedidosCriados          Pedido[]
 
   @@map("vendedores")
 }

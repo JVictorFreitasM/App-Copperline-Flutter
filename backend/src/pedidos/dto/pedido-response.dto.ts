@@ -14,7 +14,7 @@ export interface ClienteResumoPedidoDto {
 // criterio de aceite da OS 11 sobre nao vazar dado irrelevante numa lista).
 export interface PedidoResumoDto {
   id: string;
-  idExternoErp: string;
+  idExternoErp: string | null;
   numero: string | null;
   situacao: string | null;
   dataHoraUltimaAlteracao: Date | null;

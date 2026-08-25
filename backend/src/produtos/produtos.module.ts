@@ -18,6 +18,9 @@ import { ProdutosService } from './produtos.service';
   imports: [PrismaModule, NotificacoesModule, UsuariosModule],
   controllers: [ProdutosController],
   providers: [ProdutosService, ProdutosRupturaService, ProdutoCalculoService],
+  // ProdutoCalculoService exportado pra PedidosModule (OS-BACKEND-25)
+  // reaproveitar o calculo por tipo de venda na criacao de pedido.
+  exports: [ProdutoCalculoService],
 })
 export class ProdutosModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

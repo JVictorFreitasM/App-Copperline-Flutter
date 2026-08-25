@@ -95,7 +95,18 @@ export class SyncObservabilityService {
     return {
       cliente: clientes.map((c) => paraRegistroIncompletoDto(c, agora)),
       produto: produtos.map((p) => paraRegistroIncompletoDto(p, agora)),
-      pedido: pedidos.map((p) => paraRegistroIncompletoDto(p, agora)),
+      // idExternoErp e' sempre string aqui na pratica (nunca null): um
+      // stub (incompleto:true) so existe porque foi criado a partir de um
+      // idExternoErp real referenciado por outra entidade (ver
+      // resolverOuCriarPedidoStub em nota-fiscal.sync.ts) - null so
+      // acontece pra pedido criado localmente (OS-BACKEND-25), que nunca
+      // e' incompleto:true. Cast documentado, nao um bug latente.
+      pedido: pedidos.map((p) =>
+        paraRegistroIncompletoDto(
+          { ...p, idExternoErp: p.idExternoErp as string },
+          agora,
+        ),
+      ),
     };
   }
 
