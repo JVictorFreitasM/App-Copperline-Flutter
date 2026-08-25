@@ -19,6 +19,8 @@ import { BuscaModule } from './busca/busca.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 import { LlmClientModule } from './llm-client/llm-client.module';
+import { VendedoresModule } from './vendedores/vendedores.module';
+import { SolicitacoesDescontoModule } from './solicitacoes-desconto/solicitacoes-desconto.module';
 
 @Module({
   imports: [
@@ -47,6 +49,8 @@ import { LlmClientModule } from './llm-client/llm-client.module';
     UsuariosModule,
     NotificacoesModule,
     LlmClientModule,
+    VendedoresModule,
+    SolicitacoesDescontoModule,
   ],
 })
 export class AppModule {}
