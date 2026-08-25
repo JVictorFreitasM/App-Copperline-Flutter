@@ -21,6 +21,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { LlmClientModule } from './llm-client/llm-client.module';
 import { VendedoresModule } from './vendedores/vendedores.module';
 import { SolicitacoesDescontoModule } from './solicitacoes-desconto/solicitacoes-desconto.module';
+import { RastreioModule } from './rastreio/rastreio.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { SolicitacoesDescontoModule } from './solicitacoes-desconto/solicitacoes
     LlmClientModule,
     VendedoresModule,
     SolicitacoesDescontoModule,
+    RastreioModule,
   ],
 })
 export class AppModule {}

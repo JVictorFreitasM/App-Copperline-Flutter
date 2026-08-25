@@ -466,6 +466,7 @@ model Usuario {
   dispositivos DispositivoUsuario[]
   favoritos    ProdutoFavorito[]
   vendedores   Vendedor[]
+  localizacoes LocalizacaoUsuario[]
 
   @@map("usuarios")
 }
@@ -698,4 +699,28 @@ model SolicitacaoDesconto {
   @@index([vendedorSolicitanteId])
   @@index([status])
   @@map("solicitacoes_desconto")
+}
+
+// Rastreio de localizacao em LOTE (OS-BACKEND-27) - nunca tempo real. O
+// app captura pontos localmente (intervalo controlado do lado do app,
+// OS-MOBILE-20) e envia em lote via POST /rastreio/lote, inclusive apos
+// periodo offline - por isso capturadoEm (timestamp de quando o ponto foi
+// capturado NO DISPOSITIVO) e recebidoEm (quando o servidor recebeu) sao
+// campos DIFERENTES e podem estar bem distantes um do outro (criterio de
+// aceite: usa o timestamp original, nao o momento do envio). loteId
+// correlaciona todos os pontos de uma mesma chamada POST (nao e' FK pra
+// lugar nenhum, so agrupamento).
+model LocalizacaoUsuario {
+  id          String   @id @default(uuid())
+  usuarioId   String   @map("usuario_id")
+  latitude    Decimal  @db.Decimal(9, 6)
+  longitude   Decimal  @db.Decimal(9, 6)
+  capturadoEm DateTime @map("capturado_em")
+  loteId      String   @map("lote_id")
+  recebidoEm  DateTime @default(now()) @map("recebido_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, capturadoEm])
+  @@map("localizacoes_usuario")
 }
