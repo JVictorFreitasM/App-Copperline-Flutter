@@ -4,6 +4,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
+import { ClienteEstatisticasService } from './cliente-estatisticas.service';
+import type { ClienteEstatisticasDto } from './cliente-estatisticas.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import type { ClienteResumoLlmDto } from './cliente-resumo-llm.service';
 import { ClientesService } from './clientes.service';
@@ -12,6 +14,7 @@ import type {
   ClienteDetalheDto,
   ClienteResumoDto,
 } from './dto/cliente-response.dto';
+import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dto';
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
 import type { PaginatedResult } from '../common/pagination';
@@ -25,6 +28,7 @@ export class ClientesController {
   constructor(
     private readonly clientesService: ClientesService,
     private readonly clienteResumoLlmService: ClienteResumoLlmService,
+    private readonly clienteEstatisticasService: ClienteEstatisticasService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
   ) {}
@@ -70,6 +74,18 @@ export class ClientesController {
   ): Promise<ClienteResumoLlmDto> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clienteResumoLlmService.obterResumo(id, escopo);
+  }
+
+  // OS-BACKEND-26 - "/:id/estatisticas" e' mais especifico que "/:id" (3
+  // segmentos vs 2), mesmo raciocinio de "/:id/resumo" acima.
+  @Get(':id/estatisticas')
+  async obterEstatisticas(
+    @Param('id') id: string,
+    @Query() query: ClienteEstatisticasQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteEstatisticasDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clienteEstatisticasService.obter(id, query.meses, escopo);
   }
 
   private async resolverEscopo(idpUser: IdpUser): Promise<EscopoClientes> {

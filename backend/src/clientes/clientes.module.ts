@@ -7,6 +7,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
+import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
 import { ClientesService } from './clientes.service';
@@ -17,7 +18,7 @@ import { ClientesService } from './clientes.service';
   // escopo por vendedor (VendedorEscopoService).
   imports: [PrismaModule, LlmClientModule, RedisModule, UsuariosModule, VendedoresModule],
   controllers: [ClientesController],
-  providers: [ClientesService, ClienteResumoLlmService],
+  providers: [ClientesService, ClienteResumoLlmService, ClienteEstatisticasService],
 })
 export class ClientesModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}
