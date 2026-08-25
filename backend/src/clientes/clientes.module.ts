@@ -9,6 +9,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
+import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
 import { ClientesService } from './clientes.service';
@@ -27,7 +28,12 @@ import { ClientesService } from './clientes.service';
     VisitasModule,
   ],
   controllers: [ClientesController],
-  providers: [ClientesService, ClienteResumoLlmService, ClienteEstatisticasService],
+  providers: [
+    ClientesService,
+    ClienteResumoLlmService,
+    ClienteEstatisticasService,
+    ClienteLocalizacaoService,
+  ],
 })
 export class ClientesModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

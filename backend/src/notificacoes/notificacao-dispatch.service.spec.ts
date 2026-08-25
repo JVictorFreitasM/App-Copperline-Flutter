@@ -18,8 +18,9 @@ function eventoFake(overrides: Partial<Record<string, unknown>> = {}) {
 
 function prismaFake(overrides: {
   pendentes?: unknown[];
-  dispositivos?: { token: string }[];
+  dispositivos?: { token: string; usuarioId?: string }[];
   favoritos?: { usuario: { dispositivos: { token: string }[] } }[];
+  visita?: { vendedor: { supervisor: { usuarioId: string | null } | null } } | null;
 } = {}) {
   return {
     eventoNotificacao: {
@@ -27,10 +28,23 @@ function prismaFake(overrides: {
       update: jest.fn().mockResolvedValue(undefined),
     },
     dispositivoUsuario: {
-      findMany: jest.fn().mockResolvedValue(overrides.dispositivos ?? []),
+      findMany: jest
+        .fn()
+        .mockImplementation(async ({ where }: { where?: { usuarioId?: string } } = {}) => {
+          const todos = overrides.dispositivos ?? [];
+          if (where?.usuarioId) {
+            return todos.filter((d) => d.usuarioId === where.usuarioId);
+          }
+          return todos;
+        }),
     },
     produtoFavorito: {
       findMany: jest.fn().mockResolvedValue(overrides.favoritos ?? []),
+    },
+    visita: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue('visita' in overrides ? overrides.visita : null),
     },
   };
 }
@@ -97,6 +111,42 @@ describe('NotificacaoDispatchService.processarPendentes', () => {
     const prisma = prismaFake({
       pendentes: [eventoFake({ tipo: 'PRODUTO_REABASTECIDO' })],
       favoritos: [],
+    });
+    const pushClient = pushClientFake({ sucesso: [], falha: [] });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(pushClient.enviar).not.toHaveBeenCalled();
+    expect(prisma.eventoNotificacao.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ENVIADO' }) }),
+    );
+  });
+
+  it('VISITA_CANCELADA: so vai pro dispositivo do supervisor DIRETO do vendedor (nunca broadcast)', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake({ tipo: 'VISITA_CANCELADA', referenciaId: 'visita-1' })],
+      visita: { vendedor: { supervisor: { usuarioId: 'usuario-supervisor' } } },
+      dispositivos: [
+        { token: 'token-supervisor', usuarioId: 'usuario-supervisor' },
+        { token: 'token-outro-vendedor', usuarioId: 'outro-usuario' },
+      ],
+    });
+    const pushClient = pushClientFake({ sucesso: ['token-supervisor'], falha: [] });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(prisma.visita.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'visita-1' } }),
+    );
+    expect(pushClient.enviar).toHaveBeenCalledWith(['token-supervisor'], expect.anything());
+  });
+
+  it('VISITA_CANCELADA: marca ENVIADO sem chamar push quando o vendedor nao tem supervisor vinculado', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake({ tipo: 'VISITA_CANCELADA', referenciaId: 'visita-1' })],
+      visita: { vendedor: { supervisor: null } },
     });
     const pushClient = pushClientFake({ sucesso: [], falha: [] });
     const service = new NotificacaoDispatchService(prisma as never, pushClient as never);

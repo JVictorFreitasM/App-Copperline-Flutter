@@ -83,8 +83,15 @@ services:
       # Firebase Cloud Messaging - vazio ate ser configurado (fail-closed
       # so no envio, nao no boot - ver PushNotificationClientService).
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      # Fotos de check-in de visita (extensao pos-OS-BACKEND-28) - disco
+      # local, decisao confirmada com o usuario. Volume nomeado abaixo pra
+      # sobreviver a recriacao do container (docker compose up -d
+      # backend), senao a foto some a cada deploy.
+      VISITAS_FOTOS_DIR: /workspace/backend/uploads/visitas
     ports:
       - "3010:3000"
+    volumes:
+      - copperline-visitas-fotos:/workspace/backend/uploads/visitas
     depends_on:
       postgres:
         condition: service_healthy
@@ -109,3 +116,4 @@ services:
 
 volumes:
   copperline-postgres-data:
+  copperline-visitas-fotos:

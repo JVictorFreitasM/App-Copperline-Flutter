@@ -74,10 +74,24 @@ model Cliente {
   incompleto       Boolean  @default(false)
   sincronizadoEm   DateTime @map("sincronizado_em")
 
-  contatos   ContatoCliente[]
-  pedidos    Pedido[]
-  vendedores ClienteVendedor[]
-  visitas    Visita[]
+  // "Pin" de localizacao (visita com foto/geolocalizacao, extensao da
+  // OS-BACKEND-28) - NAO vem do WK Radar (o endereco em `enderecos` acima
+  // e' o cadastral, sem coordenada). Definido manualmente por um vendedor
+  // vinculado ao cliente via PATCH /clientes/:id/localizacao, uma vez
+  // (redefinivel depois). Serve de referencia pra validar que check-in e
+  // checkout de visita aconteceram a ate 50m de distancia (ver
+  // VisitasService, domain/distancia-geografica.ts) - sem pin definido,
+  // check-in fica bloqueado (nao ha o que validar contra).
+  localizacaoLat           Decimal?  @map("localizacao_lat") @db.Decimal(9, 6)
+  localizacaoLng           Decimal?  @map("localizacao_lng") @db.Decimal(9, 6)
+  localizacaoDefinidaEm    DateTime? @map("localizacao_definida_em")
+  localizacaoDefinidaPorId String?   @map("localizacao_definida_por_id")
+
+  contatos               ContatoCliente[]
+  pedidos                Pedido[]
+  vendedores             ClienteVendedor[]
+  visitas                Visita[]
+  localizacaoDefinidaPor Vendedor?         @relation("ClienteLocalizacaoDefinidaPor", fields: [localizacaoDefinidaPorId], references: [id])
 
   @@map("clientes")
 }
@@ -516,6 +530,10 @@ enum TipoEventoNotificacao {
   PEDIDO_SITUACAO_ALTERADA
   NOTA_FISCAL_REJEITADA
   PRODUTO_REABASTECIDO
+  // Extensao pos-OS-BACKEND-28 - vendedor cancelou um check-in de visita,
+  // avisa o supervisor DIRETO (nao broadcast, ver
+  // NotificacaoDispatchService.resolverTokensAlvo).
+  VISITA_CANCELADA
 
   @@map("tipo_evento_notificacao")
 }
@@ -624,11 +642,12 @@ model Vendedor {
 
   clientes ClienteVendedor[]
 
-  solicitacoesSolicitadas SolicitacaoDesconto[] @relation("SolicitacaoVendedorSolicitante")
-  solicitacoesParaAprovar SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
-  solicitacoesDecididas   SolicitacaoDesconto[] @relation("SolicitacaoAprovador")
-  pedidosCriados          Pedido[]
-  visitas                 Visita[]
+  solicitacoesSolicitadas     SolicitacaoDesconto[] @relation("SolicitacaoVendedorSolicitante")
+  solicitacoesParaAprovar     SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
+  solicitacoesDecididas       SolicitacaoDesconto[] @relation("SolicitacaoAprovador")
+  pedidosCriados              Pedido[]
+  visitas                     Visita[]
+  clientesLocalizacaoDefinida Cliente[]             @relation("ClienteLocalizacaoDefinidaPor")
 
   @@map("vendedores")
 }
@@ -750,6 +769,25 @@ model Visita {
   // Nota livre - pode ser preenchida no check-in e/ou sobrescrita no
   // checkout (VisitasService.checkout so atualiza se uma nova nota vier).
   nota        String?
+
+  // Cancelamento (extensao pos-OS-BACKEND-28) - vendedor errou o cliente e
+  // cancela ANTES do checkout, com comentario obrigatorio repassado ao
+  // supervisor direto via push (ver VisitasService.cancelar,
+  // TipoEventoNotificacao.VISITA_CANCELADA). Visita cancelada nunca tem
+  // checkoutEm - canceladaEm e' o que marca "nao esta mais em aberto"
+  // pro bloqueio de check-in duplo (ver VisitasService.checkin).
+  canceladaEm        DateTime? @map("cancelada_em")
+  motivoCancelamento String?   @map("motivo_cancelamento")
+
+  // Foto da fachada (extensao pos-OS-BACKEND-28) - obrigatoria no
+  // check-in, guardada em disco local (ver VisitaFotoStorageService).
+  // distanciaCheckinMetros/distanciaCheckoutMetros sao a distancia REAL
+  // calculada no momento (Cliente.localizacaoLat/Lng pode mudar depois -
+  // guardar o valor calculado preserva o que foi validado na hora, nao um
+  // numero que se tornaria inconsistente com o pin atual).
+  fotoCheckinCaminho      String?  @map("foto_checkin_caminho")
+  distanciaCheckinMetros  Decimal? @map("distancia_checkin_metros") @db.Decimal(10, 2)
+  distanciaCheckoutMetros Decimal? @map("distancia_checkout_metros") @db.Decimal(10, 2)
 
   cliente  Cliente  @relation(fields: [clienteId], references: [id])
   vendedor Vendedor @relation(fields: [vendedorId], references: [id])

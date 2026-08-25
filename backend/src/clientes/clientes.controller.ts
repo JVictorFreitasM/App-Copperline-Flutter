@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -6,6 +6,8 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import type { ClienteEstatisticasDto } from './cliente-estatisticas.service';
+import { ClienteLocalizacaoService } from './cliente-localizacao.service';
+import type { ClienteLocalizacaoDto } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import type { ClienteResumoLlmDto } from './cliente-resumo-llm.service';
 import { ClientesService } from './clientes.service';
@@ -15,6 +17,7 @@ import type {
   ClienteResumoDto,
 } from './dto/cliente-response.dto';
 import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dto';
+import { DefinirLocalizacaoClienteDto } from './dto/definir-localizacao-cliente.dto';
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
 import type { PaginatedResult } from '../common/pagination';
@@ -34,6 +37,7 @@ export class ClientesController {
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly visitasService: VisitasService,
+    private readonly clienteLocalizacaoService: ClienteLocalizacaoService,
   ) {}
 
   @Get()
@@ -101,6 +105,20 @@ export class ClientesController {
   ): Promise<VisitaDto[]> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.visitasService.listarPorCliente(id, escopo);
+  }
+
+  // "Pin" de localizacao do cliente (extensao pos-OS-BACKEND-28) - so o
+  // vendedor vinculado ao cliente pode definir/redefinir (ver
+  // ClienteLocalizacaoService, mesmo criterio de "cliente proprio" de
+  // VisitasService.checkin).
+  @Patch(':id/localizacao')
+  async definirLocalizacao(
+    @Param('id') id: string,
+    @Body() dto: DefinirLocalizacaoClienteDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteLocalizacaoDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.clienteLocalizacaoService.definir(usuario.id, id, dto);
   }
 
   private async resolverEscopo(idpUser: IdpUser): Promise<EscopoClientes> {

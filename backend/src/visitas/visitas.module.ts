@@ -4,13 +4,17 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { AdminVisitasController } from './admin-visitas.controller';
+import { VisitaFotoStorageService } from './visita-foto-storage.service';
 import { VisitasController } from './visitas.controller';
 import { VisitasService } from './visitas.service';
 
 @Module({
   imports: [PrismaModule, UsuariosModule],
-  controllers: [VisitasController],
-  providers: [VisitasService],
+  // AdminVisitasController fica protegido so por ApiKeyGuard (ver seu
+  // proprio @UseGuards) - so VisitasController entra no requireAuth abaixo.
+  controllers: [VisitasController, AdminVisitasController],
+  providers: [VisitasService, VisitaFotoStorageService],
   // VisitasService exportado pra ClientesModule (OS-BACKEND-28) montar
   // GET /clientes/:id/visitas sem duplicar a logica de listagem aqui.
   exports: [VisitasService],

@@ -89,6 +89,28 @@ export class NotificacaoDispatchService {
       return favoritos.flatMap((f) => f.usuario.dispositivos.map((d) => d.token));
     }
 
+    if (evento.tipo === 'VISITA_CANCELADA') {
+      // So o supervisor DIRETO do vendedor que cancelou (referenciaId =
+      // Visita.id) - nunca broadcast pra esse tipo (extensao
+      // pos-OS-BACKEND-28).
+      const visita = await this.prisma.visita.findUnique({
+        where: { id: evento.referenciaId },
+        select: { vendedor: { select: { supervisor: { select: { usuarioId: true } } } } },
+      });
+      const supervisorUsuarioId = visita?.vendedor.supervisor?.usuarioId;
+      if (!supervisorUsuarioId) {
+        // Vendedor sem supervisor configurado (hierarquia nao definida,
+        // ver OS-BACKEND-22) ou supervisor sem Usuario vinculado - ninguem
+        // pra avisar, nao e' erro (mesmo raciocinio de PRODUTO_REABASTECIDO
+        // sem favorito nenhum).
+        return [];
+      }
+      const dispositivosSupervisor = await this.prisma.dispositivoUsuario.findMany({
+        where: { usuarioId: supervisorUsuarioId },
+      });
+      return dispositivosSupervisor.map((d) => d.token);
+    }
+
     // PEDIDO_SITUACAO_ALTERADA / NOTA_FISCAL_REJEITADA: broadcast pra
     // todo mundo registrado (decisao confirmada com o usuario - sem
     // vinculo Cliente<->Usuario no sistema hoje).
