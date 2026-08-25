@@ -5,14 +5,17 @@ import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { UsuariosModule } from '../usuarios/usuarios.module';
+import { VendedoresModule } from '../vendedores/vendedores.module';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
 import { ClientesService } from './clientes.service';
 
 @Module({
   // LlmClientModule/RedisModule importados so pelo GET /clientes/:id/resumo
-  // (OS-BACKEND-20) - resto do modulo nao precisa de nenhum dos dois.
-  imports: [PrismaModule, LlmClientModule, RedisModule],
+  // (OS-BACKEND-20). UsuariosModule/VendedoresModule (OS-BACKEND-23) pro
+  // escopo por vendedor (VendedorEscopoService).
+  imports: [PrismaModule, LlmClientModule, RedisModule, UsuariosModule, VendedoresModule],
   controllers: [ClientesController],
   providers: [ClientesService, ClienteResumoLlmService],
 })

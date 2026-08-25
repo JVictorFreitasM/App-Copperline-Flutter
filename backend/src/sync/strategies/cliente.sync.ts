@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '../../../generated/prisma/client';
 import { ErpClientService } from '../../erp-client/erp-client.service';
@@ -30,6 +30,7 @@ const CAMPOS_CLIENTE = [
   'contatos.telefoneDDD',
   'contatos.telefoneNumero',
   'contatos.funcao',
+  'detalhes.idVendedores',
 ];
 
 const TAMANHO_JANELA_PADRAO_MS = 24 * 60 * 60 * 1000; // 1 dia
@@ -40,6 +41,7 @@ export class ClienteSyncStrategy implements SyncStrategy<
   ClienteMapeado
 > {
   readonly nomeEntidade = 'cliente';
+  private readonly logger = new Logger(ClienteSyncStrategy.name);
   private readonly tamanhoJanelaMs: number;
 
   constructor(
@@ -84,6 +86,7 @@ export class ClienteSyncStrategy implements SyncStrategy<
         telefoneNumero: contato.telefoneNumero ?? null,
         funcao: contato.funcao ?? null,
       })),
+      vendedoresExternoIds: bruto.detalhes?.idVendedores ?? [],
     };
   }
 
@@ -127,9 +130,50 @@ export class ClienteSyncStrategy implements SyncStrategy<
           update: { ...contato, clienteId: cliente.id, sincronizadoEm },
         });
       }
+
+      // N:N com vendedor (OS-BACKEND-23) - recriado do zero a cada sync,
+      // mesmo padrao ja usado em NotaFiscalPedido (ver nota-fiscal.sync.ts):
+      // mais simples e correto do que diffar contra o estado anterior.
+      await tx.clienteVendedor.deleteMany({ where: { clienteId: cliente.id } });
+      for (const idVendedorExterno of mapeado.vendedoresExternoIds) {
+        const vendedorId = await this.resolverOuCriarVendedorStub(
+          tx,
+          idVendedorExterno,
+        );
+        await tx.clienteVendedor.create({
+          data: { clienteId: cliente.id, vendedorId },
+        });
+      }
     });
   }
+
+  // Mesmo padrao ja usado por NotaFiscalSyncStrategy pra pedido (OS 09): se
+  // o cliente referenciar um vendedor que este sistema ainda nao
+  // sincronizou, cria um stub (incompleto=true, so id_externo_erp) em vez
+  // de perder o vinculo. vendedor.sync.ts completa os dados e zera
+  // incompleto quando sincronizar esse vendedor de verdade.
+  private async resolverOuCriarVendedorStub(
+    tx: PrismaTx,
+    idExternoErp: string,
+  ): Promise<string> {
+    const vendedor = await tx.vendedor.upsert({
+      where: { idExternoErp },
+      update: {},
+      create: { idExternoErp, incompleto: true, sincronizadoEm: new Date() },
+    });
+
+    if (vendedor.incompleto) {
+      this.logger.warn(
+        `Vendedor ${idExternoErp} ainda nao sincronizado - stub criado/reaproveitado para o cliente referenciar`,
+      );
+    }
+
+    return vendedor.id;
+  }
 }
+
+// Tipo do client de transacao do Prisma (this.prisma.$transaction(tx => ...))
+type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
 
 // WK Radar aceita date-time sem milissegundos/timezone (ex:
 // "2026-08-17T00:00:00") - confirmado contra o ambiente de testes.

@@ -1,34 +1,62 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import type { IdpUser } from '@copperline/idp-client';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UsuariosService } from '../usuarios/usuarios.service';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
+import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import type { ClienteResumoLlmDto } from './cliente-resumo-llm.service';
 import { ClientesService } from './clientes.service';
+import type { ConflitoClienteDto } from './clientes.service';
 import type {
   ClienteDetalheDto,
   ClienteResumoDto,
 } from './dto/cliente-response.dto';
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
+import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
 import type { PaginatedResult } from '../common/pagination';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver clientes.module.ts,
-// mesmo padrao da OS 03) - sem role especifica, qualquer usuario autenticado
-// le a lista (dado compartilhado da empresa, sem conceito de "dono").
+// mesmo padrao da OS 03). GET /clientes e /:id sao escopados por vendedor
+// (OS-BACKEND-23, ver VendedorEscopoService) - qualquer usuario autenticado
+// acessa a ROTA, mas o CONTEUDO retornado depende de quem esta logado.
 @Controller('clientes')
 export class ClientesController {
   constructor(
     private readonly clientesService: ClientesService,
     private readonly clienteResumoLlmService: ClienteResumoLlmService,
+    private readonly usuariosService: UsuariosService,
+    private readonly vendedorEscopoService: VendedorEscopoService,
   ) {}
 
   @Get()
-  listar(
+  async listar(
     @Query() query: ListarClientesQueryDto,
+    @CurrentUser() idpUser: IdpUser,
   ): Promise<PaginatedResult<ClienteResumoDto>> {
-    return this.clientesService.listar(query);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clientesService.listar(query, escopo);
+  }
+
+  // Literal, ANTES de `:id` - mesmo motivo de 'favoritos' em
+  // produtos.controller.ts (OS-BACKEND-19): `:id` (GET) casaria com
+  // "verificar-conflito" como valor de id se viesse antes. Unica rota de
+  // cliente SEM escopo por vendedor de proposito (ver
+  // ClientesService.verificarConflito).
+  @Get('verificar-conflito')
+  verificarConflito(
+    @Query() query: VerificarConflitoQueryDto,
+  ): Promise<ConflitoClienteDto> {
+    return this.clientesService.verificarConflito(query.documento);
   }
 
   @Get(':id')
-  buscarPorId(@Param('id') id: string): Promise<ClienteDetalheDto> {
-    return this.clientesService.buscarPorId(id);
+  async buscarPorId(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteDetalheDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clientesService.buscarPorId(id, escopo);
   }
 
   // OS-BACKEND-20 - "/:id/resumo" e' mais especifico que "/:id" (3
@@ -36,7 +64,16 @@ export class ClientesController {
   // declaracao (diferente do caso de /produtos/favoritos, ver
   // produtos.controller.ts).
   @Get(':id/resumo')
-  obterResumo(@Param('id') id: string): Promise<ClienteResumoLlmDto> {
-    return this.clienteResumoLlmService.obterResumo(id);
+  async obterResumo(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteResumoLlmDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clienteResumoLlmService.obterResumo(id, escopo);
+  }
+
+  private async resolverEscopo(idpUser: IdpUser): Promise<EscopoClientes> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.vendedorEscopoService.resolverEscopoClientes(idpUser, usuario.id);
   }
 }

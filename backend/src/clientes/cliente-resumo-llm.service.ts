@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { LlmClientService } from '../llm-client/llm-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
+import {
+  construirWhereClientePorEscopo,
+  type EscopoClientes,
+} from '../vendedores/vendedor-escopo.service';
 
 const TTL_CACHE_SEGUNDOS = 24 * 60 * 60;
 const QUANTIDADE_PEDIDOS_RECENTES = 10;
@@ -47,8 +51,22 @@ export class ClienteResumoLlmService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  async obterResumo(clienteId: string): Promise<ClienteResumoLlmDto> {
-    const cliente = await this.prisma.cliente.findUnique({ where: { id: clienteId } });
+  // escopo (OS-BACKEND-23): mesma regra de ClientesService.buscarPorId -
+  // 404 tanto pra "nao existe" quanto pra "existe mas fora do escopo do
+  // vendedor logado", nunca 403 (evita confirmar existencia pra quem nao
+  // deveria ver, ver skill security-review).
+  async obterResumo(
+    clienteId: string,
+    escopo: EscopoClientes,
+  ): Promise<ClienteResumoLlmDto> {
+    const whereEscopo = construirWhereClientePorEscopo(escopo);
+    if (whereEscopo === null) {
+      throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
+    }
+
+    const cliente = await this.prisma.cliente.findFirst({
+      where: { id: clienteId, ...whereEscopo },
+    });
     if (!cliente) {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
     }

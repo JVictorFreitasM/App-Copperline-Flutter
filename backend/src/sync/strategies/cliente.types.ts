@@ -24,6 +24,15 @@ export interface WkRadarContato {
   telefoneNumero?: string | null;
 }
 
+// detalhes.idVendedores: ARRAY (confirmado contra o swagger.json do
+// ambiente de testes) - um cliente pode ter mais de um vendedor vinculado
+// (OS-BACKEND-23, ver comentario em schema.prisma, model ClienteVendedor).
+// idRepresentantes existe no mesmo bloco mas fica fora do escopo desta OS
+// (so vendedor foi pedido).
+export interface WkRadarClienteDetalhes {
+  idVendedores?: string[] | null;
+}
+
 export interface WkRadarCliente {
   id: string;
   codigoIntegrador?: string | null;
@@ -33,6 +42,7 @@ export interface WkRadarCliente {
   inativo: boolean;
   enderecos?: WkRadarEndereco[] | null;
   contatos?: WkRadarContato[] | null;
+  detalhes?: WkRadarClienteDetalhes | null;
 }
 
 export interface ContatoMapeado {
@@ -54,4 +64,5 @@ export interface ClienteMapeado {
   inativo: boolean;
   enderecos: WkRadarEndereco[];
   contatos: ContatoMapeado[];
+  vendedoresExternoIds: string[];
 }

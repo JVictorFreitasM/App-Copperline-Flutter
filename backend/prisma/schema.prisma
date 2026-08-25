@@ -74,10 +74,34 @@ model Cliente {
   incompleto       Boolean  @default(false)
   sincronizadoEm   DateTime @map("sincronizado_em")
 
-  contatos ContatoCliente[]
-  pedidos  Pedido[]
+  contatos   ContatoCliente[]
+  pedidos    Pedido[]
+  vendedores ClienteVendedor[]
 
   @@map("clientes")
+}
+
+// N:N (OS-BACKEND-23) - o WK Radar modela vinculo de cliente com vendedor
+// como detalhes.idVendedores, um ARRAY (confirmado contra o swagger.json
+// do ambiente de testes) - um cliente pode ter mais de um vendedor
+// vinculado (raro na pratica, mas possivel - decisao confirmada com o
+// usuario). Por isso NAO e' um campo unico vendedorResponsavelId em
+// Cliente como o texto original da OS sugeria, e sim esta tabela de
+// vinculo, recriada do zero a cada sync (delete+recreate por clienteId -
+// mesmo padrao ja usado em NotaFiscalPedido, ver nota-fiscal.sync.ts) em
+// vez de tentar diffar contra o estado anterior.
+model ClienteVendedor {
+  id         String   @id @default(uuid())
+  clienteId  String   @map("cliente_id")
+  vendedorId String   @map("vendedor_id")
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  cliente  Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  vendedor Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, vendedorId])
+  @@index([vendedorId])
+  @@map("clientes_vendedores")
 }
 
 // Contatos tem identidade propria no WK Radar (id + codigoIntegrador
@@ -209,9 +233,9 @@ model Pedido {
   incompleto              Boolean             @default(false)
   sincronizadoEm          DateTime            @map("sincronizado_em")
 
-  cliente             Cliente?              @relation(fields: [clienteId], references: [id])
-  itens               PedidoItem[]
-  notasFiscais        NotaFiscalPedido[]
+  cliente              Cliente?              @relation(fields: [clienteId], references: [id])
+  itens                PedidoItem[]
+  notasFiscais         NotaFiscalPedido[]
   solicitacoesDesconto SolicitacaoDesconto[]
 
   @@index([clienteId])
@@ -454,18 +478,18 @@ enum StatusEventoNotificacao {
 // NotificacaoDispatchService (fila propria, separada da fila de sync, pra
 // nao atrasar o cursor incremental).
 model EventoNotificacao {
-  id           String                   @id @default(uuid())
+  id           String                  @id @default(uuid())
   tipo         TipoEventoNotificacao
   // id LOCAL (nao idExternoErp) do Pedido/NotaFiscal/Produto conforme o
   // tipo - quem le decide como interpretar, nao ha FK polimorfica no Prisma.
-  referenciaId String                   @map("referencia_id")
+  referenciaId String                  @map("referencia_id")
   titulo       String
   corpo        String
   // Dados extra pro deep-link do app (ex: {"pedidoId": "..."}).
   dados        Json?
-  status       StatusEventoNotificacao  @default(PENDENTE)
-  criadoEm     DateTime                 @default(now()) @map("criado_em")
-  processadoEm DateTime?                @map("processado_em")
+  status       StatusEventoNotificacao @default(PENDENTE)
+  criadoEm     DateTime                @default(now()) @map("criado_em")
+  processadoEm DateTime?               @map("processado_em")
   erro         Json?
 
   @@index([status])
@@ -511,16 +535,16 @@ model ConfiguracaoLlm {
 // pra flag de estado) em vez de so depender de usuarioId ser null, que
 // tambem seria o estado antes de qualquer tentativa de vinculo.
 model Vendedor {
-  id                       String   @id @default(uuid())
-  idExternoErp             String   @unique @map("id_externo_erp")
-  codigoIntegrador         String?  @map("codigo_integrador")
-  codigo                   String?
-  nome                     String?
-  email                    String?
-  inativo                  Boolean  @default(false)
-  usuarioId                String?  @map("usuario_id")
-  semCorrespondenciaUsuario Boolean @default(true) @map("sem_correspondencia_usuario")
-  sincronizadoEm           DateTime @map("sincronizado_em")
+  id                        String   @id @default(uuid())
+  idExternoErp              String   @unique @map("id_externo_erp")
+  codigoIntegrador          String?  @map("codigo_integrador")
+  codigo                    String?
+  nome                      String?
+  email                     String?
+  inativo                   Boolean  @default(false)
+  usuarioId                 String?  @map("usuario_id")
+  semCorrespondenciaUsuario Boolean  @default(true) @map("sem_correspondencia_usuario")
+  sincronizadoEm            DateTime @map("sincronizado_em")
 
   // Hierarquia (OS-BACKEND-22) - NAO vem do WK Radar (endpoint /vendedor nao
   // tem esses campos, ver skill wk-radar-client), configurada manualmente
@@ -532,7 +556,16 @@ model Vendedor {
   supervisor   Vendedor?     @relation("HierarquiaVendedor", fields: [supervisorId], references: [id])
   subordinados Vendedor[]    @relation("HierarquiaVendedor")
 
+  // true quando esta linha foi criada como stub por ClienteSyncStrategy
+  // (OS-BACKEND-23, detalhes.idVendedores referenciando um vendedor ainda
+  // nao sincronizado) - mesmo padrao de Produto/Cliente/Pedido.incompleto
+  // (OS 06/07). VendedorSyncStrategy sempre grava false ao completar os
+  // dados de verdade no proximo full refresh.
+  incompleto Boolean @default(false)
+
   usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  clientes ClienteVendedor[]
 
   solicitacoesSolicitadas SolicitacaoDesconto[] @relation("SolicitacaoVendedorSolicitante")
   solicitacoesParaAprovar SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
@@ -560,7 +593,7 @@ enum PapelVendedor {
 // distinguir o papel de quem solicita.
 model ConfiguracaoDesconto {
   id               String   @id @default(uuid())
-  limitePercentual Decimal  @default(20) @db.Decimal(5, 2) @map("limite_percentual")
+  limitePercentual Decimal  @default(20) @map("limite_percentual") @db.Decimal(5, 2)
   atualizadoEm     DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_desconto")
@@ -601,8 +634,8 @@ model SolicitacaoDesconto {
   decididoEm            DateTime?                 @map("decidido_em")
   criadoEm              DateTime                  @default(now()) @map("criado_em")
 
-  pedido              Pedido?  @relation(fields: [pedidoId], references: [id])
-  vendedorSolicitante Vendedor @relation("SolicitacaoVendedorSolicitante", fields: [vendedorSolicitanteId], references: [id])
+  pedido              Pedido?   @relation(fields: [pedidoId], references: [id])
+  vendedorSolicitante Vendedor  @relation("SolicitacaoVendedorSolicitante", fields: [vendedorSolicitanteId], references: [id])
   aprovadorEsperado   Vendedor? @relation("SolicitacaoAprovadorEsperado", fields: [aprovadorEsperadoId], references: [id])
   aprovador           Vendedor? @relation("SolicitacaoAprovador", fields: [aprovadorId], references: [id])
 

@@ -100,6 +100,11 @@ export class VendedorSyncStrategy implements SyncStrategy<
       inativo: mapeado.inativo,
       usuarioId: usuarioCorrespondente?.id ?? null,
       semCorrespondenciaUsuario: !usuarioCorrespondente,
+      // incompleto:false tambem no update - "completa" um eventual stub
+      // criado por ClienteSyncStrategy (OS-BACKEND-23, detalhes.idVendedores
+      // referenciando um vendedor ainda nao sincronizado) quando o vendedor
+      // de verdade chega aqui. Mesmo padrao de Produto/Cliente/Pedido.
+      incompleto: false,
       sincronizadoEm,
     };
 

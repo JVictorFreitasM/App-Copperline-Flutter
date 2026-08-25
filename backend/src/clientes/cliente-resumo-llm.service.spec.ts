@@ -1,5 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
+
+const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
 
 function prismaFake(overrides: {
   cliente?: unknown;
@@ -9,7 +12,7 @@ function prismaFake(overrides: {
 } = {}) {
   return {
     cliente: {
-      findUnique: jest
+      findFirst: jest
         .fn()
         .mockResolvedValue('cliente' in overrides ? overrides.cliente : { id: 'c1' }),
     },
@@ -44,7 +47,7 @@ describe('ClienteResumoLlmService.obterResumo', () => {
       redisFake() as never,
     );
 
-    await expect(service.obterResumo('inexistente')).rejects.toThrow(NotFoundException);
+    await expect(service.obterResumo('inexistente', ESCOPO_TODOS)).rejects.toThrow(NotFoundException);
   });
 
   it('retorna do cache quando ja existe, sem chamar o LLM de novo', async () => {
@@ -67,7 +70,7 @@ describe('ClienteResumoLlmService.obterResumo', () => {
       redisFake({ valorCacheado: JSON.stringify(resumoCacheado) }) as never,
     );
 
-    const resultado = await service.obterResumo('c1');
+    const resultado = await service.obterResumo('c1', ESCOPO_TODOS);
 
     expect(llmClient.gerarJson).not.toHaveBeenCalled();
     expect(resultado.fonteCache).toBe(true);
@@ -88,7 +91,7 @@ describe('ClienteResumoLlmService.obterResumo', () => {
     });
     const service = new ClienteResumoLlmService(prisma as never, llmClient as never, redis as never);
 
-    const resultado = await service.obterResumo('c1');
+    const resultado = await service.obterResumo('c1', ESCOPO_TODOS);
 
     expect(resultado.fonteCache).toBe(false);
     expect(resultado.pontosDeAtencao).toEqual(['cliente com nota rejeitada']);
@@ -108,6 +111,20 @@ describe('ClienteResumoLlmService.obterResumo', () => {
       redisFake() as never,
     );
 
-    await expect(service.obterResumo('c1')).rejects.toThrow('sem chave configurada');
+    await expect(service.obterResumo('c1', ESCOPO_TODOS)).rejects.toThrow('sem chave configurada');
+  });
+
+  it('lanca NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {
+    const prisma = prismaFake();
+    const service = new ClienteResumoLlmService(
+      prisma as never,
+      llmClientServiceFake({ pontosDeAtencao: [], sugestaoAbordagem: '', dadosInsuficientes: true }) as never,
+      redisFake() as never,
+    );
+
+    await expect(service.obterResumo('c1', { tipo: 'NENHUM' })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.cliente.findFirst).not.toHaveBeenCalled();
   });
 });
