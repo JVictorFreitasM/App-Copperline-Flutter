@@ -21,6 +21,7 @@ Só os recursos abaixo estão em escopo por enquanto — não sincronizar nada a
 | Nota Fiscal | Comercial | `GET /nota-fiscal`, `GET /nota-fiscal/{id}` |
 | Cliente | Empresarial | `GET /cliente`, `GET /cliente/{id}` |
 | Produto | Empresarial | `GET /produto`, `GET /produto/{id}` |
+| Vendedor | Empresarial | `GET /vendedor`, `GET /vendedor/{id}` |
 
 ## Base de URL
 
@@ -96,6 +97,12 @@ Como o WK Radar não resolve isso, a estratégia de paginação é responsabilid
 - **Sistema de grade**: produto tem `idGrade1`/`idGrade2`/`idGrade3` (dimensões de variação, ex: cor/tamanho) e `referenciasGrade[]` (referência específica por combinação de grade). Isso é o que `itens[].produtoServico.idItemGrade1/2/3` em `pedido` referencia — ou seja, a referência de um item de pedido a um produto **não é só pelo `id` do produto**, é pela combinação `id` + até 3 níveis de grade. Ao desenhar a tabela de produtos sincronizados, considerar se a chave de upsert precisa incluir os níveis de grade ou se cada combinação de grade vira sua própria linha.
 - Campos-chave da resposta: `id` (→ `id_externo_erp`), `codigoIntegrador`, `codigo`, `nome`, `descricao`, `tipo` (mesmo enum de `Tipo` do filtro), `inativo`, `precoVenda`, `complemento.gtin`/`gtinTributavel`, `kit[]` (se o produto for um kit, lista os itens componentes — relevante para conciliar com `pedido.kits[]`).
 - Schema também traz blocos fiscais extensos (`ipi`, `aliquotasICMS`, `produtoPISCOFINS`, `informacoesFiscais`) e físicos (`dimensoes`, `embalagem`, `composicaoLocal` para produção) — mapear no Prisma só o que o sistema for efetivamente usar, seguindo o mesmo critério já aplicado a `pedido`/`nota-fiscal`.
+
+### Vendedor (`GET /vendedor`)
+
+- **Sem filtro de data** — diferente de todos os outros recursos desta lista: não há `DataHoraAlteracao` (cursor único, como produto/pedido) nem par `Inicial`/`Final` (como cliente/nota-fiscal). Filtros disponíveis: `Nome`, `Email`, `Codigo`, `Situacao` (`Todos`/`Inativo`/`Ativo`), `PercentualComissaoFaturamento/RecebimentoInicial/Final`, `PagamentoComissao` (`Todos`/`Semana`/`Mensal`), `ListaIDFilial`, além de `Ids`/`CodigosIntegrador`/`Fields` (padrão comum). **Decisão do projeto (OS-BACKEND-21)**: sem filtro de alteração, não há como sincronizar incrementalmente — a estratégia reprocessa a lista inteira a cada execução (`agendamento: 'JANELA_FIXA_DIARIA'`, uma vez por noite; volume tipicamente baixo o suficiente para não precisar de janela/paginação). Mesmo raciocínio de nota-fiscal, um degrau mais simples (nem sequer há um campo de data pra filtrar por).
+- Campos-chave da resposta: `id` (→ `id_externo_erp`), `codigoIntegrador`, `codigo`, `nome`, `email`, `inativo`. Campos de comissão (`valorFixo`, `percentualComissaoFaturamento`/`Recebimento`, `pagamentoComissao*`) e telefone (`fone1`/`fone2`, `dddFone1`/`dddFone2`) existem na resposta mas ficam fora do escopo atual — só mapear se/quando o sistema precisar exibir isso.
+- **Vínculo com usuário do sistema de autenticação**: não vem do WK Radar — é calculado no `upsert()` da strategy, por correspondência de `email` (case-insensitive) contra a tabela `Usuario` local. Como `Usuario` só existe após o primeiro login (`UsuariosService.obterOuCriarPorSub`), a maioria dos vendedores pode não ter correspondência na primeira sincronização — isso é esperado, não um erro: sinalizado via `Vendedor.semCorrespondenciaUsuario`, sem lançar exceção (não pode derrubar a sincronização dos demais vendedores, ver `SyncService.executar`). Reavaliado a cada full refresh noturno.
 
 ## Pendências (não implementar sem resolver antes)
 

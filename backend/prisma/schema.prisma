@@ -385,6 +385,7 @@ model Usuario {
 
   dispositivos DispositivoUsuario[]
   favoritos    ProdutoFavorito[]
+  vendedores   Vendedor[]
 
   @@map("usuarios")
 }
@@ -488,4 +489,39 @@ model ConfiguracaoLlm {
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_llm")
+}
+
+// Sincronizado do WK Radar (GET /empresarial/v1/vendedor) - so leitura, ver
+// skill wk-radar-client. DIFERENTE de cliente/produto/pedido: o endpoint nao
+// tem NENHUM filtro de data (nem cursor unico, nem par Inicial/Final -
+// confirmado contra o swagger.json do ambiente de testes), entao nao ha
+// sync incremental de verdade - VendedorSyncStrategy reprocessa a lista
+// inteira a cada execucao (agendamento JANELA_FIXA_DIARIA, mesmo padrao de
+// NotaFiscal, ver vendedor.sync.ts).
+//
+// Vinculo com Usuario (OS-BACKEND-21): usuarioId e' resolvido no upsert por
+// correspondencia de e-mail (Vendedor.email x Usuario.email,
+// case-insensitive) - NAO e' uma FK vinda do WK Radar, e' calculada aqui.
+// Usuario so existe apos o primeiro login desse vendedor no app (ver
+// UsuariosService.obterOuCriarPorSub), entao a maioria dos vendedores pode
+// nao ter correspondencia na primeira sincronizacao - normal, reavaliado a
+// cada full refresh noturno. semCorrespondenciaUsuario sinaliza esse caso
+// explicitamente (mesmo padrao de Produto.incompleto/Cliente.incompleto
+// pra flag de estado) em vez de so depender de usuarioId ser null, que
+// tambem seria o estado antes de qualquer tentativa de vinculo.
+model Vendedor {
+  id                       String   @id @default(uuid())
+  idExternoErp             String   @unique @map("id_externo_erp")
+  codigoIntegrador         String?  @map("codigo_integrador")
+  codigo                   String?
+  nome                     String?
+  email                    String?
+  inativo                  Boolean  @default(false)
+  usuarioId                String?  @map("usuario_id")
+  semCorrespondenciaUsuario Boolean @default(true) @map("sem_correspondencia_usuario")
+  sincronizadoEm           DateTime @map("sincronizado_em")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("vendedores")
 }

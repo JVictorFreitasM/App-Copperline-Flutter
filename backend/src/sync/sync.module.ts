@@ -8,6 +8,7 @@ import { NotaFiscalSyncStrategy } from './strategies/nota-fiscal.sync';
 import { PedidoSyncStrategy } from './strategies/pedido.sync';
 import { ProdutoSyncStrategy } from './strategies/produto.sync';
 import { SaldoEstoqueSyncStrategy } from './strategies/saldo-estoque.sync';
+import { VendedorSyncStrategy } from './strategies/vendedor.sync';
 import { SyncConfigService } from './sync-config.service';
 import { SyncObservabilityService } from './sync-observability.service';
 import { SYNC_QUEUE, SYNC_STRATEGIES } from './sync.constants';
@@ -28,6 +29,7 @@ import { SyncService } from './sync.service';
     PedidoSyncStrategy,
     NotaFiscalSyncStrategy,
     SaldoEstoqueSyncStrategy,
+    VendedorSyncStrategy,
     {
       // Lista de strategies disponiveis para o SyncService/SyncScheduler -
       // adicionar uma nova entidade e so incluir a strategy aqui, sem
@@ -43,13 +45,15 @@ import { SyncService } from './sync.service';
         pedido: PedidoSyncStrategy,
         notaFiscal: NotaFiscalSyncStrategy,
         saldoEstoque: SaldoEstoqueSyncStrategy,
-      ) => [cliente, produto, pedido, notaFiscal, saldoEstoque],
+        vendedor: VendedorSyncStrategy,
+      ) => [cliente, produto, pedido, notaFiscal, saldoEstoque, vendedor],
       inject: [
         ClienteSyncStrategy,
         ProdutoSyncStrategy,
         PedidoSyncStrategy,
         NotaFiscalSyncStrategy,
         SaldoEstoqueSyncStrategy,
+        VendedorSyncStrategy,
       ],
     },
     SyncService,
