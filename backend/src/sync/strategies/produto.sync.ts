@@ -36,7 +36,16 @@ const CAMPOS_PRODUTO = [
   'idGrade3',
   'referenciasGrade',
   'complemento.gtin',
+  'dimensoes.comprimento',
+  'dimensoes.unidadeMedidaComprimento',
 ];
+
+// Valor do enum unidadeMedidaComprimento que consideramos "metro" (OS-BACKEND-24)
+// - NAO confirmado contra o ambiente real ainda (swagger so mostra
+// "Invalido" como placeholder de exemplo). Qualquer valor diferente deste
+// (incluindo null/undefined) faz comprimentoMetros ficar null - fail-safe,
+// nunca assume metro por omissao.
+const UNIDADE_MEDIDA_METRO = 'Metro';
 
 const MAPA_TIPO: Record<TipoProdutoWkRadar, TipoProduto> = {
   Invalido: 'INVALIDO',
@@ -128,6 +137,10 @@ export class ProdutoSyncStrategy implements SyncStrategy<
       idGrade2: bruto.idGrade2 ?? null,
       idGrade3: bruto.idGrade3 ?? null,
       referenciasGrade: bruto.referenciasGrade ?? [],
+      comprimentoMetros:
+        bruto.dimensoes?.unidadeMedidaComprimento === UNIDADE_MEDIDA_METRO
+          ? (bruto.dimensoes?.comprimento ?? null)
+          : null,
     };
   }
 
@@ -153,6 +166,7 @@ export class ProdutoSyncStrategy implements SyncStrategy<
       idGrade2: mapeado.idGrade2,
       idGrade3: mapeado.idGrade3,
       referenciasGrade,
+      comprimentoMetros: mapeado.comprimentoMetros,
       incompleto: false,
       sincronizadoEm,
     };

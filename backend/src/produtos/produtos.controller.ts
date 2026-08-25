@@ -1,9 +1,11 @@
-import { Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { PaginatedResult } from '../common/pagination';
 import { FavoritosService } from '../notificacoes/favoritos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { ProdutoCalculoService } from './produto-calculo.service';
+import type { ResultadoCalculoQuantidade } from './domain/calculo-quantidade-pedido';
 import { ProdutosService } from './produtos.service';
 import { ProdutosRupturaService } from './produtos-ruptura.service';
 import type { ProdutoRupturaPrevistaDto } from './produtos-ruptura.service';
@@ -11,6 +13,7 @@ import type {
   ProdutoDetalheDto,
   ProdutoResumoDto,
 } from './dto/produto-response.dto';
+import { CalcularQuantidadeDto } from './dto/calcular-quantidade.dto';
 import { ListarProdutosQueryDto } from './dto/listar-produtos-query.dto';
 import { RupturaPrevistaQueryDto } from './dto/ruptura-prevista-query.dto';
 
@@ -22,6 +25,7 @@ export class ProdutosController {
     private readonly favoritosService: FavoritosService,
     private readonly usuariosService: UsuariosService,
     private readonly produtosRupturaService: ProdutosRupturaService,
+    private readonly produtoCalculoService: ProdutoCalculoService,
   ) {}
 
   @Get()
@@ -74,5 +78,17 @@ export class ProdutosController {
   @Get(':id')
   buscarPorId(@Param('id') id: string): Promise<ProdutoDetalheDto> {
     return this.produtosService.buscarPorId(id);
+  }
+
+  // OS-BACKEND-24 - chamado antes de adicionar item ao pedido (mobile e
+  // web, OS-WEB-22). "/:id/calcular" e' mais especifico que "/:id" (2
+  // segmentos vs 1), sem risco de colisao independente da ordem de
+  // declaracao (mesmo raciocinio de "/:id/resumo" em clientes.controller.ts).
+  @Post(':id/calcular')
+  calcular(
+    @Param('id') id: string,
+    @Body() dto: CalcularQuantidadeDto,
+  ): Promise<ResultadoCalculoQuantidade> {
+    return this.produtoCalculoService.calcular(id, dto.metrosDesejados);
   }
 }

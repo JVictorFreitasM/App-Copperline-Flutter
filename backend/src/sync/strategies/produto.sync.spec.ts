@@ -42,7 +42,28 @@ describe('ProdutoSyncStrategy.map', () => {
       idGrade2: null,
       idGrade3: null,
       referenciasGrade: [],
+      comprimentoMetros: null,
     });
+  });
+
+  it('mapeia comprimentoMetros quando unidadeMedidaComprimento e "Metro"', () => {
+    const bruto: WkRadarProduto = {
+      id: '456',
+      inativo: false,
+      dimensoes: { comprimento: 30, unidadeMedidaComprimento: 'Metro' },
+    };
+
+    expect(strategy.map(bruto).comprimentoMetros).toBe(30);
+  });
+
+  it('NAO mapeia comprimentoMetros quando unidadeMedidaComprimento nao e "Metro" (fail-safe)', () => {
+    const bruto: WkRadarProduto = {
+      id: '456',
+      inativo: false,
+      dimensoes: { comprimento: 30, unidadeMedidaComprimento: 'Centimetro' },
+    };
+
+    expect(strategy.map(bruto).comprimentoMetros).toBeNull();
   });
 
   it('preserva referenciasGrade sem transformar em linhas proprias (decisao desta OS)', () => {

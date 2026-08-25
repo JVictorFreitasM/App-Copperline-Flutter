@@ -5,6 +5,7 @@ import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { ProdutoCalculoService } from './produto-calculo.service';
 import { ProdutosController } from './produtos.controller';
 import { ProdutosRupturaService } from './produtos-ruptura.service';
 import { ProdutosService } from './produtos.service';
@@ -16,7 +17,7 @@ import { ProdutosService } from './produtos.service';
   // contra GET /produtos/:id, ver OS-BACKEND-19).
   imports: [PrismaModule, NotificacoesModule, UsuariosModule],
   controllers: [ProdutosController],
-  providers: [ProdutosService, ProdutosRupturaService],
+  providers: [ProdutosService, ProdutosRupturaService, ProdutoCalculoService],
 })
 export class ProdutosModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

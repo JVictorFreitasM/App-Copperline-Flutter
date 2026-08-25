@@ -168,10 +168,36 @@ model Produto {
   incompleto       Boolean      @default(false)
   sincronizadoEm   DateTime     @map("sincronizado_em")
 
+  // Comprimento por peca/unidade fechada (OS-BACKEND-24), mapeado de
+  // dimensoes.comprimento do WK Radar - so quando
+  // dimensoes.unidadeMedidaComprimento e' "Metro" (valor exato do enum
+  // ainda NAO confirmado contra o ambiente real - ver comentario em
+  // produto.sync.ts); em qualquer outro caso fica null (fail-safe, nunca
+  // interpreta um valor errado como metro). Usado por
+  // calcularQuantidadePedido pra POC/KM - RET nao depende disso.
+  comprimentoMetros Decimal? @map("comprimento_metros") @db.Decimal(10, 3)
+
+  // PENDENCIA (OS-BACKEND-24): origem/regra de classificacao (campo nativo
+  // do Radar `classificacao` vs. calculo local a partir de
+  // comprimentoMetros, incluindo o corte exato entre 30-50m) NAO foi
+  // confirmada com quem define a regra de negocio - decisao explicita de
+  // deixar como pendencia por enquanto. Nullable, sem populacao automatica
+  // nem endpoint de atribuicao manual ainda - so o campo existe, pronto
+  // pra ser preenchido quando a regra for definida.
+  tipoVenda TipoVendaProduto? @map("tipo_venda")
+
   itensPedido PedidoItem[]
   favoritos   ProdutoFavorito[]
 
   @@map("produtos")
+}
+
+enum TipoVendaProduto {
+  POC
+  RET
+  KM
+
+  @@map("tipo_venda_produto")
 }
 
 enum TipoSituacaoPedido {

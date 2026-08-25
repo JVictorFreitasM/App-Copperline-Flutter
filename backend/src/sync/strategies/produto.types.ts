@@ -16,6 +16,19 @@ export interface WkRadarProdutoComplemento {
   gtin?: string | null;
 }
 
+// dimensoes.comprimento (OS-BACKEND-24) - usado por
+// calcularQuantidadePedido pra produtos POC/KM (comprimento por
+// peca/unidade fechada). unidadeMedidaComprimento e' enum livre no Radar
+// (swagger so mostra "Invalido" como placeholder de exemplo, valores
+// reais NAO confirmados contra o ambiente de testes) - so tratamos como
+// metros quando o valor for exatamente "Metro" (ver
+// produto.sync.ts:mapearComprimentoMetros); qualquer outra coisa fica
+// null, nunca interpretado incorretamente.
+export interface WkRadarProdutoDimensoes {
+  comprimento?: number | null;
+  unidadeMedidaComprimento?: string | null;
+}
+
 export interface WkRadarProduto {
   id: string;
   codigoIntegrador?: string | null;
@@ -30,6 +43,7 @@ export interface WkRadarProduto {
   idGrade3?: string | null;
   referenciasGrade?: WkRadarProdutoReferenciaGrade[] | null;
   complemento?: WkRadarProdutoComplemento | null;
+  dimensoes?: WkRadarProdutoDimensoes | null;
 }
 
 export interface ProdutoMapeado {
@@ -46,4 +60,5 @@ export interface ProdutoMapeado {
   idGrade2: string | null;
   idGrade3: string | null;
   referenciasGrade: WkRadarProdutoReferenciaGrade[];
+  comprimentoMetros: number | null;
 }
