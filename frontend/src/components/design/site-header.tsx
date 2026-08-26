@@ -16,7 +16,7 @@ export async function SiteHeader() {
       <Link href={user ? "/painel" : "/"} className="text-base font-bold text-ink">
         Copperline
       </Link>
-      {user && <SiteNav />}
+      {user && <SiteNav role={user.role} />}
       {user && (
         <div className="flex items-center gap-4 text-sm">
           <span className="text-muted">{user.name}</span>

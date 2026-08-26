@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 // skill, "Navegação inferior (mobile) / lateral ou superior (web)").
 // Client Component só por causa do usePathname() (destaque do item ativo)
 // - o resto do header (SiteHeader) continua Server Component.
-const ITENS = [
+const ITENS_BASE = [
   { href: "/painel", rotulo: "Painel" },
   { href: "/clientes", rotulo: "Clientes" },
   { href: "/produtos", rotulo: "Produtos" },
@@ -18,12 +18,20 @@ const ITENS = [
   { href: "/notas-fiscais", rotulo: "Notas fiscais" },
 ];
 
-export function SiteNav() {
+// "Sincronização" só aparece pra role:'admin' (OS-WEB-18) - a página em si
+// já nega acesso a quem não é admin (notFound(), ver
+// admin/sincronizacao/page.tsx), isso aqui é só não oferecer o link a quem
+// não vai conseguir usá-lo.
+export function SiteNav({ role }: { role: string | null }) {
   const pathname = usePathname();
+  const itens =
+    role === "admin"
+      ? [...ITENS_BASE, { href: "/admin/sincronizacao", rotulo: "Sincronização" }]
+      : ITENS_BASE;
 
   return (
     <nav className="flex items-center gap-1">
-      {ITENS.map((item) => {
+      {itens.map((item) => {
         const ativo = pathname?.startsWith(item.href) ?? false;
         return (
           <Link

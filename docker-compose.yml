@@ -109,6 +109,10 @@ services:
       API_URL: http://backend:3000
       # O que o NAVEGADOR do usuario efetivamente acessa (login/logout).
       API_PUBLIC_URL: http://localhost:3010
+      # Mesma chave do backend (ver ApiKeyGuard) - a Central de
+      # Sincronizacao (OS-WEB-18) chama admin/sync/* server-side
+      # (lib/admin-api.ts), nunca exposta ao navegador.
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
     ports:
       - "3020:3000"
     depends_on:
