@@ -18,16 +18,19 @@ const ITENS_BASE = [
   { href: "/notas-fiscais", rotulo: "Notas fiscais" },
 ];
 
-// "Sincronização" só aparece pra role:'admin' (OS-WEB-18) - a página em si
-// já nega acesso a quem não é admin (notFound(), ver
-// admin/sincronizacao/page.tsx), isso aqui é só não oferecer o link a quem
-// não vai conseguir usá-lo.
+// "Sincronização"/"Qualidade de dados" só aparecem pra role:'admin'
+// (OS-WEB-18/OS-WEB-20) - a página em si já nega acesso a quem não é admin
+// (notFound(), ver admin/sincronizacao/page.tsx e
+// admin/qualidade-dados/page.tsx), isso aqui é só não oferecer o link a
+// quem não vai conseguir usá-lo.
+const ITENS_ADMIN = [
+  { href: "/admin/sincronizacao", rotulo: "Sincronização" },
+  { href: "/admin/qualidade-dados", rotulo: "Qualidade de dados" },
+];
+
 export function SiteNav({ role }: { role: string | null }) {
   const pathname = usePathname();
-  const itens =
-    role === "admin"
-      ? [...ITENS_BASE, { href: "/admin/sincronizacao", rotulo: "Sincronização" }]
-      : ITENS_BASE;
+  const itens = role === "admin" ? [...ITENS_BASE, ...ITENS_ADMIN] : ITENS_BASE;
 
   return (
     <nav className="flex items-center gap-1">
