@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
-import { rotuloTipoProduto, type ProdutoDetalheDto } from "@/lib/produtos";
+import { rotuloTipoProduto, rotuloTipoVenda, type ProdutoDetalheDto } from "@/lib/produtos";
 import { formatarMoeda } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
-import { BadgeAtivoInativo } from "@/components/badge";
+import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
 import { SecondaryButton } from "@/components/design/button";
+import { SimularCalculo } from "./simular-calculo";
 
 // Tela de detalhe do produto (OS-WEB-15) - mostra o que a listagem não
 // mostrava: grade (idGrade1/2/3 + referenciasGrade). Sem "blocos fiscais"
@@ -79,7 +80,21 @@ export default async function ProdutoDetalhePage({
               <p>
                 <span className="font-medium">GTIN:</span> {produto.gtin ?? "—"}
               </p>
+              <p className="flex items-center gap-2">
+                <span className="font-medium">Tipo de venda:</span>
+                <Badge enfase={produto.tipoVenda !== null}>
+                  {rotuloTipoVenda(produto.tipoVenda)}
+                </Badge>
+              </p>
+              {produto.comprimentoMetros && (
+                <p>
+                  <span className="font-medium">Comprimento por peça:</span>{" "}
+                  {produto.comprimentoMetros}m
+                </p>
+              )}
             </Card>
+
+            <SimularCalculo produtoId={produto.id} />
 
             {(produto.idGrade1 || produto.idGrade2 || produto.idGrade3) && (
               <Card className="text-sm text-ink">

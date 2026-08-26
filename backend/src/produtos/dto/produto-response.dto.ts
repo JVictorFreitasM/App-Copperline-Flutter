@@ -18,6 +18,13 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   idGrade2: string | null;
   idGrade3: string | null;
   referenciasGrade: unknown;
+  // tipoVenda/comprimentoMetros (OS-BACKEND-24) expostos aqui pra
+  // OS-WEB-22 poder mostrar o badge POC/RET/KM e o contexto de por que uma
+  // simulação (POST /:id/calcular) falhou (ex: "sem tipoVenda
+  // configurado") - ainda sem regra de classificação automática definida
+  // (ver PENDENCIA em schema.prisma), então normalmente vem null hoje.
+  tipoVenda: string | null;
+  comprimentoMetros: string | null;
 }
 
 export function paraProdutoResumoDto(produto: Produto): ProdutoResumoDto {
@@ -42,5 +49,7 @@ export function paraProdutoDetalheDto(produto: Produto): ProdutoDetalheDto {
     idGrade2: produto.idGrade2,
     idGrade3: produto.idGrade3,
     referenciasGrade: produto.referenciasGrade,
+    tipoVenda: produto.tipoVenda,
+    comprimentoMetros: produto.comprimentoMetros?.toString() ?? null,
   };
 }
