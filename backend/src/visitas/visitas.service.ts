@@ -7,9 +7,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import exifr from 'exifr';
+import type { IdpUser } from '@copperline/idp-client';
+import type { Prisma } from '../../generated/prisma/client';
+import { paginar, type PaginatedResult } from '../common/pagination';
+import { filtroPeriodo } from '../dashboard/filtro-periodo';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   construirWhereClientePorEscopo,
+  VendedorEscopoService,
   type EscopoClientes,
 } from '../vendedores/vendedor-escopo.service';
 import { calcularDistanciaMetros } from './domain/distancia-geografica';
@@ -18,7 +23,12 @@ import {
   FotoSemExifDataHoraError,
   validarExifDataHora,
 } from './domain/validar-exif-foto';
-import { paraVisitaDto, type VisitaDto } from './dto/visita-response.dto';
+import {
+  paraVisitaDto,
+  paraVisitaEquipeDto,
+  type VisitaDto,
+  type VisitaEquipeDto,
+} from './dto/visita-response.dto';
 import { registrarEventoNotificacao } from '../notificacoes/evento-notificacao.service';
 import { VisitaFotoStorageService } from './visita-foto-storage.service';
 
@@ -33,6 +43,15 @@ export interface CheckoutInput {
   latitude: number;
   longitude: number;
   nota?: string;
+}
+
+export interface ListarVisitasEquipeInput {
+  vendedorId?: string;
+  clienteId?: string;
+  dataInicial?: string;
+  dataFinal?: string;
+  page: number;
+  limit: number;
 }
 
 // Raio maximo aceito entre a posicao do vendedor (check-in/checkout) e o
@@ -50,6 +69,7 @@ export class VisitasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fotoStorageService: VisitaFotoStorageService,
+    private readonly vendedorEscopoService: VendedorEscopoService,
   ) {}
 
   // momentoOverride (OS-BACKEND-29): a fila de acoes offline
@@ -280,6 +300,103 @@ export class VisitasService {
       select: { fotoCheckinCaminho: true },
     });
     if (!visita?.fotoCheckinCaminho) {
+      throw new NotFoundException(`Foto da visita '${visitaId}' não encontrada`);
+    }
+    return visita.fotoCheckinCaminho;
+  }
+
+  // Painel de revisao do supervisor (OS-WEB-26) - mesma resolucao de
+  // papel/equipe de VendedorEscopoService (ver seu comentario sobre reuso
+  // alem de Cliente/SolicitacaoDesconto/Rastreio): SUPERVISOR/GERENTE ve a
+  // equipe recursiva, admin ve todos, VENDEDOR comum ou sem Vendedor
+  // vinculado nao tem "equipe" pra revisar - 403 (mesmo criterio de
+  // SolicitacoesDescontoService.listarPendentes/RastreioService, nunca
+  // lista vazia). vendedorId no filtro fora do escopo: 404, nao 403
+  // (anti-IDOR, mesmo criterio de RastreioService.obterTrajetoEquipe).
+  async listarEquipe(
+    idpUser: IdpUser,
+    usuarioId: string,
+    filtro: ListarVisitasEquipeInput,
+  ): Promise<PaginatedResult<VisitaEquipeDto>> {
+    const escopo = await this.vendedorEscopoService.resolverEscopoVendedores(
+      idpUser,
+      usuarioId,
+    );
+
+    if (escopo.tipo === 'NENHUM' || escopo.tipo === 'PROPRIO') {
+      throw new ForbiddenException(
+        'Usuario autenticado nao tem papel de supervisao (supervisor/gerente) - sem equipe para revisar',
+      );
+    }
+    if (
+      escopo.tipo === 'EQUIPE' &&
+      filtro.vendedorId &&
+      !escopo.vendedorIds.includes(filtro.vendedorId)
+    ) {
+      throw new NotFoundException(`Vendedor '${filtro.vendedorId}' não encontrado`);
+    }
+
+    const vendedorWhere = filtro.vendedorId
+      ? { vendedorId: filtro.vendedorId }
+      : escopo.tipo === 'EQUIPE'
+        ? { vendedorId: { in: escopo.vendedorIds } }
+        : {};
+
+    const where: Prisma.VisitaWhereInput = {
+      ...vendedorWhere,
+      ...(filtro.clienteId && { clienteId: filtro.clienteId }),
+      ...(filtroPeriodo(filtro.dataInicial, filtro.dataFinal) && {
+        checkinEm: filtroPeriodo(filtro.dataInicial, filtro.dataFinal),
+      }),
+    };
+
+    const [visitas, total] = await this.prisma.$transaction([
+      this.prisma.visita.findMany({
+        where,
+        orderBy: { checkinEm: 'desc' },
+        skip: (filtro.page - 1) * filtro.limit,
+        take: filtro.limit,
+        include: {
+          vendedor: { select: { id: true, nome: true } },
+          cliente: { select: { id: true, razaoSocial: true } },
+        },
+      }),
+      this.prisma.visita.count({ where }),
+    ]);
+
+    return paginar(visitas.map(paraVisitaEquipeDto), total, filtro.page, filtro.limit);
+  }
+
+  // Mesmo gate de papel de listarEquipe acima, mais o check de que a
+  // visita pertence a um vendedor do escopo - 404 tanto pra visita
+  // inexistente quanto pra visita fora da equipe (nao distingue os dois
+  // casos pra quem chama, mesmo criterio anti-IDOR do resto do projeto).
+  async obterCaminhoFotoEquipe(
+    idpUser: IdpUser,
+    usuarioId: string,
+    visitaId: string,
+  ): Promise<string> {
+    const escopo = await this.vendedorEscopoService.resolverEscopoVendedores(
+      idpUser,
+      usuarioId,
+    );
+    if (escopo.tipo === 'NENHUM' || escopo.tipo === 'PROPRIO') {
+      throw new ForbiddenException(
+        'Usuario autenticado nao tem papel de supervisao (supervisor/gerente) - sem equipe para revisar',
+      );
+    }
+
+    const visita = await this.prisma.visita.findUnique({
+      where: { id: visitaId },
+      select: { vendedorId: true, fotoCheckinCaminho: true },
+    });
+    if (!visita) {
+      throw new NotFoundException(`Visita '${visitaId}' não encontrada`);
+    }
+    if (escopo.tipo === 'EQUIPE' && !escopo.vendedorIds.includes(visita.vendedorId)) {
+      throw new NotFoundException(`Visita '${visitaId}' não encontrada`);
+    }
+    if (!visita.fotoCheckinCaminho) {
       throw new NotFoundException(`Foto da visita '${visitaId}' não encontrada`);
     }
     return visita.fotoCheckinCaminho;

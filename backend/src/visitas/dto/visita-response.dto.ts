@@ -21,6 +21,14 @@ export interface VisitaDto {
   distanciaCheckoutMetros: number | null;
 }
 
+// Usado em GET /visitas (OS-WEB-26) - inclui vendedor/cliente resolvidos
+// (join) pra tela de revisão do supervisor não precisar de mais chamadas
+// só pra mostrar quem fez a visita e em qual cliente.
+export interface VisitaEquipeDto extends VisitaDto {
+  vendedor: { id: string; nome: string | null };
+  cliente: { id: string; razaoSocial: string | null };
+}
+
 export function paraVisitaDto(visita: Visita): VisitaDto {
   return {
     id: visita.id,
@@ -42,5 +50,18 @@ export function paraVisitaDto(visita: Visita): VisitaDto {
     distanciaCheckoutMetros: visita.distanciaCheckoutMetros
       ? visita.distanciaCheckoutMetros.toNumber()
       : null,
+  };
+}
+
+export function paraVisitaEquipeDto(
+  visita: Visita & {
+    vendedor: { id: string; nome: string | null };
+    cliente: { id: string; razaoSocial: string | null };
+  },
+): VisitaEquipeDto {
+  return {
+    ...paraVisitaDto(visita),
+    vendedor: visita.vendedor,
+    cliente: visita.cliente,
   };
 }

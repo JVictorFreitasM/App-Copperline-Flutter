@@ -2,19 +2,26 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
+  Header,
   Param,
   Post,
+  Query,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { IdpUser } from '@copperline/idp-client';
+import type { PaginatedResult } from '../common/pagination';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { CancelarVisitaDto } from './dto/cancelar-visita.dto';
 import { CheckinVisitaDto } from './dto/checkin-visita.dto';
 import { CheckoutVisitaDto } from './dto/checkout-visita.dto';
-import type { VisitaDto } from './dto/visita-response.dto';
+import { ListarVisitasQueryDto } from './dto/listar-visitas-query.dto';
+import type { VisitaDto, VisitaEquipeDto } from './dto/visita-response.dto';
+import { VisitaFotoStorageService } from './visita-foto-storage.service';
 import { VisitasService } from './visitas.service';
 
 // Foto obrigatoria (criterio: "so tirando direto da camera dentro do
@@ -32,7 +39,36 @@ export class VisitasController {
   constructor(
     private readonly visitasService: VisitasService,
     private readonly usuariosService: UsuariosService,
+    private readonly fotoStorageService: VisitaFotoStorageService,
   ) {}
+
+  // Painel de revisao do supervisor (OS-WEB-26) - escopado por hierarquia
+  // dentro de VisitasService.listarEquipe (VendedorEscopoService), nao
+  // aqui. Rota GET raiz - sem colisao com os POSTs abaixo.
+  @Get()
+  async listarEquipe(
+    @Query() query: ListarVisitasQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PaginatedResult<VisitaEquipeDto>> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.visitasService.listarEquipe(idpUser, usuario.id, query);
+  }
+
+  // Mesma foto de GET /admin/visitas/:id/foto (ApiKeyGuard, sem escopo),
+  // mas por sessao e escopada por equipe - e' esta que o painel web
+  // (OS-WEB-26) usa, ja que o supervisor esta logado via SSO, nao com uma
+  // API key generica.
+  @Get(':id/foto')
+  @Header('Content-Type', 'image/jpeg')
+  async obterFotoEquipe(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<StreamableFile> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const caminho = await this.visitasService.obterCaminhoFotoEquipe(idpUser, usuario.id, id);
+    const buffer = await this.fotoStorageService.ler(caminho);
+    return new StreamableFile(buffer);
+  }
 
   @Post('checkin')
   @UseInterceptors(

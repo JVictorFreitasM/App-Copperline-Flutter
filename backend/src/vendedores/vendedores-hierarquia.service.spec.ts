@@ -1,12 +1,24 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
+
+const IDP_USER = { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' };
+
+function vendedorEscopoServiceFake(
+  escopo: Record<string, unknown> = { tipo: 'TODOS' },
+) {
+  return { resolverEscopoVendedores: jest.fn().mockResolvedValue(escopo) };
+}
 
 function prismaFake(vendedores: Record<string, unknown>[]) {
   const linhas = new Map(vendedores.map((v) => [v.id as string, { ...v }]));
   return {
     vendedor: {
-      findMany: jest.fn().mockImplementation(async () => {
-        const todas = [...linhas.values()];
+      findMany: jest.fn().mockImplementation(
+        async (args: { where?: { id?: { in: string[] } } } = {}) => {
+        const idsPermitidos = args.where?.id?.in;
+        const todas = [...linhas.values()].filter(
+          (linha) => !idsPermitidos || idsPermitidos.includes(linha.id as string),
+        );
         todas.sort((a, b) => String(a.nome ?? '').localeCompare(String(b.nome ?? '')));
         return todas.map((linha) => ({
           id: linha.id,
@@ -56,7 +68,7 @@ describe('VendedoresHierarquiaService.listar', () => {
       { id: 'sup1', nome: 'Ana Supervisora', papel: 'SUPERVISOR', supervisorId: null },
       { id: 'v1', nome: 'Beto Vendedor', papel: 'VENDEDOR', supervisorId: 'sup1' },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     const resultado = await service.listar();
 
@@ -84,7 +96,7 @@ describe('VendedoresHierarquiaService.listar', () => {
 
   it('retorna lista vazia quando nao ha vendedores', async () => {
     const prisma = prismaFake([]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     expect(await service.listar()).toEqual([]);
   });
@@ -96,7 +108,7 @@ describe('VendedoresHierarquiaService.atualizar', () => {
       { id: 'v1', nome: 'Vendedor 1', papel: 'VENDEDOR', supervisorId: null },
       { id: 'sup1', nome: 'Supervisor 1', papel: 'SUPERVISOR', supervisorId: null },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     const resultado = await service.atualizar('v1', {
       papel: 'VENDEDOR',
@@ -115,7 +127,7 @@ describe('VendedoresHierarquiaService.atualizar', () => {
     const prisma = prismaFake([
       { id: 'v1', nome: 'Vendedor 1', papel: 'VENDEDOR', supervisorId: 'sup1' },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     const resultado = await service.atualizar('v1', { supervisorId: null });
 
@@ -124,7 +136,7 @@ describe('VendedoresHierarquiaService.atualizar', () => {
 
   it('lanca NotFoundException quando o vendedor nao existe', async () => {
     const prisma = prismaFake([]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     await expect(
       service.atualizar('inexistente', { papel: 'SUPERVISOR' }),
@@ -135,7 +147,7 @@ describe('VendedoresHierarquiaService.atualizar', () => {
     const prisma = prismaFake([
       { id: 'v1', nome: 'Vendedor 1', papel: 'VENDEDOR', supervisorId: null },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     await expect(
       service.atualizar('v1', { supervisorId: 'v1' }),
@@ -146,7 +158,7 @@ describe('VendedoresHierarquiaService.atualizar', () => {
     const prisma = prismaFake([
       { id: 'v1', nome: 'Vendedor 1', papel: 'VENDEDOR', supervisorId: null },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     await expect(
       service.atualizar('v1', { supervisorId: 'inexistente' }),
@@ -161,10 +173,52 @@ describe('VendedoresHierarquiaService.atualizar', () => {
       { id: 'b', nome: 'B', papel: 'SUPERVISOR', supervisorId: 'a' },
       { id: 'c', nome: 'C', papel: 'SUPERVISOR', supervisorId: 'b' },
     ]);
-    const service = new VendedoresHierarquiaService(prisma as never);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
 
     await expect(
       service.atualizar('a', { supervisorId: 'c' }),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('VendedoresHierarquiaService.listarEquipe', () => {
+  it('lanca ForbiddenException quando o escopo e PROPRIO', async () => {
+    const prisma = prismaFake([]);
+    const service = new VendedoresHierarquiaService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'PROPRIO', vendedorId: 'v1' }) as never,
+    );
+
+    await expect(service.listarEquipe(IDP_USER as never, 'u1')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('lanca ForbiddenException quando o escopo e NENHUM', async () => {
+    const prisma = prismaFake([]);
+    const service = new VendedoresHierarquiaService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'NENHUM' }) as never,
+    );
+
+    await expect(service.listarEquipe(IDP_USER as never, 'u1')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('escopo EQUIPE retorna so id/nome dos vendedores da equipe', async () => {
+    const prisma = prismaFake([
+      { id: 'v1', nome: 'Beto', papel: 'VENDEDOR', supervisorId: 'sup1' },
+      { id: 'v2', nome: 'Ana', papel: 'VENDEDOR', supervisorId: 'sup1' },
+      { id: 'fora', nome: 'Fora Da Equipe', papel: 'VENDEDOR', supervisorId: null },
+    ]);
+    const service = new VendedoresHierarquiaService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1', 'v2'] }) as never,
+    );
+
+    const resultado = await service.listarEquipe(IDP_USER as never, 'u-sup');
+
+    expect(resultado.map((v) => v.id).sort()).toEqual(['v1', 'v2']);
   });
 });

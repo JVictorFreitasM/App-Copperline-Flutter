@@ -3,8 +3,13 @@ import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { VisitaFotoStorageService } from './visita-foto-storage.service';
 import { VisitasService } from './visitas.service';
 
-// Consumo do painel web (supervisor revisando check-ins) - protegido so
-// por ApiKeyGuard, mesmo criterio de admin/rastreio, admin/llm, etc.
+// Consulta administrativa/automacao (ex: suporte investigando um caso
+// pontual) - protegido so por ApiKeyGuard, mesmo criterio de admin/rastreio,
+// admin/llm, etc. NAO e' o que o painel web de OS-WEB-26 consome (esse usa
+// GET /visitas/:id/foto via sessao, escopado por hierarquia - ver
+// visitas.controller.ts) porque esta rota nao teria como saber "essa foto
+// e' de alguem da equipe de quem esta chamando" (sem sessao/idpUser, so
+// uma chave de API generica).
 @Controller('admin/visitas')
 @UseGuards(ApiKeyGuard)
 export class AdminVisitasController {

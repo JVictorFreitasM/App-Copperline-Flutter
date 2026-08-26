@@ -4,6 +4,8 @@ import type { PapelVendedor } from '../../generated/prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
+import type { VendedorEquipeDto } from './vendedores-hierarquia.service';
 
 export interface MeuVendedorDto {
   vendedorId: string | null;
@@ -22,6 +24,7 @@ export class VendedoresController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usuariosService: UsuariosService,
+    private readonly vendedoresHierarquiaService: VendedoresHierarquiaService,
   ) {}
 
   @Get('me')
@@ -42,5 +45,13 @@ export class VendedoresController {
       papel: vendedor?.papel ?? null,
       podeAprovar,
     };
+  }
+
+  // GET /vendedores/equipe (OS-WEB-26) - so o roster (id/nome) da equipe de
+  // quem chama, pra popular o filtro por vendedor do painel de visitas.
+  @Get('equipe')
+  async equipe(@CurrentUser() idpUser: IdpUser): Promise<VendedorEquipeDto[]> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.vendedoresHierarquiaService.listarEquipe(idpUser, usuario.id);
   }
 }

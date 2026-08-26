@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { IdpUser } from '@copperline/idp-client';
 import type { PapelVendedor } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { VendedorEscopoService } from './vendedor-escopo.service';
 
 export interface VendedorHierarquiaDto {
   id: string;
@@ -27,6 +29,16 @@ export interface AtualizarHierarquiaInput {
   supervisorId?: string | null;
 }
 
+// Usado em GET /vendedores/equipe (OS-WEB-26) - so o roster (id/nome) da
+// equipe de quem chama, pra popular o filtro por vendedor do painel de
+// visitas sem expor toda a base de vendedores (diferente de
+// VendedorListaDto/listar(), que e' a lista COMPLETA, admin-only via
+// ApiKeyGuard).
+export interface VendedorEquipeDto {
+  id: string;
+  nome: string | null;
+}
+
 // Hierarquia (OS-BACKEND-22) nao vem do WK Radar (ver skill
 // wk-radar-client, secao "Vendedor") - configurada manualmente aqui pelo
 // admin. Transporte simples (achar/validar/gravar), sem decisao de
@@ -36,7 +48,34 @@ export interface AtualizarHierarquiaInput {
 // supervisorId) e' validacao estrutural, nao regra de negocio.
 @Injectable()
 export class VendedoresHierarquiaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly vendedorEscopoService: VendedorEscopoService,
+  ) {}
+
+  // Mesmo gate de papel de RastreioService/SolicitacoesDescontoService -
+  // sem "equipe" nenhuma pra listar quando o chamador nao supervisiona
+  // ninguem (403, nao lista vazia/so o proprio vendedor).
+  async listarEquipe(idpUser: IdpUser, usuarioId: string): Promise<VendedorEquipeDto[]> {
+    const escopo = await this.vendedorEscopoService.resolverEscopoVendedores(
+      idpUser,
+      usuarioId,
+    );
+
+    if (escopo.tipo === 'NENHUM' || escopo.tipo === 'PROPRIO') {
+      throw new ForbiddenException(
+        'Usuario autenticado nao tem papel de supervisao (supervisor/gerente) - sem equipe para listar',
+      );
+    }
+
+    const vendedores = await this.prisma.vendedor.findMany({
+      where: escopo.tipo === 'EQUIPE' ? { id: { in: escopo.vendedorIds } } : {},
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true },
+    });
+
+    return vendedores;
+  }
 
   // Lista completa (sem paginacao - carteira de vendedores e' pequena,
   // dezenas/poucas centenas, nao milhares como cliente/produto) pra

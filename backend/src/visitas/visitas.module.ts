@@ -4,13 +4,17 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminVisitasController } from './admin-visitas.controller';
 import { VisitaFotoStorageService } from './visita-foto-storage.service';
 import { VisitasController } from './visitas.controller';
 import { VisitasService } from './visitas.service';
 
 @Module({
-  imports: [PrismaModule, UsuariosModule],
+  // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-26,
+  // GET /visitas* escopado por hierarquia) - mesmo raciocinio de
+  // ClientesModule/SolicitacoesDescontoModule/RastreioModule.
+  imports: [PrismaModule, UsuariosModule, VendedoresModule],
   // AdminVisitasController fica protegido so por ApiKeyGuard (ver seu
   // proprio @UseGuards) - so VisitasController entra no requireAuth abaixo.
   controllers: [VisitasController, AdminVisitasController],
