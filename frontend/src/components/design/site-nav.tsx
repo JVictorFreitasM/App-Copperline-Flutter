@@ -29,13 +29,13 @@ const ITENS_ADMIN = [
   { href: "/admin/vendedores", rotulo: "Vendedores" },
 ];
 
-// "Aprovações" (OS-WEB-21) e "Rastreio de equipe" (OS-WEB-24) seguem um
-// critério diferente dos itens /admin/*: não é role:'admin' do IdP, é
-// `podeAprovar` (resolvido no backend via GET /vendedores/me -
-// PapelVendedor SUPERVISOR/GERENTE, ou admin) - a MESMA elegibilidade das
-// duas telas (quem aprova desconto também supervisiona a equipe no mapa),
-// porque 'supervisor'/'gerente' não são papéis do IdP, são hierarquia de
-// vendas.
+// "Aprovações" (OS-WEB-21), "Rastreio de equipe" (OS-WEB-24) e "Visitas da
+// equipe" (OS-WEB-26, rota /admin/visitas apesar do prefixo - critério de
+// acesso é PapelVendedor, não role:'admin' do IdP) seguem um critério
+// diferente dos itens /admin/* de verdade acima: `podeAprovar` (resolvido
+// no backend via GET /vendedores/me - PapelVendedor SUPERVISOR/GERENTE, ou
+// admin) - a MESMA elegibilidade das três telas (quem supervisiona a
+// equipe em uma supervisiona nas outras).
 export function SiteNav({
   role,
   podeAprovar,
@@ -50,6 +50,7 @@ export function SiteNav({
       ? [
           { href: "/aprovacoes", rotulo: "Aprovações" },
           { href: "/rastreio-equipe", rotulo: "Rastreio de equipe" },
+          { href: "/admin/visitas", rotulo: "Visitas da equipe" },
         ]
       : []),
     ...(role === "admin" ? ITENS_ADMIN : []),

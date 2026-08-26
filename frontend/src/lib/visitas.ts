@@ -22,6 +22,14 @@ export interface VisitaDto {
   distanciaCheckoutMetros: number | null;
 }
 
+// Usado em GET /visitas (OS-WEB-26) - inclui vendedor/cliente resolvidos
+// (join) pra tela de revisão do supervisor não precisar de mais chamadas
+// só pra mostrar quem fez a visita e em qual cliente.
+export interface VisitaEquipeDto extends VisitaDto {
+  vendedor: { id: string; nome: string | null };
+  cliente: { id: string; razaoSocial: string | null };
+}
+
 // Só dois tons (ver skill design-system) - "Concluída" (checkout feito) é
 // o único estado que ganha destaque, mesmo padrão de configSituacaoPedido.
 export function statusVisita(visita: VisitaDto): { rotulo: string; enfase: boolean } {

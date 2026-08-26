@@ -27,6 +27,16 @@ export interface MeuVendedorDto {
   podeAprovar: boolean;
 }
 
+// Mesmo shape de backend/src/vendedores/vendedores-hierarquia.service.ts
+// (VendedorEquipeDto, GET /vendedores/equipe) - só o roster (id/nome) da
+// equipe de quem chama, usado pra popular o filtro por vendedor do painel
+// de visitas (OS-WEB-26). Diferente de VendedorListaDto (lista completa,
+// admin-only via ApiKeyGuard).
+export interface VendedorEquipeDto {
+  id: string;
+  nome: string | null;
+}
+
 const ROTULOS_PAPEL: Record<PapelVendedor, string> = {
   VENDEDOR: "Vendedor",
   SUPERVISOR: "Supervisor",
