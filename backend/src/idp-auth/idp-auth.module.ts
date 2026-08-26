@@ -16,6 +16,14 @@ import { IDP_AUTH } from './idp-auth.constants';
           clientId: configService.getOrThrow<string>('IDP_CLIENT_ID'),
           clientSecret: configService.getOrThrow<string>('IDP_CLIENT_SECRET'),
           redirectUri: configService.getOrThrow<string>('IDP_REDIRECT_URI'),
+          // Sem isso, o fallback pos-login da lib é "/" relativo ao
+          // próprio BACKEND (ver skill idp-client) - só não aparece quando
+          // o login começa por GET /auth/login (que grava um `returnTo`
+          // próprio antes de redirecionar pro IdP, ver login-url.ts no
+          // front). Quem entra direto pelo card do portal do IdP (sem
+          // passar por /auth/login) não tem returnTo nenhum salvo, cai
+          // nesse fallback e vê um 404 cru na API em vez do site.
+          postLoginRedirect: configService.get<string>('FRONTEND_PUBLIC_URL'),
         }),
     },
   ],

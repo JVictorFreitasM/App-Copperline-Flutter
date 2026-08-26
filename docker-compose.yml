@@ -42,18 +42,25 @@ services:
       SESSION_COOKIE_DOMAIN:
       # IDP_URL (servidor-a-servidor) usa host.docker.internal pra alcancar
       # o IdP rodando fora dessa stack, exposto na porta 3000 do host.
-      # IDP_AUTHORIZE_URL/IDP_REDIRECT_URI (navegador/WebView) usam o IP da
-      # rede local (nao localhost) - o app mobile roda num celular fisico
-      # (OS-MOBILE-12), que enxerga "localhost" como o proprio celular, nao
-      # esta maquina. Continua funcionando tambem pra quem acessa do PC
-      # (mesmo IP, so nao mais via "localhost"). Cadastrado como
-      # redirect_uri adicional no IdP (systems.redirect_uris) - IP fixo
-      # nesta rede; revisitar se a maquina de desenvolvimento mudar de IP.
+      # IDP_AUTHORIZE_URL/IDP_REDIRECT_URI (navegador) usam localhost -
+      # decisao deliberada enquanto so o web e' testado nesta maquina (sem
+      # depender do IP da rede local, que muda com o DHCP). Se o app mobile
+      # (OS-MOBILE-12) voltar a ser testado num celular fisico nesta rede,
+      # isso PRECISA voltar a ser o IP da rede local (nao host.docker.internal
+      # nem localhost - o celular enxerga "localhost" como o proprio
+      # celular). Cadastrado como redirect_uri no IdP (systems.redirect_uris)
+      # - "http://localhost:3010/auth/callback".
       IDP_URL: http://host.docker.internal:3000
-      IDP_AUTHORIZE_URL: http://192.168.2.38:3000
+      IDP_AUTHORIZE_URL: http://localhost:3000
       IDP_CLIENT_ID: ${IDP_CLIENT_ID}
       IDP_CLIENT_SECRET: ${IDP_CLIENT_SECRET}
-      IDP_REDIRECT_URI: http://192.168.2.38:3010/auth/callback
+      IDP_REDIRECT_URI: http://localhost:3010/auth/callback
+      # Destino pos-login quando NAO ha' `returnTo` salvo (ver
+      # idp-auth.module.ts) - acontece sempre que o login comeca direto por
+      # um card no portal do IdP, em vez de GET /auth/login desta app. Sem
+      # isso, o usuario cai no "/" do proprio BACKEND (404 cru) em vez do
+      # site (frontend).
+      FRONTEND_PUBLIC_URL: http://localhost:3020
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       WK_RADAR_API_URL: ${WK_RADAR_API_URL}
       WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}
