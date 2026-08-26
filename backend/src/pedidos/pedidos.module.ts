@@ -26,6 +26,9 @@ import { PedidosService } from './pedidos.service';
   ],
   controllers: [PedidosController],
   providers: [PedidosService, CriarPedidoService, PedidoErpClientService],
+  // CriarPedidoService exportado pra MobileModule (OS-BACKEND-29)
+  // reaproveitar na fila de acoes offline.
+  exports: [CriarPedidoService],
 })
 export class PedidosModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

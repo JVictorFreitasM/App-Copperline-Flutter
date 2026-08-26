@@ -52,10 +52,20 @@ export class VisitasService {
     private readonly fotoStorageService: VisitaFotoStorageService,
   ) {}
 
+  // momentoOverride (OS-BACKEND-29): a fila de acoes offline
+  // (FilaPendenteService) passa o timestamp ORIGINAL do dispositivo aqui -
+  // um check-in feito offline aconteceu no passado, nao agora (quando o
+  // app reconecta e reenvia). Omitido (endpoint HTTP normal, ao vivo) usa
+  // o momento real do servidor - continua fail-closed contra timestamp
+  // manipulado nesse caminho. A foto ainda precisa bater (EXIF) com
+  // QUALQUER valor usado aqui, entao aceitar um timestamp passado pela
+  // fila nao abre brecha nova: quem quisesse forjar teria que forjar os
+  // dois consistentemente, mesmo esforco de antes.
   async checkin(
     usuarioId: string,
     input: CheckinInput,
     fotoBuffer: Buffer,
+    momentoOverride?: Date,
   ): Promise<VisitaDto> {
     const vendedor = await this.resolverVendedor(usuarioId);
 
@@ -107,7 +117,7 @@ export class VisitasService {
       );
     }
 
-    const checkinEm = new Date();
+    const checkinEm = momentoOverride ?? new Date();
     await this.validarFotoOuFalhar(fotoBuffer, checkinEm);
     const fotoCaminho = await this.fotoStorageService.salvar(fotoBuffer);
 
@@ -131,6 +141,7 @@ export class VisitasService {
     usuarioId: string,
     visitaId: string,
     input: CheckoutInput,
+    momentoOverride?: Date,
   ): Promise<VisitaDto> {
     const vendedor = await this.resolverVendedor(usuarioId);
 
@@ -176,7 +187,7 @@ export class VisitasService {
     const atualizada = await this.prisma.visita.update({
       where: { id: visitaId },
       data: {
-        checkoutEm: new Date(),
+        checkoutEm: momentoOverride ?? new Date(),
         checkoutLat: input.latitude,
         checkoutLng: input.longitude,
         distanciaCheckoutMetros: distanciaMetros,
@@ -199,6 +210,7 @@ export class VisitasService {
     usuarioId: string,
     visitaId: string,
     comentario: string,
+    momentoOverride?: Date,
   ): Promise<VisitaDto> {
     const vendedor = await this.resolverVendedor(usuarioId);
 
@@ -220,7 +232,7 @@ export class VisitasService {
     const atualizada = await this.prisma.$transaction(async (tx) => {
       const resultado = await tx.visita.update({
         where: { id: visitaId },
-        data: { canceladaEm: new Date(), motivoCancelamento: comentario },
+        data: { canceladaEm: momentoOverride ?? new Date(), motivoCancelamento: comentario },
       });
 
       await registrarEventoNotificacao(tx, {

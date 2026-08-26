@@ -14,6 +14,9 @@ import { RastreioService } from './rastreio.service';
   // proprio @UseGuards) - so RastreioController entra no requireAuth abaixo.
   controllers: [RastreioController, AdminRastreioController],
   providers: [RastreioService],
+  // RastreioService exportado pra MobileModule (OS-BACKEND-29)
+  // reaproveitar na fila de acoes offline.
+  exports: [RastreioService],
 })
 export class RastreioModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

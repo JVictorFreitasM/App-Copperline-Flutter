@@ -478,10 +478,11 @@ model Usuario {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  dispositivos DispositivoUsuario[]
-  favoritos    ProdutoFavorito[]
-  vendedores   Vendedor[]
-  localizacoes LocalizacaoUsuario[]
+  dispositivos         DispositivoUsuario[]
+  favoritos            ProdutoFavorito[]
+  vendedores           Vendedor[]
+  localizacoes         LocalizacaoUsuario[]
+  acoesFilaProcessadas AcaoFilaProcessada[]
 
   @@map("usuarios")
 }
@@ -795,4 +796,48 @@ model Visita {
   @@index([clienteId])
   @@index([vendedorId, checkoutEm])
   @@map("visitas")
+}
+
+// Idempotencia da fila de acoes offline (OS-BACKEND-29) - idLocal e'
+// gerado no DISPOSITIVO (nao aqui), a chave que garante que reenviar a
+// mesma acao (retry de rede no meio do envio) nunca duplica o efeito no
+// backend. @@unique([usuarioId, idLocal]) escopado por usuario (nao
+// globalmente unico) - suficiente pro proposito (nunca faria sentido o
+// MESMO idLocal, gerado no MESMO dispositivo/sessao de um vendedor,
+// aparecer legitimamente pra outro usuario) e evita depender de um UUID
+// verdadeiramente global nunca colidir.
+model AcaoFilaProcessada {
+  id           String         @id @default(uuid())
+  usuarioId    String         @map("usuario_id")
+  idLocal      String         @map("id_local")
+  tipo         TipoAcaoFila
+  status       StatusAcaoFila
+  // resultado/erro sao a resposta CONGELADA na primeira execucao - um
+  // reenvio do mesmo idLocal devolve isso de novo, sem re-executar nada
+  // (ver FilaPendenteService.processarUma).
+  resultado    Json?
+  erro         String?
+  processadoEm DateTime       @default(now()) @map("processado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, idLocal])
+  @@map("acoes_fila_processadas")
+}
+
+enum TipoAcaoFila {
+  CRIAR_PEDIDO
+  CHECKIN_VISITA
+  CHECKOUT_VISITA
+  CANCELAR_VISITA
+  RASTREIO_LOTE
+
+  @@map("tipo_acao_fila")
+}
+
+enum StatusAcaoFila {
+  SUCESSO
+  ERRO
+
+  @@map("status_acao_fila")
 }

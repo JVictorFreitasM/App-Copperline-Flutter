@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
+import compression from 'compression';
 import session from 'express-session';
 import type { IdpAuth } from '@copperline/idp-client';
 import { AppModule } from './app.module';
@@ -10,6 +11,13 @@ import { IDP_AUTH } from './idp-auth/idp-auth.constants';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+
+  // Gzip global (OS-BACKEND-29: GET /mobile/snapshot pode devolver um JSON
+  // grande - catalogo de produtos + clientes do vendedor + pedidos
+  // recentes numa resposta so). Beneficia qualquer resposta acima do
+  // limiar padrao da lib (1kb), nao so esse endpoint - sem custo
+  // perceptivel pras respostas pequenas do resto da API.
+  app.use(compression());
 
   // Validacao real de todo input de rota via class-validator (DTOs) - nunca
   // confiar so em validacao do lado client (ver skill security-review,

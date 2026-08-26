@@ -23,6 +23,7 @@ import { VendedoresModule } from './vendedores/vendedores.module';
 import { SolicitacoesDescontoModule } from './solicitacoes-desconto/solicitacoes-desconto.module';
 import { RastreioModule } from './rastreio/rastreio.module';
 import { VisitasModule } from './visitas/visitas.module';
+import { MobileModule } from './mobile/mobile.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { VisitasModule } from './visitas/visitas.module';
     SolicitacoesDescontoModule,
     RastreioModule,
     VisitasModule,
+    MobileModule,
   ],
 })
 export class AppModule {}
