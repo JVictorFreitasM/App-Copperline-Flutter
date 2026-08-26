@@ -28,3 +28,19 @@ export interface ClienteDetalheDto extends ClienteResumoDto {
   enderecos: unknown;
   contatos: ContatoClienteDto[];
 }
+
+// Mesmo shape de backend/src/clientes/cliente-estatisticas.service.ts
+// (ClienteEstatisticasDto, GET /clientes/:id/estatisticas) - totais,
+// ticketMedio e vendedorResponsavel já vêm calculados pelo backend
+// (agregado sobre Pedido, nunca NotaFiscal - ver comentário no service);
+// o front só formata pra exibição, nunca soma/divide nada (critério de
+// aceite da OS-WEB-23: "sem cálculo duplicado no front").
+export interface ClienteEstatisticasDto {
+  clienteId: string;
+  meses: number;
+  totalUltimosMeses: number;
+  totalGeral: number;
+  quantidadePedidos: number;
+  ticketMedio: number;
+  vendedorResponsavel: string | null;
+}

@@ -21,3 +21,14 @@ export function formatarData(valorIso: string | null): string {
   }
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(data);
 }
+
+export function formatarDataHora(valorIso: string | null): string {
+  if (valorIso === null) {
+    return "—";
+  }
+  const data = new Date(valorIso);
+  if (Number.isNaN(data.getTime())) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(data);
+}
