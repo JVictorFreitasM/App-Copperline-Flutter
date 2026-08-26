@@ -26,11 +26,26 @@ const ITENS_BASE = [
 const ITENS_ADMIN = [
   { href: "/admin/sincronizacao", rotulo: "Sincronização" },
   { href: "/admin/qualidade-dados", rotulo: "Qualidade de dados" },
+  { href: "/admin/vendedores", rotulo: "Vendedores" },
 ];
 
-export function SiteNav({ role }: { role: string | null }) {
+// "Aprovações" (OS-WEB-21) segue um critério diferente dos itens acima:
+// não é role:'admin' do IdP, é `podeAprovar` (resolvido no backend via
+// GET /vendedores/me - PapelVendedor SUPERVISOR/GERENTE, ou admin) porque
+// 'supervisor'/'gerente' não são papéis do IdP, são hierarquia de vendas.
+export function SiteNav({
+  role,
+  podeAprovar,
+}: {
+  role: string | null;
+  podeAprovar: boolean;
+}) {
   const pathname = usePathname();
-  const itens = role === "admin" ? [...ITENS_BASE, ...ITENS_ADMIN] : ITENS_BASE;
+  const itens = [
+    ...ITENS_BASE,
+    ...(podeAprovar ? [{ href: "/aprovacoes", rotulo: "Aprovações" }] : []),
+    ...(role === "admin" ? ITENS_ADMIN : []),
+  ];
 
   return (
     <nav className="flex items-center gap-1">
