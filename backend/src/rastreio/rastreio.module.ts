@@ -4,12 +4,16 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminRastreioController } from './admin-rastreio.controller';
 import { RastreioController } from './rastreio.controller';
 import { RastreioService } from './rastreio.service';
 
 @Module({
-  imports: [PrismaModule, UsuariosModule],
+  // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-24,
+  // GET /rastreio/equipe* escopado por hierarquia) - mesmo raciocinio de
+  // ClientesModule/SolicitacoesDescontoModule.
+  imports: [PrismaModule, UsuariosModule, VendedoresModule],
   // AdminRastreioController fica protegido so por ApiKeyGuard (ver seu
   // proprio @UseGuards) - so RastreioController entra no requireAuth abaixo.
   controllers: [RastreioController, AdminRastreioController],
