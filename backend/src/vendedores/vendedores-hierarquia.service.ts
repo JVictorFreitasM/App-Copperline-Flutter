@@ -9,6 +9,19 @@ export interface VendedorHierarquiaDto {
   supervisorId: string | null;
 }
 
+// Usado em GET /admin/vendedores (OS-WEB-21) - inclui o nome do supervisor
+// resolvido (self-join) pra tela nao precisar de uma segunda chamada por
+// linha so pra mostrar "reporta para quem".
+export interface VendedorListaDto {
+  id: string;
+  nome: string | null;
+  email: string | null;
+  inativo: boolean;
+  papel: PapelVendedor;
+  supervisorId: string | null;
+  supervisorNome: string | null;
+}
+
 export interface AtualizarHierarquiaInput {
   papel?: PapelVendedor;
   supervisorId?: string | null;
@@ -24,6 +37,34 @@ export interface AtualizarHierarquiaInput {
 @Injectable()
 export class VendedoresHierarquiaService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Lista completa (sem paginacao - carteira de vendedores e' pequena,
+  // dezenas/poucas centenas, nao milhares como cliente/produto) pra
+  // popular a tabela editavel de /admin/vendedores.
+  async listar(): Promise<VendedorListaDto[]> {
+    const vendedores = await this.prisma.vendedor.findMany({
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        inativo: true,
+        papel: true,
+        supervisorId: true,
+        supervisor: { select: { nome: true } },
+      },
+    });
+
+    return vendedores.map((vendedor) => ({
+      id: vendedor.id,
+      nome: vendedor.nome,
+      email: vendedor.email,
+      inativo: vendedor.inativo,
+      papel: vendedor.papel,
+      supervisorId: vendedor.supervisorId,
+      supervisorNome: vendedor.supervisor?.nome ?? null,
+    }));
+  }
 
   async atualizar(
     vendedorId: string,

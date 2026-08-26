@@ -5,6 +5,21 @@ function prismaFake(vendedores: Record<string, unknown>[]) {
   const linhas = new Map(vendedores.map((v) => [v.id as string, { ...v }]));
   return {
     vendedor: {
+      findMany: jest.fn().mockImplementation(async () => {
+        const todas = [...linhas.values()];
+        todas.sort((a, b) => String(a.nome ?? '').localeCompare(String(b.nome ?? '')));
+        return todas.map((linha) => ({
+          id: linha.id,
+          nome: linha.nome,
+          email: linha.email ?? null,
+          inativo: linha.inativo ?? false,
+          papel: linha.papel,
+          supervisorId: linha.supervisorId,
+          supervisor: linha.supervisorId
+            ? { nome: linhas.get(linha.supervisorId as string)?.nome ?? null }
+            : null,
+        }));
+      }),
       findUnique: jest.fn().mockImplementation(
         async ({ where: { id }, select }: { where: { id: string }; select?: Record<string, boolean> }) => {
           const linha = linhas.get(id);
@@ -34,6 +49,46 @@ function prismaFake(vendedores: Record<string, unknown>[]) {
     },
   };
 }
+
+describe('VendedoresHierarquiaService.listar', () => {
+  it('retorna todos os vendedores com o nome do supervisor resolvido', async () => {
+    const prisma = prismaFake([
+      { id: 'sup1', nome: 'Ana Supervisora', papel: 'SUPERVISOR', supervisorId: null },
+      { id: 'v1', nome: 'Beto Vendedor', papel: 'VENDEDOR', supervisorId: 'sup1' },
+    ]);
+    const service = new VendedoresHierarquiaService(prisma as never);
+
+    const resultado = await service.listar();
+
+    expect(resultado).toEqual([
+      {
+        id: 'sup1',
+        nome: 'Ana Supervisora',
+        email: null,
+        inativo: false,
+        papel: 'SUPERVISOR',
+        supervisorId: null,
+        supervisorNome: null,
+      },
+      {
+        id: 'v1',
+        nome: 'Beto Vendedor',
+        email: null,
+        inativo: false,
+        papel: 'VENDEDOR',
+        supervisorId: 'sup1',
+        supervisorNome: 'Ana Supervisora',
+      },
+    ]);
+  });
+
+  it('retorna lista vazia quando nao ha vendedores', async () => {
+    const prisma = prismaFake([]);
+    const service = new VendedoresHierarquiaService(prisma as never);
+
+    expect(await service.listar()).toEqual([]);
+  });
+});
 
 describe('VendedoresHierarquiaService.atualizar', () => {
   it('atualiza papel e supervisorId quando validos', async () => {

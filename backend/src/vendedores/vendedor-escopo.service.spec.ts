@@ -96,3 +96,24 @@ describe('VendedorEscopoService.resolverEscopoClientes', () => {
     }
   });
 });
+
+describe('VendedorEscopoService.resolverEscopoVendedores', () => {
+  // Mesma resolucao de resolverEscopoClientes (papel + equipe) so exposta
+  // sob outro nome pro caller de OS-WEB-21 (GET /solicitacoes-desconto) -
+  // um teste de fumaca confirma que nao ha divergencia entre os dois.
+  it('resolve EQUIPE identico a resolverEscopoClientes pro mesmo usuario', async () => {
+    const prisma = prismaFake([
+      { id: 'sup1', usuarioId: 'u-sup', papel: 'SUPERVISOR', supervisorId: null },
+      { id: 'v1', usuarioId: 'u-v1', papel: 'VENDEDOR', supervisorId: 'sup1' },
+    ]);
+    const service = new VendedorEscopoService(prisma as never);
+    const idpUser = { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' };
+
+    const escopo = await service.resolverEscopoVendedores(idpUser, 'u-sup');
+
+    expect(escopo.tipo).toBe('EQUIPE');
+    if (escopo.tipo === 'EQUIPE') {
+      expect(new Set(escopo.vendedorIds)).toEqual(new Set(['sup1', 'v1']));
+    }
+  });
+});

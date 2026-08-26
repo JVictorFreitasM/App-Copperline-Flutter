@@ -5,8 +5,10 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { PapelVendedor } from '../../generated/prisma/client';
+import type { IdpUser } from '@copperline/idp-client';
+import type { PapelVendedor, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
 import {
   AutoaprovacaoNaoPermitidaError,
@@ -27,6 +29,18 @@ export interface SolicitacaoDescontoDto {
   aprovadorId: string | null;
   decididoEm: string | null;
   criadoEm: string;
+}
+
+// Usado em GET /solicitacoes-desconto (OS-WEB-21) - inclui o solicitante e
+// o pedido/cliente pra tela de aprovacao nao precisar de mais chamadas so
+// pra mostrar contexto legivel (nome de quem pediu, cliente, valor).
+export interface SolicitacaoDescontoResumoDto extends SolicitacaoDescontoDto {
+  vendedorSolicitante: { id: string; nome: string | null };
+  pedido: {
+    id: string;
+    valorTotal: string | null;
+    cliente: { id: string; razaoSocial: string | null } | null;
+  } | null;
 }
 
 export type AvaliarDescontoResultado =
@@ -52,7 +66,55 @@ export class SolicitacoesDescontoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configuracaoDescontoService: ConfiguracaoDescontoService,
+    private readonly vendedorEscopoService: VendedorEscopoService,
   ) {}
+
+  // Lista PENDENTE escopada por hierarquia (OS-WEB-21, mesma resolucao de
+  // papel/equipe de VendedorEscopoService, ver seu comentario sobre reuso
+  // alem de Cliente): SUPERVISOR/GERENTE ve a propria equipe (recursivo,
+  // ja inclusa a propria carteira); admin do IdP ve tudo; VENDEDOR comum
+  // (sem papel de aprovacao) ou usuario sem Vendedor vinculado nao tem
+  // "equipe" nenhuma pra aprovar - 403, nao lista vazia (a tela usa esse
+  // 403 pra mostrar "sem permissao de aprovacao" em vez de assumir acesso).
+  async listarPendentes(
+    idpUser: IdpUser,
+    usuarioId: string,
+  ): Promise<SolicitacaoDescontoResumoDto[]> {
+    const escopo = await this.vendedorEscopoService.resolverEscopoVendedores(
+      idpUser,
+      usuarioId,
+    );
+
+    if (escopo.tipo === 'NENHUM' || escopo.tipo === 'PROPRIO') {
+      throw new ForbiddenException(
+        'Usuario autenticado nao tem papel de aprovacao (supervisor/gerente) - sem solicitacoes de equipe para listar',
+      );
+    }
+
+    const where: Prisma.SolicitacaoDescontoWhereInput = {
+      status: 'PENDENTE',
+      ...(escopo.tipo === 'EQUIPE'
+        ? { vendedorSolicitanteId: { in: escopo.vendedorIds } }
+        : {}),
+    };
+
+    const registros = await this.prisma.solicitacaoDesconto.findMany({
+      where,
+      orderBy: { criadoEm: 'asc' },
+      include: {
+        vendedorSolicitante: { select: { id: true, nome: true } },
+        pedido: {
+          select: {
+            id: true,
+            valorTotal: true,
+            cliente: { select: { id: true, razaoSocial: true } },
+          },
+        },
+      },
+    });
+
+    return registros.map(paraResumoDto);
+  }
 
   async avaliarDesconto(
     input: AvaliarDescontoInput,
@@ -212,5 +274,36 @@ function paraDto(registro: {
     aprovadorId: registro.aprovadorId,
     decididoEm: registro.decididoEm ? registro.decididoEm.toISOString() : null,
     criadoEm: registro.criadoEm.toISOString(),
+  };
+}
+
+function paraResumoDto(registro: {
+  id: string;
+  pedidoId: string | null;
+  percentualSolicitado: { toNumber(): number };
+  vendedorSolicitanteId: string;
+  papelExigido: PapelVendedor;
+  aprovadorEsperadoId: string | null;
+  status: StatusSolicitacaoDesconto;
+  aprovadorId: string | null;
+  decididoEm: Date | null;
+  criadoEm: Date;
+  vendedorSolicitante: { id: string; nome: string | null };
+  pedido: {
+    id: string;
+    valorTotal: { toString(): string } | null;
+    cliente: { id: string; razaoSocial: string | null } | null;
+  } | null;
+}): SolicitacaoDescontoResumoDto {
+  return {
+    ...paraDto(registro),
+    vendedorSolicitante: registro.vendedorSolicitante,
+    pedido: registro.pedido
+      ? {
+          id: registro.pedido.id,
+          valorTotal: registro.pedido.valorTotal ? registro.pedido.valorTotal.toString() : null,
+          cliente: registro.pedido.cliente,
+        }
+      : null,
   };
 }

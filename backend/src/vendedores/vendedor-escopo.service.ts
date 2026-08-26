@@ -50,6 +50,26 @@ export class VendedorEscopoService {
     idpUser: IdpUser,
     usuarioId: string,
   ): Promise<EscopoClientes> {
+    return this.resolverEscopo(idpUser, usuarioId);
+  }
+
+  // Mesma resolucao de EscopoClientes (papel + equipe), so com outro nome
+  // no call site (OS-BACKEND-22/OS-WEB-21) - "quais vendedores este usuario
+  // enxerga" e' identico pra filtrar Cliente ou SolicitacaoDesconto por
+  // vendedorSolicitanteId, so o `construirWhere*PorEscopo` que muda por
+  // entidade (ver solicitacoes-desconto.service.ts). Evita duplicar a
+  // resolucao (papel/BFS) num segundo metodo so por causa do nome.
+  async resolverEscopoVendedores(
+    idpUser: IdpUser,
+    usuarioId: string,
+  ): Promise<EscopoClientes> {
+    return this.resolverEscopo(idpUser, usuarioId);
+  }
+
+  private async resolverEscopo(
+    idpUser: IdpUser,
+    usuarioId: string,
+  ): Promise<EscopoClientes> {
     if (idpUser.role === 'admin') {
       return { tipo: 'TODOS' };
     }

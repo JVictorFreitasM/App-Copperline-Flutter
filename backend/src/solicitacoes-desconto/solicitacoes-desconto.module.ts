@@ -4,13 +4,17 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminConfiguracaoDescontoController } from './admin-configuracao-desconto.controller';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
 import { SolicitacoesDescontoController } from './solicitacoes-desconto.controller';
 import { SolicitacoesDescontoService } from './solicitacoes-desconto.service';
 
 @Module({
-  imports: [PrismaModule, UsuariosModule],
+  // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-21,
+  // GET /solicitacoes-desconto escopado por equipe) - mesmo raciocinio de
+  // ClientesModule.
+  imports: [PrismaModule, UsuariosModule, VendedoresModule],
   // AdminConfiguracaoDescontoController fica protegido so por ApiKeyGuard
   // (ver seu proprio @UseGuards) - so SolicitacoesDescontoController entra
   // no requireAuth abaixo.
