@@ -31,6 +31,8 @@ const CAMPOS_CLIENTE = [
   'contatos.telefoneNumero',
   'contatos.funcao',
   'detalhes.idVendedores',
+  'informacoesFinanceiras.limiteCredito',
+  'informacoesFinanceiras.dataLimiteCredito',
 ];
 
 const TAMANHO_JANELA_PADRAO_MS = 24 * 60 * 60 * 1000; // 1 dia
@@ -87,6 +89,10 @@ export class ClienteSyncStrategy implements SyncStrategy<
         funcao: contato.funcao ?? null,
       })),
       vendedoresExternoIds: bruto.detalhes?.idVendedores ?? [],
+      limiteCredito: bruto.informacoesFinanceiras?.limiteCredito ?? null,
+      dataLimiteCredito: bruto.informacoesFinanceiras?.dataLimiteCredito
+        ? new Date(bruto.informacoesFinanceiras.dataLimiteCredito)
+        : null,
     };
   }
 
@@ -107,6 +113,8 @@ export class ClienteSyncStrategy implements SyncStrategy<
           enderecos,
           incompleto: false,
           sincronizadoEm,
+          limiteCredito: mapeado.limiteCredito,
+          dataLimiteCredito: mapeado.dataLimiteCredito,
         },
         // incompleto:false tambem no update - "completa" um eventual stub
         // criado por PedidoSyncStrategy (OS 07) quando o cliente de verdade
@@ -120,6 +128,8 @@ export class ClienteSyncStrategy implements SyncStrategy<
           enderecos,
           incompleto: false,
           sincronizadoEm,
+          limiteCredito: mapeado.limiteCredito,
+          dataLimiteCredito: mapeado.dataLimiteCredito,
         },
       });
 

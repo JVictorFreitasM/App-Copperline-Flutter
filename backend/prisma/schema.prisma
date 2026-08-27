@@ -74,6 +74,17 @@ model Cliente {
   incompleto       Boolean  @default(false)
   sincronizadoEm   DateTime @map("sincronizado_em")
 
+  // Dados financeiros embutidos no proprio cadastro do cliente no WK Radar
+  // (informacoesFinanceiras) - vem junto do sync normal, sem chamada extra
+  // (OS-BACKEND-36). O DTO do Radar tambem tem descontoFinanceiro/desconto,
+  // mas so limiteCredito foi pedido pela OS - os demais ficam fora de
+  // escopo. Inadimplencia/notas em aberto NAO vem daqui: sao consultadas
+  // sob demanda em /api/financeiro/v1/titulo-contas-receber (ver
+  // ClienteFinanceiroService) - endpoint separado, sem persistir localmente
+  // (dado transacional que muda com cada pagamento).
+  limiteCredito     Decimal?  @map("limite_credito") @db.Decimal(14, 2)
+  dataLimiteCredito DateTime? @map("data_limite_credito")
+
   // "Pin" de localizacao (visita com foto/geolocalizacao, extensao da
   // OS-BACKEND-28) - NAO vem do WK Radar (o endereco em `enderecos` acima
   // e' o cadastral, sem coordenada). Definido manualmente por um vendedor

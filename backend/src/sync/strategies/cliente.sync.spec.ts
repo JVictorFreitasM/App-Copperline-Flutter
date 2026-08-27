@@ -33,7 +33,22 @@ describe('ClienteSyncStrategy.map', () => {
       enderecos: [{ cep: '01000-000', bairro: 'Centro' }],
       contatos: [],
       vendedoresExternoIds: [],
+      limiteCredito: null,
+      dataLimiteCredito: null,
     });
+  });
+
+  it('mapeia informacoesFinanceiras.limiteCredito/dataLimiteCredito (OS-BACKEND-36)', () => {
+    const bruto: WkRadarCliente = {
+      id: '123',
+      inativo: false,
+      informacoesFinanceiras: { limiteCredito: 600, dataLimiteCredito: '2026-08-01' },
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.limiteCredito).toBe(600);
+    expect(mapeado.dataLimiteCredito).toEqual(new Date('2026-08-01'));
   });
 
   it('mapeia detalhes.idVendedores (array - cliente pode ter mais de um vendedor)', () => {
@@ -113,6 +128,8 @@ const MAPEADO_BASE = {
   enderecos: [],
   contatos: [],
   vendedoresExternoIds: [] as string[],
+  limiteCredito: null as number | null,
+  dataLimiteCredito: null as Date | null,
 };
 
 describe('ClienteSyncStrategy.upsert (OS-BACKEND-23, vinculo N:N com vendedor)', () => {

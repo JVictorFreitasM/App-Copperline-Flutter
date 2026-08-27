@@ -6,6 +6,8 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import type { ClienteEstatisticasDto } from './cliente-estatisticas.service';
+import { ClienteFinanceiroService } from './cliente-financeiro.service';
+import type { ClienteFinanceiroDto } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import type { ClienteLocalizacaoDto } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
@@ -34,6 +36,7 @@ export class ClientesController {
     private readonly clientesService: ClientesService,
     private readonly clienteResumoLlmService: ClienteResumoLlmService,
     private readonly clienteEstatisticasService: ClienteEstatisticasService,
+    private readonly clienteFinanceiroService: ClienteFinanceiroService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly visitasService: VisitasService,
@@ -93,6 +96,17 @@ export class ClientesController {
   ): Promise<ClienteEstatisticasDto> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clienteEstatisticasService.obter(id, query.meses, escopo);
+  }
+
+  // OS-BACKEND-36 - "/:id/financeiro" e' mais especifico que "/:id" (3
+  // segmentos vs 2), mesmo raciocinio de "/:id/resumo"/"/:id/estatisticas".
+  @Get(':id/financeiro')
+  async obterFinanceiro(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteFinanceiroDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clienteFinanceiroService.obter(id, escopo);
   }
 
   // OS-BACKEND-28 - historico de visitas, pra exibir junto das

@@ -33,6 +33,14 @@ export interface WkRadarClienteDetalhes {
   idVendedores?: string[] | null;
 }
 
+// Subconjunto de ReadClienteInformacoesFinanceirasDto - so limiteCredito e'
+// pedido pela OS-BACKEND-36 (descontoFinanceiro/desconto ficam fora de
+// escopo, ver comentario em schema.prisma).
+export interface WkRadarClienteInformacoesFinanceiras {
+  limiteCredito?: number | null;
+  dataLimiteCredito?: string | null;
+}
+
 export interface WkRadarCliente {
   id: string;
   codigoIntegrador?: string | null;
@@ -43,6 +51,7 @@ export interface WkRadarCliente {
   enderecos?: WkRadarEndereco[] | null;
   contatos?: WkRadarContato[] | null;
   detalhes?: WkRadarClienteDetalhes | null;
+  informacoesFinanceiras?: WkRadarClienteInformacoesFinanceiras | null;
 }
 
 export interface ContatoMapeado {
@@ -65,4 +74,6 @@ export interface ClienteMapeado {
   enderecos: WkRadarEndereco[];
   contatos: ContatoMapeado[];
   vendedoresExternoIds: string[];
+  limiteCredito: number | null;
+  dataLimiteCredito: Date | null;
 }

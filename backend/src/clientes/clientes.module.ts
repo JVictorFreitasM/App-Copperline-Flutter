@@ -1,6 +1,7 @@
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
+import { ErpClientModule } from '../erp-client/erp-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -9,6 +10,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
+import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
@@ -18,7 +20,8 @@ import { ClientesService } from './clientes.service';
   // LlmClientModule/RedisModule importados so pelo GET /clientes/:id/resumo
   // (OS-BACKEND-20). UsuariosModule/VendedoresModule (OS-BACKEND-23) pro
   // escopo por vendedor (VendedorEscopoService). VisitasModule (OS-BACKEND-28)
-  // pro GET /clientes/:id/visitas.
+  // pro GET /clientes/:id/visitas. ErpClientModule (OS-BACKEND-36) pro GET
+  // /clientes/:id/financeiro (consulta sob demanda de titulos em aberto).
   imports: [
     PrismaModule,
     LlmClientModule,
@@ -26,6 +29,7 @@ import { ClientesService } from './clientes.service';
     UsuariosModule,
     VendedoresModule,
     VisitasModule,
+    ErpClientModule,
   ],
   controllers: [ClientesController],
   providers: [
@@ -33,6 +37,7 @@ import { ClientesService } from './clientes.service';
     ClienteResumoLlmService,
     ClienteEstatisticasService,
     ClienteLocalizacaoService,
+    ClienteFinanceiroService,
   ],
 })
 export class ClientesModule implements NestModule {
