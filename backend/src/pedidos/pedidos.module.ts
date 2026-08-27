@@ -11,6 +11,7 @@ import { CriarPedidoService } from './criar-pedido.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
 import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
+import { RelatorioPedidosService } from './relatorio-pedidos.service';
 
 @Module({
   // ProdutosModule (calculo por tipo de venda), SolicitacoesDescontoModule
@@ -25,7 +26,7 @@ import { PedidosService } from './pedidos.service';
     VendedoresModule,
   ],
   controllers: [PedidosController],
-  providers: [PedidosService, CriarPedidoService, PedidoErpClientService],
+  providers: [PedidosService, CriarPedidoService, PedidoErpClientService, RelatorioPedidosService],
   // CriarPedidoService exportado pra MobileModule (OS-BACKEND-29)
   // reaproveitar na fila de acoes offline.
   exports: [CriarPedidoService],

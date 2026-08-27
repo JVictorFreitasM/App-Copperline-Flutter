@@ -13,6 +13,9 @@ import type {
   PedidoResumoDto,
 } from './dto/pedido-response.dto';
 import { ListarPedidosQueryDto } from './dto/listar-pedidos-query.dto';
+import { RelatorioPedidosQueryDto } from './dto/relatorio-pedidos-query.dto';
+import type { RelatorioPedidosDto } from './dto/relatorio-pedidos-response.dto';
+import { RelatorioPedidosService } from './relatorio-pedidos.service';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver pedidos.module.ts).
 @Controller('pedidos')
@@ -22,6 +25,7 @@ export class PedidosController {
     private readonly criarPedidoService: CriarPedidoService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly relatorioPedidosService: RelatorioPedidosService,
   ) {}
 
   @Get()
@@ -29,6 +33,20 @@ export class PedidosController {
     @Query() query: ListarPedidosQueryDto,
   ): Promise<PaginatedResult<PedidoResumoDto>> {
     return this.pedidosService.listar(query);
+  }
+
+  // "/relatorio" ANTES de "/:id" - mesmo motivo de 'favoritos' em
+  // produtos.controller.ts (OS-BACKEND-19): "/:id" (GET) casaria com
+  // "relatorio" como valor de id se viesse antes. Painel de gestão
+  // (OS-WEB-27) - escopado por hierarquia dentro de
+  // RelatorioPedidosService.obter (VendedorEscopoService), não aqui.
+  @Get('relatorio')
+  async relatorio(
+    @Query() query: RelatorioPedidosQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<RelatorioPedidosDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.relatorioPedidosService.obter(idpUser, usuario.id, query);
   }
 
   @Get(':id')
