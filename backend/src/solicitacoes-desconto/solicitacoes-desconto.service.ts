@@ -238,13 +238,33 @@ export class SolicitacoesDescontoService {
       throw error;
     }
 
-    const atualizada = await this.prisma.solicitacaoDesconto.update({
-      where: { id: registro.id },
-      data: {
-        status: novoStatus,
-        aprovadorId: aprovadorVendedor.id,
-        decididoEm: new Date(),
-      },
+    const atualizada = await this.prisma.$transaction(async (tx) => {
+      const resultado = await tx.solicitacaoDesconto.update({
+        where: { id: registro.id },
+        data: {
+          status: novoStatus,
+          aprovadorId: aprovadorVendedor.id,
+          decididoEm: new Date(),
+        },
+      });
+
+      // Historico do PEDIDO (OS-BACKEND-33), nao so da solicitacao - so
+      // registra quando ja existe um pedido vinculado (pedidoId comeca
+      // null, so e' preenchido por persistirPedidoAguardandoAprovacao - ver
+      // criar-pedido.service.ts; teoricamente sempre preenchido por aqui,
+      // mas defensivo contra a ordem de chamada mudar no futuro).
+      if (resultado.pedidoId) {
+        await tx.pedidoHistoricoStatus.create({
+          data: {
+            pedidoId: resultado.pedidoId,
+            statusAnterior: 'AGUARDANDO_APROVACAO',
+            statusNovo: novoStatus,
+            alteradoPor: aprovadorUsuarioId,
+          },
+        });
+      }
+
+      return resultado;
     });
 
     return paraDto(atualizada);

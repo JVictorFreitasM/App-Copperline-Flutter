@@ -34,6 +34,13 @@ const INTERVALO_PADRAO_INCREMENTAL_MINUTOS = 30;
 const HORARIO_PADRAO_INCREMENTAL_NOTURNO = '00:00';
 const HORARIO_PADRAO_JANELA_FIXA_DIARIA = '03:15';
 const INTERVALO_PADRAO_CONFIGURAVEL_MINUTOS = 30;
+// Espelha DIAS_JANELA_RETROATIVA em nota-fiscal.sync.ts (OS-BACKEND-38) -
+// fonte duplicada de proposito, mesmo raciocinio dos outros padroes de
+// cadencia acima: so pra exibir um valor coerente em
+// GET /admin/sync/configuracoes antes do admin salvar uma config propria.
+const JANELA_REPROCESSAMENTO_PADRAO_DIAS: Record<string, number> = {
+  'nota-fiscal': 60,
+};
 
 export interface ConfiguracaoSyncDto {
   nomeEntidade: string;
@@ -41,6 +48,10 @@ export interface ConfiguracaoSyncDto {
   intervaloMinutos: number | null;
   horarioFixo: string | null;
   diasSemana: number[];
+  // Distinto de cadencia (frequencia de execucao) - QUANTO PASSADO cada
+  // execucao reprocessa. null pra entidades onde o conceito nao se aplica
+  // (todas exceto nota-fiscal hoje, ver NotaFiscalSyncStrategy).
+  janelaReprocessamentoDias: number | null;
   origem: 'CONFIGURADA' | 'PADRAO';
   ultimaSincronizacaoEm: string | null;
 }
@@ -50,6 +61,7 @@ export interface AtualizarConfiguracaoSyncInput {
   intervaloMinutos?: number;
   horarioFixo?: string;
   diasSemana?: number[];
+  janelaReprocessamentoDias?: number;
 }
 
 // Generaliza o padrao que a OS anterior criou so pra saldo_estoque
@@ -95,6 +107,10 @@ export class SyncConfigService implements OnModuleInit {
           intervaloMinutos: salva.intervaloMinutos,
           horarioFixo: salva.horarioFixo,
           diasSemana: salva.diasSemana,
+          janelaReprocessamentoDias:
+            salva.janelaReprocessamentoDias ??
+            JANELA_REPROCESSAMENTO_PADRAO_DIAS[strategy.nomeEntidade] ??
+            null,
           origem: 'CONFIGURADA',
           ultimaSincronizacaoEm: ultimaSincronizacao?.toISOString() ?? null,
         };
@@ -127,6 +143,7 @@ export class SyncConfigService implements OnModuleInit {
       intervaloMinutos: input.intervaloMinutos ?? null,
       horarioFixo: input.horarioFixo ?? null,
       diasSemana: input.diasSemana ?? [],
+      janelaReprocessamentoDias: input.janelaReprocessamentoDias ?? null,
     };
 
     const salva = await this.prisma.configuracaoSync.upsert({
@@ -149,6 +166,10 @@ export class SyncConfigService implements OnModuleInit {
       intervaloMinutos: salva.intervaloMinutos,
       horarioFixo: salva.horarioFixo,
       diasSemana: salva.diasSemana,
+      janelaReprocessamentoDias:
+        salva.janelaReprocessamentoDias ??
+        JANELA_REPROCESSAMENTO_PADRAO_DIAS[nomeEntidade] ??
+        null,
       origem: 'CONFIGURADA',
       ultimaSincronizacaoEm: syncEntity?.ultimaSincronizacao?.toISOString() ?? null,
     };
@@ -194,6 +215,8 @@ export class SyncConfigService implements OnModuleInit {
       nomeEntidade: strategy.nomeEntidade,
       tipoCadencia,
       origem: 'PADRAO' as const,
+      janelaReprocessamentoDias:
+        JANELA_REPROCESSAMENTO_PADRAO_DIAS[strategy.nomeEntidade] ?? null,
     };
 
     switch (tipoCadencia) {

@@ -50,10 +50,15 @@ describe('NotaFiscalSyncStrategy.fetch', () => {
     // Janela de 30 dias configurada de uma vez so (nao fatiada), pra
     // deixar claro na asserção qual foi o range total efetivamente usado.
     const configServiceFake = { get: () => 60 * 24 * 60 * 60 * 1000 } as never;
+    // Sem ConfiguracaoSync salva - cai no padrao hardcoded (60 dias, ver
+    // DIAS_JANELA_RETROATIVA), mesmo comportamento de antes da OS-BACKEND-38.
+    const prismaFakeSemConfig = {
+      configuracaoSync: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as never;
 
     const strategy = new NotaFiscalSyncStrategy(
       erpClientFake,
-      undefined as never,
+      prismaFakeSemConfig,
       configServiceFake,
     );
 
@@ -77,6 +82,34 @@ describe('NotaFiscalSyncStrategy.fetch', () => {
     // nota-fiscal.sync.ts). 60 dias antes de 2026-08-18 e 2026-06-19.
     expect(paramsUsados.DataEmissaoInicial).toBe('2026-06-19');
     expect(paramsUsados.DataEmissaoFinal).toBe('2026-08-18');
+  });
+
+  it('usa janelaReprocessamentoDias configurada em vez do padrao de 60 dias (OS-BACKEND-38)', async () => {
+    const get = jest.fn().mockResolvedValue([]);
+    const erpClientFake = { get } as never;
+    const configServiceFake = { get: () => 24 * 60 * 60 * 1000 } as never;
+    const prismaFakeComConfig = {
+      configuracaoSync: {
+        findUnique: jest.fn().mockResolvedValue({ janelaReprocessamentoDias: 10 }),
+      },
+    } as never;
+
+    const strategy = new NotaFiscalSyncStrategy(
+      erpClientFake,
+      prismaFakeComConfig,
+      configServiceFake,
+    );
+
+    const agora = new Date('2026-08-18T03:15:00Z');
+    await strategy.fetch({ desde: agora, ate: agora });
+
+    const paramsUsados = get.mock.calls[0][1] as {
+      DataEmissaoInicial: string;
+      DataEmissaoFinal: string;
+    };
+    // 10 dias antes de 2026-08-18 e 2026-08-08 (nao 2026-06-19, que seria
+    // o padrao de 60 dias).
+    expect(paramsUsados.DataEmissaoInicial).toBe('2026-08-08');
   });
 });
 

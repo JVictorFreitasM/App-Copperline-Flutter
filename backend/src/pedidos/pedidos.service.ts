@@ -8,6 +8,10 @@ import {
   type PedidoDetalheDto,
   type PedidoResumoDto,
 } from './dto/pedido-response.dto';
+import {
+  paraPedidoHistoricoStatusDto,
+  type PedidoHistoricoStatusDto,
+} from './dto/pedido-historico.dto';
 import type { ListarPedidosQueryDto } from './dto/listar-pedidos-query.dto';
 
 // So leitura sobre dado ja sincronizado do WK Radar (OS 07) - sem regra de
@@ -84,5 +88,25 @@ export class PedidosService {
     }
 
     return paraPedidoDetalheDto(pedido);
+  }
+
+  // GET /pedidos/:id/historico (OS-BACKEND-33) - ordem cronologica
+  // (criterio de aceite).
+  async obterHistorico(id: string): Promise<PedidoHistoricoStatusDto[]> {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!pedido) {
+      throw new NotFoundException(`Pedido '${id}' não encontrado`);
+    }
+
+    const historico = await this.prisma.pedidoHistoricoStatus.findMany({
+      where: { pedidoId: id },
+      include: { usuario: true },
+      orderBy: { alteradoEm: 'asc' },
+    });
+
+    return historico.map(paraPedidoHistoricoStatusDto);
   }
 }

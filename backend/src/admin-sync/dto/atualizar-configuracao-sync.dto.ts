@@ -48,4 +48,15 @@ export class AtualizarConfiguracaoSyncDto {
   @Min(0, { each: true })
   @Max(6, { each: true })
   diasSemana?: number[];
+
+  // OS-BACKEND-38 - tamanho da janela retroativa reprocessada a cada
+  // execucao, em dias. So tem efeito pra entidades cuja strategy realmente
+  // le esse valor (hoje so nota-fiscal, ver NotaFiscalSyncStrategy) -
+  // aceito genericamente aqui (mesmo criterio de intervaloMinutos/
+  // horarioFixo, que tambem so fazem sentido conforme o tipoCadencia
+  // escolhido) em vez de validar "so pra essa entidade" no DTO.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  janelaReprocessamentoDias?: number;
 }

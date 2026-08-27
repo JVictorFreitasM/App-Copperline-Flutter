@@ -62,6 +62,7 @@ describe('SyncConfigService.listar', () => {
         intervaloMinutos: 30,
         horarioFixo: null,
         diasSemana: [],
+        janelaReprocessamentoDias: null,
         origem: 'PADRAO',
         ultimaSincronizacaoEm: null,
       },
@@ -71,6 +72,7 @@ describe('SyncConfigService.listar', () => {
         intervaloMinutos: null,
         horarioFixo: '00:00',
         diasSemana: [],
+        janelaReprocessamentoDias: null,
         origem: 'PADRAO',
         ultimaSincronizacaoEm: null,
       },
@@ -101,9 +103,42 @@ describe('SyncConfigService.listar', () => {
       intervaloMinutos: 120,
       horarioFixo: null,
       diasSemana: [],
+      janelaReprocessamentoDias: null,
       origem: 'CONFIGURADA',
       ultimaSincronizacaoEm: '2026-01-01T00:00:00.000Z',
     });
+  });
+
+  it('entidade nota-fiscal sem ConfiguracaoSync salva mostra o padrao de 60 dias (OS-BACKEND-38)', async () => {
+    const strategies = [strategyFake('nota-fiscal', 'JANELA_FIXA_DIARIA')];
+    const prisma = prismaFake([], []);
+    const service = new SyncConfigService(prisma as never, queueFake() as never, strategies);
+
+    const resultado = await service.listar();
+
+    expect(resultado[0].janelaReprocessamentoDias).toBe(60);
+  });
+
+  it('entidade nota-fiscal com janelaReprocessamentoDias configurada mostra o valor salvo, nao o padrao', async () => {
+    const strategies = [strategyFake('nota-fiscal', 'JANELA_FIXA_DIARIA')];
+    const prisma = prismaFake(
+      [
+        {
+          nomeEntidade: 'nota-fiscal',
+          tipoCadencia: 'JANELA_FIXA_DIARIA',
+          intervaloMinutos: null,
+          horarioFixo: '03:15',
+          diasSemana: [],
+          janelaReprocessamentoDias: 15,
+        },
+      ],
+      [],
+    );
+    const service = new SyncConfigService(prisma as never, queueFake() as never, strategies);
+
+    const resultado = await service.listar();
+
+    expect(resultado[0].janelaReprocessamentoDias).toBe(15);
   });
 });
 

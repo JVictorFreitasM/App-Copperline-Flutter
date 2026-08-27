@@ -5,12 +5,16 @@ function prismaFake(overrides: {
   findMany?: unknown[];
   count?: number;
   findUnique?: unknown;
+  historico?: unknown[];
 }) {
   return {
     pedido: {
       findMany: jest.fn().mockResolvedValue(overrides.findMany ?? []),
       count: jest.fn().mockResolvedValue(overrides.count ?? 0),
       findUnique: jest.fn().mockResolvedValue(overrides.findUnique ?? null),
+    },
+    pedidoHistoricoStatus: {
+      findMany: jest.fn().mockResolvedValue(overrides.historico ?? []),
     },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -161,5 +165,64 @@ describe('PedidosService.buscarPorId', () => {
         produto: { id: 'prod-1', nome: 'Produto A', codigo: 'P1' },
       },
     ]);
+  });
+});
+
+describe('PedidosService.obterHistorico', () => {
+  it('lanca NotFoundException quando o pedido nao existe', async () => {
+    const prisma = prismaFake({ findUnique: null });
+    const service = new PedidosService(prisma as never);
+
+    await expect(service.obterHistorico('inexistente')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('retorna o historico em ordem cronologica, resolvendo o nome de quem alterou', async () => {
+    const prisma = prismaFake({
+      findUnique: { id: 'pedido-1' },
+      historico: [
+        {
+          id: 'h1',
+          statusAnterior: null,
+          statusNovo: 'AGUARDANDO_APROVACAO',
+          alteradoEm: new Date('2026-01-01T10:00:00.000Z'),
+          usuario: { id: 'u1', nome: 'Fulano' },
+        },
+        {
+          id: 'h2',
+          statusAnterior: 'AGUARDANDO_APROVACAO',
+          statusNovo: 'APROVADO',
+          alteradoEm: new Date('2026-01-02T10:00:00.000Z'),
+          usuario: { id: 'u-sup', nome: 'Supervisora' },
+        },
+      ],
+    });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.obterHistorico('pedido-1');
+
+    expect(resultado).toEqual([
+      {
+        id: 'h1',
+        statusAnterior: null,
+        statusNovo: 'AGUARDANDO_APROVACAO',
+        alteradoPor: { id: 'u1', nome: 'Fulano' },
+        alteradoEm: '2026-01-01T10:00:00.000Z',
+      },
+      {
+        id: 'h2',
+        statusAnterior: 'AGUARDANDO_APROVACAO',
+        statusNovo: 'APROVADO',
+        alteradoPor: { id: 'u-sup', nome: 'Supervisora' },
+        alteradoEm: '2026-01-02T10:00:00.000Z',
+      },
+    ]);
+    expect(prisma.pedidoHistoricoStatus.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { pedidoId: 'pedido-1' },
+        orderBy: { alteradoEm: 'asc' },
+      }),
+    );
   });
 });

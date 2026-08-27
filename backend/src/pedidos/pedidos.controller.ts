@@ -12,6 +12,7 @@ import type {
   PedidoDetalheDto,
   PedidoResumoDto,
 } from './dto/pedido-response.dto';
+import type { PedidoHistoricoStatusDto } from './dto/pedido-historico.dto';
 import { ListarPedidosQueryDto } from './dto/listar-pedidos-query.dto';
 import { RelatorioPedidosQueryDto } from './dto/relatorio-pedidos-query.dto';
 import type { RelatorioPedidosDto } from './dto/relatorio-pedidos-response.dto';
@@ -52,6 +53,13 @@ export class PedidosController {
   @Get(':id')
   buscarPorId(@Param('id') id: string): Promise<PedidoDetalheDto> {
     return this.pedidosService.buscarPorId(id);
+  }
+
+  // OS-BACKEND-33 - "/:id/historico" e' mais especifico que "/:id" (3
+  // segmentos vs 2), sem risco de colisao independente da ordem.
+  @Get(':id/historico')
+  obterHistorico(@Param('id') id: string): Promise<PedidoHistoricoStatusDto[]> {
+    return this.pedidosService.obterHistorico(id);
   }
 
   // OS-BACKEND-25 - reaproveita o mesmo escopo cliente<->vendedor de

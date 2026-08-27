@@ -116,6 +116,7 @@ export class CriarPedidoService {
         valorComDesconto,
         itensCalculados,
         resultadoErp,
+        usuarioId,
       );
       return {
         status: 'ENVIADO',
@@ -133,6 +134,7 @@ export class CriarPedidoService {
       valorComDesconto,
       itensCalculados,
       avaliacao.solicitacao.id,
+      usuarioId,
     );
     return {
       status: 'AGUARDANDO_APROVACAO',
@@ -199,6 +201,7 @@ export class CriarPedidoService {
     valorTotal: number,
     itens: ItemCalculado[],
     resultadoErp: { idExterno: string; codigoIntegrador: string },
+    usuarioId: string,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -216,6 +219,16 @@ export class CriarPedidoService {
         },
       });
       await criarItensPedido(tx, pedido.id, itens, sincronizadoEm);
+      // Historico (OS-BACKEND-33) - criacao conta como a primeira transicao
+      // do pedido (statusAnterior: null).
+      await tx.pedidoHistoricoStatus.create({
+        data: {
+          pedidoId: pedido.id,
+          statusAnterior: null,
+          statusNovo: 'ENVIADO',
+          alteradoPor: usuarioId,
+        },
+      });
       return pedido;
     });
   }
@@ -227,6 +240,7 @@ export class CriarPedidoService {
     valorTotal: number,
     itens: ItemCalculado[],
     solicitacaoDescontoId: string,
+    usuarioId: string,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -245,6 +259,14 @@ export class CriarPedidoService {
       await tx.solicitacaoDesconto.update({
         where: { id: solicitacaoDescontoId },
         data: { pedidoId: pedido.id },
+      });
+      await tx.pedidoHistoricoStatus.create({
+        data: {
+          pedidoId: pedido.id,
+          statusAnterior: null,
+          statusNovo: 'AGUARDANDO_APROVACAO',
+          alteradoPor: usuarioId,
+        },
       });
       return pedido;
     });

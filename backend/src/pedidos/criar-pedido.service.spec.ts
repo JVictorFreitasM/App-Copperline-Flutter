@@ -17,11 +17,13 @@ function prismaFake(overrides: {
     }));
   const pedidoItemCreateMany = jest.fn().mockResolvedValue(undefined);
   const solicitacaoDescontoUpdate = jest.fn().mockResolvedValue(undefined);
+  const pedidoHistoricoStatusCreate = jest.fn().mockResolvedValue(undefined);
 
   const tx = {
     pedido: { create: pedidoCreate },
     pedidoItem: { createMany: pedidoItemCreateMany },
     solicitacaoDesconto: { update: solicitacaoDescontoUpdate },
+    pedidoHistoricoStatus: { create: pedidoHistoricoStatusCreate },
   };
 
   return {
@@ -163,6 +165,14 @@ describe('CriarPedidoService.criar', () => {
         }),
       }),
     );
+    expect(prisma._tx.pedidoHistoricoStatus.create).toHaveBeenCalledWith({
+      data: {
+        pedidoId: 'pedido-1',
+        statusAnterior: null,
+        statusNovo: 'ENVIADO',
+        alteradoPor: 'u1',
+      },
+    });
   });
 
   it('acima do limite: NAO chama o ERP e persiste o pedido com status AGUARDANDO_APROVACAO (criterio de aceite)', async () => {
@@ -198,6 +208,14 @@ describe('CriarPedidoService.criar', () => {
     expect(prisma._tx.solicitacaoDesconto.update).toHaveBeenCalledWith({
       where: { id: 'solicitacao-1' },
       data: { pedidoId: 'pedido-1' },
+    });
+    expect(prisma._tx.pedidoHistoricoStatus.create).toHaveBeenCalledWith({
+      data: {
+        pedidoId: 'pedido-1',
+        statusAnterior: null,
+        statusNovo: 'AGUARDANDO_APROVACAO',
+        alteradoPor: 'u1',
+      },
     });
   });
 

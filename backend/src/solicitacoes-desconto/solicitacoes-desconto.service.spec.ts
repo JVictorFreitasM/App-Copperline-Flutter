@@ -88,6 +88,15 @@ function prismaFake(overrides: {
         };
       }),
     },
+    pedidoHistoricoStatus: {
+      create: jest.fn().mockResolvedValue(undefined),
+    },
+    $transaction(callback: (tx: unknown) => unknown) {
+      return callback({
+        solicitacaoDesconto: this.solicitacaoDesconto,
+        pedidoHistoricoStatus: this.pedidoHistoricoStatus,
+      });
+    },
   };
 }
 
@@ -212,6 +221,58 @@ describe('SolicitacoesDescontoService.aprovar/rejeitar', () => {
 
     expect(resultado.status).toBe('APROVADO');
     expect(resultado.aprovadorId).toBe('sup1');
+  });
+
+  it('nao registra PedidoHistoricoStatus quando a solicitacao ainda nao tem pedidoId (OS-BACKEND-33)', async () => {
+    const prisma = prismaComSolicitacaoPendente();
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await service.aprovar('sol-1', 'u-sup');
+
+    expect(prisma.pedidoHistoricoStatus.create).not.toHaveBeenCalled();
+  });
+
+  it('registra PedidoHistoricoStatus (statusAnterior AGUARDANDO_APROVACAO -> APROVADO) quando a solicitacao ja tem pedidoId (OS-BACKEND-33)', async () => {
+    const prisma = prismaFake({
+      vendedores: [
+        { id: 'v1', usuarioId: 'u1', papel: 'VENDEDOR', supervisorId: 'sup1' },
+        { id: 'sup1', usuarioId: 'u-sup', papel: 'SUPERVISOR', supervisorId: null },
+      ],
+      solicitacoes: [
+        {
+          id: 'sol-1',
+          pedidoId: 'pedido-1',
+          percentualSolicitado: decimalFake(25),
+          vendedorSolicitanteId: 'v1',
+          papelExigido: 'SUPERVISOR',
+          aprovadorEsperadoId: 'sup1',
+          status: 'PENDENTE',
+          aprovadorId: null,
+          decididoEm: null,
+          criadoEm: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await service.aprovar('sol-1', 'u-sup');
+
+    expect(prisma.pedidoHistoricoStatus.create).toHaveBeenCalledWith({
+      data: {
+        pedidoId: 'pedido-1',
+        statusAnterior: 'AGUARDANDO_APROVACAO',
+        statusNovo: 'APROVADO',
+        alteradoPor: 'u-sup',
+      },
+    });
   });
 
   it('rejeita normalmente quando autorizado', async () => {

@@ -295,11 +295,12 @@ model Pedido {
   percentualDescontoSolicitado Decimal?           @map("percentual_desconto_solicitado") @db.Decimal(5, 2)
   statusLocal                  StatusPedidoLocal? @map("status_local")
 
-  cliente              Cliente?              @relation(fields: [clienteId], references: [id])
-  vendedor             Vendedor?             @relation(fields: [vendedorId], references: [id])
+  cliente              Cliente?                @relation(fields: [clienteId], references: [id])
+  vendedor             Vendedor?               @relation(fields: [vendedorId], references: [id])
   itens                PedidoItem[]
   notasFiscais         NotaFiscalPedido[]
   solicitacoesDesconto SolicitacaoDesconto[]
+  historicoStatus      PedidoHistoricoStatus[]
 
   @@index([clienteId])
   @@map("pedidos")
@@ -310,6 +311,30 @@ enum StatusPedidoLocal {
   ENVIADO
 
   @@map("status_pedido_local")
+}
+
+// Rastreabilidade de status do pedido (OS-BACKEND-33) - statusAnterior/
+// statusNovo sao texto livre (nao um enum unico), de proposito: cobrem
+// tanto StatusPedidoLocal (ENVIADO/AGUARDANDO_APROVACAO, na criacao) quanto
+// o resultado da decisao de desconto (APROVADO/REJEITADO, ver
+// SolicitacoesDescontoService.decidir) - dois vocabularios diferentes sobre
+// o mesmo pedido, sem um enum comum que faca sentido pros dois. alteradoPor
+// nullable so pro caso (hoje inexistente na pratica) de uma transicao sem
+// ator humano identificavel - toda transicao ja implementada tem um
+// usuarioId real (quem criou o pedido, quem decidiu a solicitacao).
+model PedidoHistoricoStatus {
+  id             String   @id @default(uuid())
+  pedidoId       String   @map("pedido_id")
+  statusAnterior String?  @map("status_anterior")
+  statusNovo     String   @map("status_novo")
+  alteradoPor    String?  @map("alterado_por")
+  alteradoEm     DateTime @default(now()) @map("alterado_em")
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [alteradoPor], references: [id])
+
+  @@index([pedidoId])
+  @@map("pedido_historico_status")
 }
 
 // Itens de pedido NAO tem id/codigoIntegrador proprio no WK Radar (so
@@ -452,15 +477,25 @@ enum TipoCadenciaSync {
 // diasSemana para INCREMENTAL_NOTURNO/JANELA_FIXA_DIARIA) - ver
 // construir-repeat-options.ts pra conversao pro formato do BullMQ.
 model ConfiguracaoSync {
-  id               String           @id @default(uuid())
-  nomeEntidade     String           @unique @map("nome_entidade")
-  tipoCadencia     TipoCadenciaSync @map("tipo_cadencia")
-  intervaloMinutos Int?             @map("intervalo_minutos")
+  id                        String           @id @default(uuid())
+  nomeEntidade              String           @unique @map("nome_entidade")
+  tipoCadencia              TipoCadenciaSync @map("tipo_cadencia")
+  intervaloMinutos          Int?             @map("intervalo_minutos")
   // Formato "HH:mm".
-  horarioFixo      String?          @map("horario_fixo")
+  horarioFixo               String?          @map("horario_fixo")
   // 0=domingo..6=sabado; vazio = todos os dias.
-  diasSemana       Int[]            @map("dias_semana")
-  atualizadoEm     DateTime         @updatedAt @map("atualizado_em")
+  diasSemana                Int[]            @map("dias_semana")
+  // Tamanho da janela retroativa reprocessada a cada execucao, em DIAS
+  // (OS-BACKEND-38) - campo distinto de cadencia (com que frequencia roda),
+  // este e' QUANTO PASSADO cada execucao reprocessa. So faz sentido pra
+  // entidades sem cursor incremental de alteracao (hoje so nota-fiscal, ver
+  // NotaFiscalSyncStrategy) - null = usa o padrao hardcoded da propria
+  // strategy (60 dias pra nota-fiscal). Nao e' generico o suficiente pra
+  // toda entidade (cliente/produto/pedido tem cursor incremental de
+  // verdade, esse conceito nao se aplica a eles), mas fica no mesmo lugar
+  // de config generalizada em vez de uma tabela so pra nota-fiscal.
+  janelaReprocessamentoDias Int?             @map("janela_reprocessamento_dias")
+  atualizadoEm              DateTime         @updatedAt @map("atualizado_em")
 
   @@map("configuracao_sync")
 }
@@ -478,11 +513,12 @@ model Usuario {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  dispositivos         DispositivoUsuario[]
-  favoritos            ProdutoFavorito[]
-  vendedores           Vendedor[]
-  localizacoes         LocalizacaoUsuario[]
-  acoesFilaProcessadas AcaoFilaProcessada[]
+  dispositivos           DispositivoUsuario[]
+  favoritos              ProdutoFavorito[]
+  vendedores             Vendedor[]
+  localizacoes           LocalizacaoUsuario[]
+  acoesFilaProcessadas   AcaoFilaProcessada[]
+  historicoStatusPedidos PedidoHistoricoStatus[]
 
   @@map("usuarios")
 }

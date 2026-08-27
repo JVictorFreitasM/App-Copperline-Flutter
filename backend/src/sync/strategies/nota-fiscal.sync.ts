@@ -54,6 +54,8 @@ const MAPA_STATUS_NFE: Record<StatusNfeWkRadar, StatusNfe> = {
   Inutilizada: 'INUTILIZADA',
 };
 
+// Padrao quando ConfiguracaoSync.janelaReprocessamentoDias nao foi
+// configurada (OS-BACKEND-38) - ver uso em fetch() abaixo.
 const DIAS_JANELA_RETROATIVA = 60;
 const TAMANHO_SUB_JANELA_PADRAO_MS = 24 * 60 * 60 * 1000; // 1 dia
 
@@ -68,10 +70,13 @@ const TAMANHO_SUB_JANELA_PADRAO_MS = 24 * 60 * 60 * 1000; // 1 dia
 // uma vez por dia, de madrugada - ver SyncScheduler) e, dentro de fetch(),
 // IGNORA deliberadamente `janela.desde` (o cursor incremental que o
 // SyncService calcularia a partir de SyncEntity.ultimaSincronizacao) -
-// sempre reprocessa os ultimos 60 dias inteiros, usando so `janela.ate`
-// (o instante em que a execucao comecou) como referencia. Isso e uma troca
-// deliberada: uma nota que mudar depois desses 60 dias nao e capturada -
-// decisao aceita nesta OS, nao um bug a corrigir depois. O upsert por
+// sempre reprocessa os ultimos N dias inteiros (N = janelaReprocessamentoDias
+// configurada, OS-BACKEND-38, padrao 60 - ver DIAS_JANELA_RETROATIVA
+// abaixo), usando so `janela.ate` (o instante em que a execucao comecou)
+// como referencia. Isso e uma troca deliberada: uma nota que mudar depois
+// desse tamanho de janela nao e capturada - decisao aceita nesta OS, nao
+// um bug a corrigir depois (aumentar a janela via config aumenta
+// proporcionalmente a carga da execucao diaria sobre o ERP). O upsert por
 // id_externo_erp garante que reprocessar o mesmo periodo todo dia so
 // atualiza o que mudou, sem duplicar.
 @Injectable()
@@ -98,9 +103,21 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
   async fetch(
     janela: SyncWindow,
   ): Promise<SyncFetchResultado<WkRadarNotaFiscal>> {
+    // OS-BACKEND-38 - tamanho da janela agora configuravel via
+    // PATCH /admin/sync/configuracoes/nota-fiscal (mesma config
+    // generalizada da OS-BACKEND-15, campo janelaReprocessamentoDias, ver
+    // SyncConfigService) - cai no padrao hardcoded (60 dias) quando nao ha
+    // config salva ou o campo nao foi preenchido.
+    const configuracao = await this.prisma.configuracaoSync.findUnique({
+      where: { nomeEntidade: this.nomeEntidade },
+      select: { janelaReprocessamentoDias: true },
+    });
+    const diasJanelaRetroativa =
+      configuracao?.janelaReprocessamentoDias ?? DIAS_JANELA_RETROATIVA;
+
     const janelaRetroativaFixa: SyncWindow = {
       desde: new Date(
-        janela.ate.getTime() - DIAS_JANELA_RETROATIVA * 24 * 60 * 60 * 1000,
+        janela.ate.getTime() - diasJanelaRetroativa * 24 * 60 * 60 * 1000,
       ),
       ate: janela.ate,
     };
