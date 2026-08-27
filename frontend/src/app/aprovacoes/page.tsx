@@ -4,9 +4,8 @@ import type { SolicitacaoDescontoResumoDto } from "@/lib/solicitacoes-desconto";
 import { rotuloPapel } from "@/lib/vendedores";
 import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { Card } from "@/components/design/card";
-import { PrimaryButton, SecondaryButton } from "@/components/design/button";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
-import { aprovarSolicitacao, rejeitarSolicitacao } from "./actions";
+import { AprovarRejeitarForm } from "./aprovar-rejeitar-form";
 
 // Aprovação de desconto (OS-WEB-21) - consome GET/POST
 // solicitacoes-desconto/* (o GET, escopado por equipe, foi adicionado
@@ -19,13 +18,8 @@ import { aprovarSolicitacao, rejeitarSolicitacao } from "./actions";
 // conexão. Sem gate de `role` aqui como nas páginas /admin/* porque
 // 'supervisor'/'gerente' não são papéis do IdP (role de sistema), são
 // PapelVendedor - o backend é quem sabe resolver isso.
-export default async function AprovacoesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ erro?: string; sucesso?: string }>;
-}) {
+export default async function AprovacoesPage() {
   await exigirUsuarioAutenticado("/aprovacoes");
-  const { erro: erroQuery, sucesso } = await searchParams;
 
   let solicitacoes: SolicitacaoDescontoResumoDto[] | null = null;
   let semPermissao = false;
@@ -46,13 +40,6 @@ export default async function AprovacoesPage({
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-bold text-ink">Aprovação de descontos</h1>
-
-      {erroQuery && <ErroConexao mensagem={decodeURIComponent(erroQuery)} />}
-      {sucesso && (
-        <Card>
-          <p className="text-sm font-medium text-ink">{decodeURIComponent(sucesso)}</p>
-        </Card>
-      )}
 
       {semPermissao ? (
         <Card>
@@ -85,14 +72,7 @@ export default async function AprovacoesPage({
                       {rotuloPapel(solicitacao.papelExigido)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <form action={aprovarSolicitacao.bind(null, solicitacao.id)}>
-                      <PrimaryButton type="submit">Aprovar</PrimaryButton>
-                    </form>
-                    <form action={rejeitarSolicitacao.bind(null, solicitacao.id)}>
-                      <SecondaryButton type="submit">Rejeitar</SecondaryButton>
-                    </form>
-                  </div>
+                  <AprovarRejeitarForm solicitacaoId={solicitacao.id} />
                 </div>
               </Card>
             ))}

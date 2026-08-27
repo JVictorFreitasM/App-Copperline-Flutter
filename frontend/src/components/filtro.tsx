@@ -1,23 +1,29 @@
 import type { ReactNode } from "react";
+import Form from "next/form";
 import Link from "next/link";
 import { Card } from "./design/card";
 import { PrimaryButton } from "./design/button";
 
-// Form nativo (method="get") - reflete o filtro na URL sem precisar de
-// nenhum JS no cliente (ver critério de aceite da OS-WEB-15: filtro
-// compartilhável/voltável pela URL). Submeter sem `page` reinicia a
-// listagem na página 1, que é o comportamento esperado ao trocar de filtro.
-// Card + PrimaryButton + link em `primary` (OS-WEB-16, design-system).
+// next/form (nao <form> nativo) - reflete o filtro na URL sem precisar de
+// nenhum JS no cliente pra funcionar (ver critério de aceite da OS-WEB-15:
+// filtro compartilhável/voltável pela URL), mas ao submeter faz navegação
+// client-side em vez de reload completo de pagina (OS-WEB-28: <form
+// method="get"> nativo forcava reload de documento inteiro a cada filtro -
+// next/form preserva o comportamento de URL mas sem esse reload).
+// scroll={false} evita pular pro topo da pagina ao filtrar (mesmo criterio
+// de aceite). Submeter sem `page` reinicia a listagem na página 1, que é o
+// comportamento esperado ao trocar de filtro. Card + PrimaryButton + link
+// em `primary` (OS-WEB-16, design-system).
 export function FiltroForm({ rota, children }: { rota: string; children: ReactNode }) {
   return (
     <Card>
-      <form method="get" action={rota} className="flex flex-wrap items-end gap-3">
+      <Form action={rota} scroll={false} className="flex flex-wrap items-end gap-3">
         {children}
         <PrimaryButton type="submit">Filtrar</PrimaryButton>
-        <Link href={rota} className="px-1 text-sm font-medium text-primary hover:underline">
+        <Link href={rota} scroll={false} className="px-1 text-sm font-medium text-primary hover:underline">
           Limpar filtros
         </Link>
-      </form>
+      </Form>
     </Card>
   );
 }

@@ -8,6 +8,10 @@ import Link from "next/link";
 // perderia o filtro aplicado. Pill em `surface`/`ink` (OS-WEB-16) - mesmo
 // raio/sombra do SecondaryButton, mas com estado desabilitado (link comum
 // não tem isso, por isso não reaproveita o componente Button aqui.
+// scroll={false} (OS-WEB-28) - next/link por padrao rola pro topo da
+// pagina a cada navegacao (mesmo sendo client-side, sem reload); numa
+// lista longa, trocar de pagina no meio da leitura reseta a posicao sem
+// necessidade real aqui.
 export function Paginacao({
   rota,
   pagina,
@@ -38,6 +42,7 @@ export function Paginacao({
     <div className="flex items-center justify-between text-sm text-muted">
       <Link
         href={construirHref(pagina - 1)}
+        scroll={false}
         aria-disabled={pagina <= 1}
         className={`rounded-full bg-surface px-4 py-2 font-medium text-ink shadow-sm ${
           pagina <= 1 ? "pointer-events-none opacity-40" : "hover:opacity-80"
@@ -50,6 +55,7 @@ export function Paginacao({
       </span>
       <Link
         href={construirHref(pagina + 1)}
+        scroll={false}
         aria-disabled={pagina >= totalPaginas}
         className={`rounded-full bg-surface px-4 py-2 font-medium text-ink shadow-sm ${
           pagina >= totalPaginas ? "pointer-events-none opacity-40" : "hover:opacity-80"
