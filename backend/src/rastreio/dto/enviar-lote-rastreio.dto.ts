@@ -14,7 +14,13 @@ import {
 // do lado do app, OS-MOBILE-20) - so recusa um lote absurdamente grande de
 // uma vez, indicio de bug no app (ex: loop de captura sem debounce), nao
 // um cenario de uso legitimo mesmo em dias offline longos.
-export const TAMANHO_MAXIMO_LOTE = 2000;
+//
+// OS-BACKEND-37: 2000 rejeitava cenario legitimo (captura a cada 15s por
+// varios dias offline ja passa de 2000 pontos - ex: 7 dias = ~40mil a
+// 1/min, ou so ~672 a 15/min). Elevado com folga generosa; ainda recusa um
+// runaway de verdade (loop sem debounce produziria ordens de grandeza a
+// mais que qualquer captura legitima, mesmo apos semanas offline).
+export const TAMANHO_MAXIMO_LOTE = 50_000;
 
 export class PontoRastreioDto {
   @IsNumber()

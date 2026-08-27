@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { ConsultarTrajetoDataQueryDto } from './dto/consultar-trajeto-data-query.dto';
 import { ConsultarTrajetoQueryDto } from './dto/consultar-trajeto-query.dto';
 import { RastreioService } from './rastreio.service';
 import type { TrajetoVendedorDto } from './rastreio.service';
@@ -21,5 +22,16 @@ export class AdminRastreioController {
     @Query() query: ConsultarTrajetoQueryDto,
   ): Promise<TrajetoVendedorDto> {
     return this.rastreioService.consultarTrajeto(query.vendedorId, query.data);
+  }
+
+  // OS-BACKEND-37 - forma literal pedida pela OS (path param + 'percurso'),
+  // mantida ao lado da rota acima (raiz com querystring) por retrocompat -
+  // mesmo RastreioService.consultarTrajeto, so muda a forma da URL.
+  @Get(':vendedorId/percurso')
+  consultarPercurso(
+    @Param('vendedorId') vendedorId: string,
+    @Query() query: ConsultarTrajetoDataQueryDto,
+  ): Promise<TrajetoVendedorDto> {
+    return this.rastreioService.consultarTrajeto(vendedorId, query.data);
   }
 }
