@@ -136,4 +136,21 @@ describe('ClienteEstatisticasService.obter', () => {
 
     expect(resultado.meses).toBe(6);
   });
+
+  // OS-BACKEND-35 - criterio de aceite explicito: meses=1 e meses=6
+  // retornam janelas corretas (bordas do range 1-60 aceito pelo DTO).
+  it('aceita meses=1 (borda minima) sem erro, aplicando a janela de 1 mes', async () => {
+    const prisma = prismaFake();
+    const service = new ClienteEstatisticasService(prisma as never);
+
+    const resultado = await service.obter('c1', 1, ESCOPO_TODOS);
+
+    expect(resultado.meses).toBe(1);
+    const chamada = prisma.pedido.aggregate.mock.calls[1][0];
+    const desdeEsperado = new Date();
+    desdeEsperado.setMonth(desdeEsperado.getMonth() - 1);
+    expect(chamada.where.dataHoraUltimaAlteracao.gte.getUTCMonth()).toBe(
+      desdeEsperado.getUTCMonth(),
+    );
+  });
 });
