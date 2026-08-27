@@ -24,6 +24,7 @@ import { SolicitacoesDescontoModule } from './solicitacoes-desconto/solicitacoes
 import { RastreioModule } from './rastreio/rastreio.module';
 import { VisitasModule } from './visitas/visitas.module';
 import { MobileModule } from './mobile/mobile.module';
+import { AdminEndpointsModule } from './admin-endpoints/admin-endpoints.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { MobileModule } from './mobile/mobile.module';
     RastreioModule,
     VisitasModule,
     MobileModule,
+    AdminEndpointsModule,
   ],
 })
 export class AppModule {}
