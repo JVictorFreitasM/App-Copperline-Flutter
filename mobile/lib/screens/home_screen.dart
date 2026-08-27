@@ -12,6 +12,7 @@ import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
 import '../core/formatacao.dart';
+import 'busca_screen.dart';
 import 'clientes_screen.dart';
 import 'estoque_screen.dart';
 import 'pedidos_screen.dart';
@@ -61,8 +62,20 @@ class HomeScreen extends ConsumerWidget {
             children: [
               if (usuario != null) ...[
                 Text('Olá, ${usuario.name}', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
+
+              // Campo de busca sempre visível na navegação principal
+              // (OS-MOBILE-15, critério de aceite explícito) - "botão que
+              // parece campo de busca" (mesmo padrão de apps como
+              // Google/Spotify): não abre teclado aqui, só navega pra
+              // BuscaScreen, que aí sim tem o TextField de verdade.
+              _CampoBuscaAtalho(
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
+              ),
+              const SizedBox(height: 20),
 
               saude.when(
                 data: (status) => _StatusApi(status: status),
@@ -318,6 +331,40 @@ class _StatusApi extends StatelessWidget {
           const SizedBox(width: 8),
           Text('API: ${status.status}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
         ],
+      ),
+    );
+  }
+}
+
+class _CampoBuscaAtalho extends StatelessWidget {
+  const _CampoBuscaAtalho({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: const [
+            BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.search, size: 20, color: AppColors.muted),
+            SizedBox(width: 10),
+            Text(
+              'Buscar cliente, produto ou pedido...',
+              style: TextStyle(color: AppColors.muted, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
