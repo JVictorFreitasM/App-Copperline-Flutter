@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "537561585176",
+    "project_id": "copperline-app-teste",
+    "storage_bucket": "copperline-app-teste.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:537561585176:android:990c23d42fc9dced71956d",
+        "android_client_info": {
+          "package_name": "br.com.copperline.copperline_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFJHUtpsp9PYj3hdgh1hTKzBp1eBb9Mc0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

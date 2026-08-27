@@ -30,6 +30,10 @@ plugins {
     // uma versao compativel com AGP 9.
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Firebase Cloud Messaging (OS-MOBILE-16) - le android/app/google-services.json
+    // (nao versionado com valor fake nenhum: config real do projeto
+    // "copperline-app-teste" no Firebase, obtida pelo usuario).
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

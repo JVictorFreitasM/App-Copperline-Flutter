@@ -15,6 +15,7 @@ import '../core/formatacao.dart';
 import 'busca_screen.dart';
 import 'clientes_screen.dart';
 import 'estoque_screen.dart';
+import 'notificacoes_config_screen.dart';
 import 'pedidos_screen.dart';
 import 'pedido_detalhe_screen.dart';
 import 'produtos_screen.dart';
@@ -40,6 +41,13 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Copperline'),
         actions: [
+          IconButton(
+            tooltip: 'Notificações',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen())),
+          ),
           IconButton(
             tooltip: 'Sair',
             icon: const Icon(Icons.logout),

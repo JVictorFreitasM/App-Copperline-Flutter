@@ -66,6 +66,21 @@ class ApiClient {
     }
   }
 
+  // Primeiro POST do app (OS-MOBILE-16, registro de dispositivo pra push) -
+  // resposta pode vir vazia (ex: 204 No Content, como POST /dispositivos),
+  // por isso Map vazio como default em vez de exigir corpo.
+  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> corpo) async {
+    try {
+      final resposta = await _dio.post<Map<String, dynamic>>(path, data: corpo);
+      return resposta.data ?? <String, dynamic>{};
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
   // /auth/me usa requireAuth "puro" do idp-client (redireciona pro login
   // quando não há sessão, nunca 401 - ver backend/src/auth/auth.module.ts)
   // - diferente dos endpoints de negócio, que usam RequireSessionMiddleware

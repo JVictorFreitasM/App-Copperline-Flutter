@@ -2,6 +2,9 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // OS-MOBILE-16 - le google-services.json (presente neste diretorio),
+    // gera os recursos que o firebase_core/firebase_messaging usam em runtime.
+    id("com.google.gms.google-services")
 }
 
 android {
