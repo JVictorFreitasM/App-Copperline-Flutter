@@ -145,6 +145,22 @@ describe('DashboardService.obterVendas', () => {
 });
 
 describe('DashboardService.obterRanking', () => {
+  // OS-WEB-29 - criterio de aceite: periodo sem nenhum pedido/pedidoItem
+  // (groupBy vazio) nao lanca excecao, so retorna listas vazias.
+  it('retorna topClientes/topProdutos vazios quando o periodo nao tem nenhum registro', async () => {
+    const prisma = prismaFake({ pedidoGroupBy: [], pedidoItemGroupBy: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterRanking({
+      dataInicial: '1900-01-01',
+      dataFinal: '1900-01-02',
+      limite: 10,
+    });
+
+    expect(resultado.topClientes).toEqual([]);
+    expect(resultado.topProdutos).toEqual([]);
+  });
+
   it('resolve nome do cliente/produto pros ids agrupados', async () => {
     const prisma = prismaFake({
       pedidoGroupBy: [{ clienteId: 'c1', _sum: { valorTotal: { toString: () => '500' } } }],
@@ -162,6 +178,24 @@ describe('DashboardService.obterRanking', () => {
 });
 
 describe('DashboardService.obterNotasFiscais', () => {
+  // OS-WEB-29 - mesmo criterio de obterRanking: periodo sem nenhuma nota
+  // fiscal nao lanca excecao, so "0"/lista vazia.
+  it('valorFaturado fica "0" e contagemPorStatus vazia quando nao ha nota fiscal no periodo', async () => {
+    const prisma = prismaFake({
+      notaFiscalAggregate: { _sum: { valorTotalNotaFiscal: null } },
+      notaFiscalGroupBy: [],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterNotasFiscais({
+      dataInicial: '1900-01-01',
+      dataFinal: '1900-01-02',
+    });
+
+    expect(resultado.valorFaturado).toBe('0');
+    expect(resultado.contagemPorStatus).toEqual([]);
+  });
+
   it('soma valorTotalNotaFiscal e agrupa por statusNfe no periodo', async () => {
     const prisma = prismaFake({
       notaFiscalAggregate: { _sum: { valorTotalNotaFiscal: { toString: () => '2500' } } },
