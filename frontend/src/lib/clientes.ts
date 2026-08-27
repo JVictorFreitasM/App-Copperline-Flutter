@@ -44,3 +44,22 @@ export interface ClienteEstatisticasDto {
   ticketMedio: number;
   vendedorResponsavel: string | null;
 }
+
+// Mesmo shape de backend/src/clientes/cliente-financeiro.service.ts
+// (ClienteFinanceiroDto, GET /clientes/:id/financeiro, OS-BACKEND-36).
+// limiteCredito/dataLimiteCredito vêm do cadastro já sincronizado;
+// notasEmAberto/notasVencidas são consultadas ao vivo no ERP a cada
+// chamada (dado transacional, nunca cacheado localmente).
+export interface ClienteFinanceiroGrupoDto {
+  quantidade: number;
+  valorTotal: number;
+}
+
+export interface ClienteFinanceiroDto {
+  clienteId: string;
+  limiteCredito: number | null;
+  dataLimiteCredito: string | null;
+  notasEmAberto: ClienteFinanceiroGrupoDto;
+  notasVencidas: ClienteFinanceiroGrupoDto;
+  inadimplente: boolean;
+}

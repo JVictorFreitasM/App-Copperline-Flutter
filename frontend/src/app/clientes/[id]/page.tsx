@@ -1,16 +1,27 @@
+import Form from "next/form";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
-import type { ClienteDetalheDto, ClienteEstatisticasDto } from "@/lib/clientes";
+import type {
+  ClienteDetalheDto,
+  ClienteEstatisticasDto,
+  ClienteFinanceiroDto,
+} from "@/lib/clientes";
 import { statusVisita, type VisitaDto } from "@/lib/visitas";
-import { formatarDataHora, formatarMoeda } from "@/lib/formatacao";
+import { formatarData, formatarDataHora, formatarMoeda } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
+import { PrimaryButton } from "@/components/design/button";
 import { ListItem } from "@/components/design/list-item";
 import { StatCard } from "@/components/design/stat-card";
 import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
+
+// Opções fixas de período (OS-WEB-31, critério de aceite explícito: "1 e 6
+// meses") - 12 meses mantido como terceira opção (era o único valor antes
+// desta OS, default do backend em ClienteEstatisticasQueryDto).
+const OPCOES_MESES = [1, 6, 12] as const;
 
 // Tela de detalhe do cliente (OS-WEB-15) - mostra o que a listagem não
 // mostrava: endereços e contatos. Retrofit visual (OS-WEB-16). Expandida
@@ -20,12 +31,18 @@ import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/ic
 // (GET /:id/visitas). Ainda só leitura - nenhuma ação de escrita aqui.
 export default async function ClienteDetalhePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ meses?: string }>;
 }) {
   await exigirUsuarioAutenticado("/clientes");
 
   const { id } = await params;
+  const mesesParam = Number((await searchParams).meses);
+  const meses = OPCOES_MESES.includes(mesesParam as (typeof OPCOES_MESES)[number])
+    ? mesesParam
+    : 12;
 
   let cliente: ClienteDetalheDto | null = null;
   let estatisticas: ClienteEstatisticasDto | null = null;
@@ -38,9 +55,10 @@ export default async function ClienteDetalhePage({
       cache: "no-store",
     });
     [estatisticas, visitas] = await Promise.all([
-      apiFetch<ClienteEstatisticasDto>(`/clientes/${encodeURIComponent(id)}/estatisticas`, {
-        cache: "no-store",
-      }),
+      apiFetch<ClienteEstatisticasDto>(
+        `/clientes/${encodeURIComponent(id)}/estatisticas?meses=${meses}`,
+        { cache: "no-store" },
+      ),
       apiFetch<VisitaDto[]>(`/clientes/${encodeURIComponent(id)}/visitas`, {
         cache: "no-store",
       }),
@@ -50,6 +68,24 @@ export default async function ClienteDetalhePage({
       naoEncontrado = true;
     } else {
       erro = error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
+    }
+  }
+
+  // Informações financeiras (OS-BACKEND-36/OS-WEB-31) buscadas à parte,
+  // com sua própria falha isolada (mesmo critério de resiliência da
+  // OS-WEB-29) - uma consulta ao vivo no ERP mais lenta/instável não deve
+  // derrubar o resto da tela de cliente, que já teve sucesso acima.
+  let financeiro: ClienteFinanceiroDto | null = null;
+  let erroFinanceiro: string | null = null;
+  if (cliente) {
+    try {
+      financeiro = await apiFetch<ClienteFinanceiroDto>(
+        `/clientes/${encodeURIComponent(id)}/financeiro`,
+        { cache: "no-store" },
+      );
+    } catch (error) {
+      erroFinanceiro =
+        error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
     }
   }
 
@@ -82,6 +118,28 @@ export default async function ClienteDetalhePage({
               </p>
             </Card>
 
+            <Form
+              action={`/clientes/${encodeURIComponent(id)}`}
+              scroll={false}
+              className="flex items-end gap-3"
+            >
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+                Período das estatísticas
+                <select
+                  name="meses"
+                  defaultValue={meses}
+                  className="rounded-full bg-surface px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+                >
+                  {OPCOES_MESES.map((opcao) => (
+                    <option key={opcao} value={opcao}>
+                      {opcao === 1 ? "Último mês" : `Últimos ${opcao} meses`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PrimaryButton type="submit">Aplicar</PrimaryButton>
+            </Form>
+
             {estatisticas && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <StatCard
@@ -106,6 +164,46 @@ export default async function ClienteDetalhePage({
                 />
               </div>
             )}
+
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-ink">Informações financeiras</h2>
+              {!financeiro ? (
+                <ErroConexao mensagem={erroFinanceiro ?? "Dados financeiros indisponíveis."} />
+              ) : (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <StatCard
+                    icon={<IconeMoeda />}
+                    label="Limite de crédito"
+                    value={
+                      financeiro.limiteCredito !== null
+                        ? formatarMoeda(String(financeiro.limiteCredito))
+                        : "—"
+                    }
+                  />
+                  <StatCard
+                    icon={<IconeClipboard />}
+                    label={`Em aberto (${financeiro.notasEmAberto.quantidade})`}
+                    value={formatarMoeda(String(financeiro.notasEmAberto.valorTotal))}
+                  />
+                  <StatCard
+                    icon={<IconeClipboard />}
+                    label={`Vencidas (${financeiro.notasVencidas.quantidade})`}
+                    value={formatarMoeda(String(financeiro.notasVencidas.valorTotal))}
+                  />
+                  <div className="flex flex-col justify-center gap-1 rounded-card bg-surface p-4 shadow-sm">
+                    <span className="text-xs font-medium text-muted">Situação</span>
+                    <Badge enfase={financeiro.inadimplente}>
+                      {financeiro.inadimplente ? "Inadimplente" : "Em dia"}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+              {financeiro?.dataLimiteCredito && (
+                <p className="text-xs text-muted">
+                  Limite de crédito válido até {formatarData(financeiro.dataLimiteCredito)}.
+                </p>
+              )}
+            </section>
 
             <section className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold text-ink">Visitas recentes</h2>
