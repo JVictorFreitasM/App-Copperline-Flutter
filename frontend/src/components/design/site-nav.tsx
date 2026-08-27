@@ -27,6 +27,7 @@ const ITENS_ADMIN = [
   { href: "/admin/sincronizacao", rotulo: "Sincronização" },
   { href: "/admin/qualidade-dados", rotulo: "Qualidade de dados" },
   { href: "/admin/vendedores", rotulo: "Vendedores" },
+  { href: "/admin/importar-swagger", rotulo: "Importar via Swagger" },
 ];
 
 // "Aprovações" (OS-WEB-21), "Rastreio de equipe" (OS-WEB-24), "Visitas da
