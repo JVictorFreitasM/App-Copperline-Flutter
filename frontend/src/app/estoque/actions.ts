@@ -30,7 +30,13 @@ export async function consultarEstoque(
       { cache: "no-store" },
     );
 
-    return resultado.itens.length === 0
+    // Estoque.svc (fonte atual, ver comentário em lib/estoque.ts) retorna
+    // saldo CONSOLIDADO por produto - um item com quantidade "0" ainda
+    // conta como item (linha existe no banco), mas pro usuário isso é
+    // exatamente "sem saldo", não uma localização com saldo zerado.
+    const temSaldoReal = resultado.itens.some((item) => Number(item.quantidade) > 0);
+
+    return !temSaldoReal
       ? { status: "sem-saldo", identificador }
       : { status: "com-saldo", identificador, resultado };
   } catch (error) {

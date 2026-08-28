@@ -76,7 +76,12 @@ export function BuscaEstoque({ identificadorInicial }: { identificadorInicial?: 
           {estado.resultado.itens.map((item, indice) => (
             <ListItem
               key={indice}
-              titulo={item.localNome ?? item.localCodigo ?? "Local não identificado"}
+              // Estoque.svc (fonte atual) devolve saldo CONSOLIDADO por
+              // produto, sem quebra por local de estocagem (ver comentário
+              // em lib/estoque.ts) - localNome/localCodigo sempre nulos por
+              // enquanto, por isso o título aqui é o saldo em si, não um
+              // local (que induziria a pensar que falta identificar algo).
+              titulo={item.localNome ?? item.localCodigo ?? "Saldo total"}
               subtitulo={
                 item.lote || item.fabricadoEm
                   ? `Lote ${item.lote ?? "—"} · Fabricado em ${item.fabricadoEm ?? "—"}`
@@ -85,6 +90,11 @@ export function BuscaEstoque({ identificadorInicial }: { identificadorInicial?: 
               valor={item.quantidade}
             />
           ))}
+          {estado.resultado.atualizadoEm && (
+            <p className="text-xs text-muted">
+              Atualizado em {new Date(estado.resultado.atualizadoEm).toLocaleString("pt-BR")}
+            </p>
+          )}
         </div>
       )}
     </div>
