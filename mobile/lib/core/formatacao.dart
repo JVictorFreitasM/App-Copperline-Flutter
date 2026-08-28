@@ -16,3 +16,10 @@ String formatarData(String? valorIso) {
   if (data == null) return '—';
   return DateFormat('dd/MM/yyyy', 'pt_BR').format(data.toLocal());
 }
+
+String formatarDataHora(String? valorIso) {
+  if (valorIso == null) return '—';
+  final data = DateTime.tryParse(valorIso);
+  if (data == null) return '—';
+  return DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(data.toLocal());
+}

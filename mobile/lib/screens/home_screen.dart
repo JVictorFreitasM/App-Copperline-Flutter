@@ -19,6 +19,7 @@ import 'notificacoes_config_screen.dart';
 import 'pedidos_screen.dart';
 import 'pedido_detalhe_screen.dart';
 import 'produtos_screen.dart';
+import 'roteiro_screen.dart';
 
 /// Tela inicial (OS-MOBILE-11) - reformulada na OS-MOBILE-14: antes era só
 /// um menu de atalhos (ver histórico do arquivo), agora mostra resumo do
@@ -268,6 +269,13 @@ class _FaixaAcoesRapidas extends StatelessWidget {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const PedidosScreen())),
+          ),
+          _AcaoRapida(
+            icone: Icons.map_outlined,
+            titulo: 'Roteiro',
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const RoteiroScreen())),
           ),
         ],
       ),

@@ -66,6 +66,20 @@ class ApiClient {
     }
   }
 
+  // Endpoints que respondem um array JSON na raiz (ex: GET /visitas/minhas,
+  // OS-MOBILE-17), diferente de getJson (objeto na raiz).
+  Future<List<Map<String, dynamic>>> getJsonList(String path) async {
+    try {
+      final resposta = await _dio.get<List<dynamic>>(path);
+      return (resposta.data ?? const []).cast<Map<String, dynamic>>();
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
   // Primeiro POST do app (OS-MOBILE-16, registro de dispositivo pra push) -
   // resposta pode vir vazia (ex: 204 No Content, como POST /dispositivos),
   // por isso Map vazio como default em vez de exigir corpo.

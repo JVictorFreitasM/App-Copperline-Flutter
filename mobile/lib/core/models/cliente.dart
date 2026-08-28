@@ -8,6 +8,8 @@ class ClienteResumo {
     required this.razaoSocial,
     required this.nomeFantasia,
     required this.inativo,
+    this.localizacaoLat,
+    this.localizacaoLng,
   });
 
   factory ClienteResumo.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,8 @@ class ClienteResumo {
       razaoSocial: json['razaoSocial'] as String?,
       nomeFantasia: json['nomeFantasia'] as String?,
       inativo: json['inativo'] as bool,
+      localizacaoLat: (json['localizacaoLat'] as num?)?.toDouble(),
+      localizacaoLng: (json['localizacaoLng'] as num?)?.toDouble(),
     );
   }
 
@@ -25,8 +29,14 @@ class ClienteResumo {
   final String? razaoSocial;
   final String? nomeFantasia;
   final bool inativo;
+  // "Pin" de localizacao (OS-BACKEND-28, exposto em GET /clientes desde a
+  // OS-MOBILE-17) - null quando o cliente ainda nao teve o pin definido.
+  final double? localizacaoLat;
+  final double? localizacaoLng;
 
   String get titulo => razaoSocial ?? nomeFantasia ?? '—';
+
+  bool get temLocalizacao => localizacaoLat != null && localizacaoLng != null;
 }
 
 class ContatoCliente {
@@ -70,6 +80,8 @@ class ClienteDetalhe extends ClienteResumo {
     required super.razaoSocial,
     required super.nomeFantasia,
     required super.inativo,
+    super.localizacaoLat,
+    super.localizacaoLng,
     required this.contatos,
   });
 
@@ -80,6 +92,8 @@ class ClienteDetalhe extends ClienteResumo {
       razaoSocial: json['razaoSocial'] as String?,
       nomeFantasia: json['nomeFantasia'] as String?,
       inativo: json['inativo'] as bool,
+      localizacaoLat: (json['localizacaoLat'] as num?)?.toDouble(),
+      localizacaoLng: (json['localizacaoLng'] as num?)?.toDouble(),
       contatos: (json['contatos'] as List)
           .cast<Map<String, dynamic>>()
           .map(ContatoCliente.fromJson)
