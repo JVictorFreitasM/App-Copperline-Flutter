@@ -9,3 +9,11 @@
 # Pasta vazia criada por engano numa sessao anterior (nome com ";C" -
 # provavel efeito colateral de um comando mal escapado).
 /idp-client;C/
+CLAUDE.md
+.claude
+/files/
+/frontend/node_modules
+/node_modules/
+/frontend/dist/
+/frontend/AGENTS.md
+/frontend/CLAUDE.md
