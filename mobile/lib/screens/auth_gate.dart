@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/auth/auth_notifier.dart';
+import '../core/providers/offline_provider.dart';
 import '../core/push/push_service.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -25,6 +26,16 @@ class AuthGate extends ConsumerWidget {
       final jaEstavaAutenticado = anterior?.value?.autenticado ?? false;
       if (ficouAutenticado && !jaEstavaAutenticado) {
         ref.read(pushServiceProvider).inicializar();
+
+        // Snapshot inicial + escuta de conectividade (OS-MOBILE-22) -
+        // mesma condicao de "acabou de logar" do push acima. baixar() so'
+        // falha se a PRIMEIRA sincronizacao acontecer sem rede nenhuma -
+        // aceitavel (proxima reconexao tenta de novo via
+        // OfflineSyncNotifier, que so cobre a FILA de acoes pendentes, nao
+        // o snapshot em si - reforcar o snapshot fica a cargo de um pull-
+        // to-refresh nas telas, fora de escopo re-tentar sozinho aqui).
+        ref.read(snapshotServiceProvider.future).then((servico) => servico.baixar());
+        ref.read(offlineSyncNotifierProvider);
       }
     });
 

@@ -11,6 +11,16 @@ import 'auth/session_storage.dart';
 // que pode não existir no ambiente de quem estiver rodando.
 const String _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
+/// Subconjunto de [ApiClient] (getJson/postJsonList) usado por serviços
+/// que não devem depender da classe concreta inteira (ex: `SnapshotService`/
+/// `FilaPendenteService`, OS-MOBILE-22 - testáveis com um fake que
+/// implementa só isso, sem precisar de `Dio`/`SessionStorage`/`API_BASE_URL`
+/// reais).
+abstract interface class ApiJsonClient {
+  Future<Map<String, dynamic>> getJson(String path);
+  Future<List<Map<String, dynamic>>> postJsonList(String path, Map<String, dynamic> corpo);
+}
+
 /// Cliente HTTP central de acesso à API NestJS - toda chamada ao backend
 /// passa por aqui, nunca `Dio`/`http` solto em cada tela (mesmo papel de
 /// `apiFetch` no frontend web, `frontend/src/lib/api.ts`). Anexa o cookie
@@ -18,7 +28,7 @@ const String _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 /// papel do cookie `httpOnly` que o navegador enviaria sozinho no fluxo
 /// web (aqui o app precisa fazer isso manualmente, ver `login_screen.dart`
 /// pra como o cookie chega até aqui).
-class ApiClient {
+class ApiClient implements ApiJsonClient {
   ApiClient(this._sessionStorage)
     : _dio = Dio(
         BaseOptions(
@@ -54,6 +64,7 @@ class ApiClient {
     return _apiBaseUrl;
   }
 
+  @override
   Future<Map<String, dynamic>> getJson(String path) async {
     try {
       final resposta = await _dio.get<Map<String, dynamic>>(path);
@@ -87,6 +98,24 @@ class ApiClient {
     try {
       final resposta = await _dio.post<Map<String, dynamic>>(path, data: corpo);
       return resposta.data ?? <String, dynamic>{};
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
+  // POST que responde array na raiz (ex: POST /mobile/fila-pendente,
+  // OS-MOBILE-22 - ResultadoAcaoFilaDto[]).
+  @override
+  Future<List<Map<String, dynamic>>> postJsonList(
+    String path,
+    Map<String, dynamic> corpo,
+  ) async {
+    try {
+      final resposta = await _dio.post<List<dynamic>>(path, data: corpo);
+      return (resposta.data ?? const []).cast<Map<String, dynamic>>();
     } on DioException catch (erro) {
       throw ApiException(
         _mensagemErro(erro),

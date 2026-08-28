@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- connectivity_plus (OS-MOBILE-22) - detectar volta de conectividade
+         pra disparar sincronizacao da fila offline (ver offline_provider.dart). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- android:usesCleartextTraffic - todo o backend hoje roda em HTTP
          puro (ver docker-compose.yml, sem TLS local/de teste). Android
          bloqueia HTTP por padrao a partir da API 28. Revisitar (restringir

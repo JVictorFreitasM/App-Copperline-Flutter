@@ -5,6 +5,7 @@ import '../core/health_provider.dart';
 import '../core/models/dashboard.dart';
 import '../core/models/pedido.dart';
 import '../core/providers/dashboard_provider.dart';
+import '../core/providers/offline_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_card.dart';
@@ -85,6 +86,9 @@ class HomeScreen extends ConsumerWidget {
                 ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
               ),
               const SizedBox(height: 20),
+
+              _IndicadorAcoesPendentes(),
+              const SizedBox(height: 16),
 
               saude.when(
                 data: (status) => _StatusApi(status: status),
@@ -325,6 +329,53 @@ class _AcaoRapida extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Indicador de "pendente de envio" (OS-MOBILE-22, critério de aceite
+/// explícito) - só aparece quando há ação offline aguardando sincronizar
+/// (ver contagemPendentesProvider). Ainda sem nenhuma tela criando ações
+/// offline (OS-MOBILE-20/21/23) - fica pronto e invisível até a primeira
+/// dessas telas chamar FilaPendenteService.enfileirar.
+class _IndicadorAcoesPendentes extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contagem = ref.watch(contagemPendentesProvider);
+
+    return contagem.when(
+      data: (total) {
+        if (total == 0) return const SizedBox.shrink();
+        return InkWell(
+          onTap: () async {
+            await ref.read(offlineSyncNotifierProvider).sincronizarAgora();
+          },
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.cloud_upload_outlined, size: 16, color: AppColors.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    total == 1
+                        ? '1 ação aguardando envio - toque para tentar agora'
+                        : '$total ações aguardando envio - toque para tentar agora',
+                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
