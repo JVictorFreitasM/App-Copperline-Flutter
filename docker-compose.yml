@@ -42,18 +42,27 @@ services:
       SESSION_COOKIE_DOMAIN:
       # IDP_URL (servidor-a-servidor) usa host.docker.internal pra alcancar
       # o IdP rodando fora dessa stack, exposto na porta 3000 do host.
-      # IDP_AUTHORIZE_URL/IDP_REDIRECT_URI (navegador) usam localhost -
+      # IDP_AUTHORIZE_URL/IDP_REDIRECT_URI (navegador) usam loopback local -
       # decisao deliberada enquanto so o web e' testado nesta maquina (sem
       # depender do IP da rede local, que muda com o DHCP). Se o app mobile
       # (OS-MOBILE-12) voltar a ser testado num celular fisico nesta rede,
       # isso PRECISA voltar a ser o IP da rede local (nao host.docker.internal
-      # nem localhost - o celular enxerga "localhost" como o proprio
-      # celular). Cadastrado como redirect_uri no IdP (systems.redirect_uris)
-      # - "http://localhost:3010/auth/callback".
+      # nem loopback - o celular enxerga "localhost"/"127.0.0.1" como o
+      # proprio celular).
+      # IDP_AUTHORIZE_URL usa 127.0.0.1 (nao "localhost") - nesta maquina,
+      # um processo do Windows (DllHost.exe, alheio a este projeto) fica
+      # escutando "localhost" (::1) na porta 3000 e trava qualquer
+      # redirecionamento de reautenticacao (sessao expirada, 15min) que
+      # passe por "http://localhost:3000/authorize". Sem esse problema de
+      # SO, "localhost" funcionaria igual - mas 127.0.0.1 sempre bate no
+      # container certo, entao fica como default mais robusto aqui.
       IDP_URL: http://host.docker.internal:3000
-      IDP_AUTHORIZE_URL: http://localhost:3000
+      IDP_AUTHORIZE_URL: http://127.0.0.1:3000
       IDP_CLIENT_ID: ${IDP_CLIENT_ID}
       IDP_CLIENT_SECRET: ${IDP_CLIENT_SECRET}
+      # Cadastrado EXATAMENTE assim em systems.redirect_uris no IdP - nao
+      # mudar pra 127.0.0.1 aqui sem tambem atualizar o cadastro la (match
+      # tem que ser exato, ver skill idp-client).
       IDP_REDIRECT_URI: http://localhost:3010/auth/callback
       # Destino pos-login quando NAO ha' `returnTo` salvo (ver
       # idp-auth.module.ts) - acontece sempre que o login comeca direto por
