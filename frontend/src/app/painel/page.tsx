@@ -239,7 +239,7 @@ export default async function PainelPage({
                   rotulo: item.nome,
                   valor: Number(item.valorTotal),
                 }))}
-                formatarValor={(valor) => formatarMoeda(String(valor))}
+                formato="moeda"
               />
             )}
           </Card>
@@ -256,7 +256,7 @@ export default async function PainelPage({
                   rotulo: item.nome,
                   valor: Number(item.valorTotal),
                 }))}
-                formatarValor={(valor) => formatarMoeda(String(valor))}
+                formato="moeda"
               />
             )}
           </Card>

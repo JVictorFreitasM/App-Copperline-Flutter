@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { formatarMoeda } from "@/lib/formatacao";
 
 // Gráfico de barras minimalista (OS-WEB-19) - sem grid de fundo, duas
 // tonalidades (ver skill design-system, "Gráfico de barras"): a barra de
@@ -18,13 +19,18 @@ export interface ItemGraficoBarras {
 export function GraficoBarras({
   dados,
   altura = 220,
-  formatarValor,
+  formato,
 }: {
   dados: ItemGraficoBarras[];
   altura?: number;
-  formatarValor?: (valor: number) => string;
+  // "moeda" em vez de aceitar uma função formatadora via prop - Server
+  // Component nao pode passar função pra Client Component (RSC nao
+  // serializa função através do boundary), entao a formatação fica aqui
+  // dentro, escolhida por um valor serializável (string).
+  formato?: "moeda";
 }) {
   const valorMaximo = Math.max(...dados.map((item) => item.valor), 0);
+  const formatarValor = formato === "moeda" ? (valor: number) => formatarMoeda(String(valor)) : undefined;
 
   return (
     <div style={{ height: altura }}>
