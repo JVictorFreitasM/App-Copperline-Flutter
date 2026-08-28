@@ -20,7 +20,7 @@ export interface AtualizarHierarquiaInput {
 
 // Mesmo shape de backend/src/vendedores/vendedores.controller.ts
 // (MeuVendedorDto, GET /vendedores/me) - usado só pra decidir se mostra o
-// link "Aprovações" na navegação (podeAprovar), ver site-header.tsx.
+// link "Aprovações" na navegação (podeAprovar), ver app-shell.tsx.
 export interface MeuVendedorDto {
   vendedorId: string | null;
   papel: PapelVendedor | null;

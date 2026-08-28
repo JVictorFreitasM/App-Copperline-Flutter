@@ -14,6 +14,29 @@
   --color-primary: #4640de;
   --color-primary-light: #c7cbfa;
 
+  /* Casca do app (sidebar + topbar) - referência "Constructive" (ver
+     skill design-system, seção "Aplicação no Web - casca do app"). Escuro
+     de propósito, só na navegação lateral - a área de conteúdo continua
+     nos tokens claros acima (background/surface/ink/muted), sem mudança
+     nas telas já existentes. */
+  --color-sidebar: #12141d;
+  --color-sidebar-hover: #1e2130;
+  --color-sidebar-foreground: #9497a8;
+  --color-sidebar-foreground-active: #ffffff;
+  --color-sidebar-border: #23263380;
+
+  /* Acentos de KPI/status do painel (donut rings, barras de estatística) -
+     `primary` já cobre o roxo/índigo; laranja e vermelho são novos, só
+     usados em visualização de dado no dashboard, nunca em UI genérica
+     (botão, link, texto) - mesmo critério de moderação da paleta original
+     ("não introduzir cor nova sem necessidade real"), aplicado aqui a um
+     uso bem específico (distinguir 3+ séries no mesmo gráfico). */
+  --color-accent-orange: #ffa53e;
+  --color-accent-orange-light: #ffe4c2;
+  --color-accent-red: #ff6b6b;
+  --color-accent-red-light: #ffd6d6;
+  --color-accent-green: #2ed47a;
+
   --radius-card: 1.5rem;
 
   --font-sans: var(--font-geist-sans);

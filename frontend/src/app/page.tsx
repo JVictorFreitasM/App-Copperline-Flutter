@@ -23,7 +23,7 @@ interface HealthResponse {
 // ainda - so a prova de que login/logout funcionam ponta a ponta). Não faz
 // parte do escopo de retrofit da OS-WEB-16 (não é uma das cinco telas de
 // negócio), mas usa os mesmos tokens/Card pra não destoar do resto do app,
-// que agora renderiza dentro do mesmo layout (SiteHeader, bg-background).
+// que agora renderiza dentro do mesmo layout (AppShell, bg-background).
 export default async function Home() {
   let health: HealthResponse | null = null;
   let erro: string | null = null;

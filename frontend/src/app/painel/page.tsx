@@ -11,22 +11,25 @@ import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { configSituacaoPedido } from "@/lib/pedidos";
 import { clienteDaNotaFiscal, configStatusNfe, rotuloTipoNotaFiscal } from "@/lib/notas-fiscais";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
-import { StatCard } from "@/components/design/stat-card";
 import { ListItem } from "@/components/design/list-item";
 import { Card } from "@/components/design/card";
 import { Badge } from "@/components/badge";
-import { PrimaryButton, SecondaryButton } from "@/components/design/button";
 import { FiltroForm, CampoFiltro } from "@/components/filtro";
 import { GraficoBarras } from "@/components/design/grafico-barras";
-import { IconeCaixa, IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
+import { DonutKpiCard } from "@/components/design/donut-kpi-card";
+import { GaugeCard } from "@/components/design/gauge-card";
+import { PainelResumo } from "@/components/design/painel-resumo";
+import { EventoCard } from "@/components/design/evento-card";
+import { IconeClipboard, IconeRecibo } from "@/components/design/icons";
 
 // Tela de resumo (dashboard) - substitui a antiga /painel (que so mostrava
 // dados do usuario logado, sem funcao real - ver historico da OS 10).
 // Expandida na OS-WEB-19 com os gráficos de OS-BACKEND-17 (vendas, ranking,
-// notas fiscais, estoque crítico) e um filtro de período global - a rota
-// já existia (GET /dashboard/resumo, sem período), então o resumo/stat
-// cards do topo continuam iguais, só as seções novas abaixo respeitam
-// dataInicial/dataFinal.
+// notas fiscais, estoque crítico) e um filtro de período global. Redesenho
+// visual (ver skill design-system, referência "Constructive") - mesmos
+// dados/endpoints de sempre, só reapresentados como anéis de KPI/medidor/
+// cards de evento em vez de stat cards simples - nenhum dado novo
+// inventado, só reagrupamento visual do que já era buscado aqui.
 //
 // Filtro por querystring nativa (FiltroForm, method="get") - reflete em
 // TODOS os gráficos porque são a mesma renderização server-side, disparada
@@ -40,7 +43,7 @@ export default async function PainelPage({
 }: {
   searchParams: Promise<{ dataInicial?: string; dataFinal?: string }>;
 }) {
-  const user = await exigirUsuarioAutenticado("/painel");
+  await exigirUsuarioAutenticado("/painel");
   const { dataInicial, dataFinal } = await searchParams;
 
   const queryPeriodo = new URLSearchParams({
@@ -50,17 +53,8 @@ export default async function PainelPage({
 
   // OS-WEB-29: cada secao busca seu proprio dado de forma independente
   // (Promise.allSettled, nao Promise.all) - uma falha isolada num unico
-  // endpoint (timeout, erro transitorio) nao derruba o painel inteiro com
-  // um erro generico; so a secao afetada mostra sua propria mensagem,
-  // as demais continuam renderizando normalmente. Investigacao (executar
-  // DashboardService diretamente contra dado real de producao, cobrindo
-  // periodo vazio, periodo invertido, ausencia de filtro): nenhum dos 4
-  // endpoints de periodo lancou excecao em nenhum cenario testado - a
-  // divisao por zero do ticket medio (obterVendas) ja era tratada. Mesmo
-  // sem reproduzir uma excecao real do backend, a falha "tudo ou nada" do
-  // Promise.all original e' em si um problema defensivo (um timeout
-  // isolado em QUALQUER um dos 5 endpoints derrubava o painel inteiro) -
-  // corrigido independente da causa original nao ter sido reproduzida.
+  // endpoint nao derruba o painel inteiro, so a secao afetada mostra sua
+  // propria mensagem de erro.
   const [resumoResultado, vendasResultado, rankingResultado, notasFiscaisResultado, estoqueCriticoResultado] =
     await Promise.allSettled([
       apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
@@ -86,44 +80,92 @@ export default async function PainelPage({
   const [notasFiscais, erroNotasFiscais] = extrair(notasFiscaisResultado);
   const [estoqueCritico, erroEstoqueCritico] = extrair(estoqueCriticoResultado);
 
+  // Percentuais derivados pros anéis de KPI/medidor - sempre a partir do
+  // MESMO dado já buscado acima, nunca um número novo/estimado.
+  const totalPedidos = vendas?.totalPedidos ?? 0;
+  const pedidosFaturados =
+    vendas?.contagemPorSituacao.find((item) => item.situacao === "FATURADO")?.quantidade ?? 0;
+  const percentualFaturado = totalPedidos > 0 ? (pedidosFaturados / totalPedidos) * 100 : 0;
+
+  const totalNotas = notasFiscais?.contagemPorStatus.reduce((soma, item) => soma + item.quantidade, 0) ?? 0;
+  const notasAutorizadas =
+    notasFiscais?.contagemPorStatus.find((item) => item.status === "AUTORIZADA")?.quantidade ?? 0;
+  const percentualAutorizadas = totalNotas > 0 ? (notasAutorizadas / totalNotas) * 100 : 0;
+
+  const produtosAtivos = resumo?.produtosAtivos ?? 0;
+  const produtosCriticos = estoqueCritico?.produtos.length ?? 0;
+  const percentualCritico = produtosAtivos > 0 ? (produtosCriticos / produtosAtivos) * 100 : 0;
+  const saudeEstoque = 100 - percentualCritico;
+
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
-      <h1 className="text-2xl font-bold text-ink">Olá, {user.name}</h1>
-
-      <div className="flex flex-wrap gap-3">
-        <PrimaryButton href="/clientes">Clientes</PrimaryButton>
-        <SecondaryButton href="/produtos">Produtos</SecondaryButton>
-        <SecondaryButton href="/pedidos">Pedidos</SecondaryButton>
-        <SecondaryButton href="/estoque">Estoque</SecondaryButton>
-        <SecondaryButton href="/notas-fiscais">Notas fiscais</SecondaryButton>
-      </div>
+      <h1 className="text-2xl font-bold text-ink">Painel</h1>
 
       <FiltroForm rota="/painel">
         <CampoFiltro label="De" name="dataInicial" defaultValue={dataInicial} type="date" />
         <CampoFiltro label="Até" name="dataFinal" defaultValue={dataFinal} type="date" />
       </FiltroForm>
 
-      {resumo ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard icon={<IconePessoas />} label="Clientes ativos" value={resumo.clientesAtivos} />
-          <StatCard icon={<IconeCaixa />} label="Produtos ativos" value={resumo.produtosAtivos} />
-          <StatCard
-            icon={<IconeClipboard />}
-            label="Pedidos em aberto"
-            value={resumo.pedidosEmAberto}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {vendas ? (
+          <DonutKpiCard
+            titulo="Pedidos faturados"
+            percentual={percentualFaturado}
+            valor={String(totalPedidos)}
+            cor="primary"
+            href="/pedidos"
           />
-          <StatCard
-            icon={<IconeMoeda />}
-            label={`Faturado (${resumo.periodoValorFaturadoDias}d)`}
-            value={formatarMoeda(resumo.valorFaturadoRecente)}
-          />
-        </div>
-      ) : (
-        <ErroConexao mensagem={erroResumo!} />
-      )}
+        ) : (
+          <Card>
+            <ErroConexao mensagem={erroVendas!} />
+          </Card>
+        )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+        {notasFiscais ? (
+          <DonutKpiCard
+            titulo="Notas autorizadas"
+            percentual={percentualAutorizadas}
+            valor={String(totalNotas)}
+            cor="laranja"
+            href="/notas-fiscais"
+          />
+        ) : (
+          <Card>
+            <ErroConexao mensagem={erroNotasFiscais!} />
+          </Card>
+        )}
+
+        {estoqueCritico && resumo ? (
+          <DonutKpiCard
+            titulo="Estoque crítico"
+            percentual={percentualCritico}
+            valor={String(produtosCriticos)}
+            cor="vermelho"
+            href="/estoque"
+          />
+        ) : (
+          <Card>
+            <ErroConexao mensagem={(erroEstoqueCritico ?? erroResumo)!} />
+          </Card>
+        )}
+
+        {resumo ? (
+          <PainelResumo
+            itens={[
+              { rotulo: "Clientes ativos", valor: resumo.clientesAtivos, cor: "primary" },
+              { rotulo: "Produtos ativos", valor: resumo.produtosAtivos, cor: "verde" },
+              { rotulo: "Pedidos em aberto", valor: resumo.pedidosEmAberto, cor: "laranja" },
+            ]}
+          />
+        ) : (
+          <Card>
+            <ErroConexao mensagem={erroResumo!} />
+          </Card>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
           <div className="mb-1 flex items-baseline justify-between">
             <h2 className="text-lg font-semibold text-ink">Vendas por situação</h2>
             {vendas && (
@@ -147,6 +189,20 @@ export default async function PainelPage({
           )}
         </Card>
 
+        {estoqueCritico && resumo ? (
+          <GaugeCard
+            percentual={saudeEstoque}
+            legendaVerde={{ rotulo: "OK", valor: String(produtosAtivos - produtosCriticos) }}
+            legendaVermelha={{ rotulo: "Crítico", valor: String(produtosCriticos) }}
+          />
+        ) : (
+          <Card>
+            <ErroConexao mensagem={(erroEstoqueCritico ?? erroResumo)!} />
+          </Card>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <div className="mb-1 flex items-baseline justify-between">
             <h2 className="text-lg font-semibold text-ink">Notas fiscais por status</h2>
@@ -170,40 +226,86 @@ export default async function PainelPage({
           )}
         </Card>
 
-        <Card>
-          <h2 className="mb-1 text-lg font-semibold text-ink">Top clientes</h2>
-          {!ranking ? (
-            <ErroConexao mensagem={erroRanking!} />
-          ) : ranking.topClientes.length === 0 ? (
-            <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
-          ) : (
-            <GraficoBarras
-              dados={ranking.topClientes.map((item) => ({
-                rotulo: item.nome,
-                valor: Number(item.valorTotal),
-              }))}
-              formatarValor={(valor) => formatarMoeda(String(valor))}
-            />
-          )}
-        </Card>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Card>
+            <h2 className="mb-1 text-lg font-semibold text-ink">Top clientes</h2>
+            {!ranking ? (
+              <ErroConexao mensagem={erroRanking!} />
+            ) : ranking.topClientes.length === 0 ? (
+              <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
+            ) : (
+              <GraficoBarras
+                dados={ranking.topClientes.map((item) => ({
+                  rotulo: item.nome,
+                  valor: Number(item.valorTotal),
+                }))}
+                formatarValor={(valor) => formatarMoeda(String(valor))}
+              />
+            )}
+          </Card>
 
-        <Card>
-          <h2 className="mb-1 text-lg font-semibold text-ink">Top produtos</h2>
-          {!ranking ? (
-            <ErroConexao mensagem={erroRanking!} />
-          ) : ranking.topProdutos.length === 0 ? (
-            <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
-          ) : (
-            <GraficoBarras
-              dados={ranking.topProdutos.map((item) => ({
-                rotulo: item.nome,
-                valor: Number(item.valorTotal),
-              }))}
-              formatarValor={(valor) => formatarMoeda(String(valor))}
-            />
-          )}
-        </Card>
+          <Card>
+            <h2 className="mb-1 text-lg font-semibold text-ink">Top produtos</h2>
+            {!ranking ? (
+              <ErroConexao mensagem={erroRanking!} />
+            ) : ranking.topProdutos.length === 0 ? (
+              <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
+            ) : (
+              <GraficoBarras
+                dados={ranking.topProdutos.map((item) => ({
+                  rotulo: item.nome,
+                  valor: Number(item.valorTotal),
+                }))}
+                formatarValor={(valor) => formatarMoeda(String(valor))}
+              />
+            )}
+          </Card>
+        </div>
       </div>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-ink">Eventos recentes</h2>
+        {!resumo ? (
+          <ErroConexao mensagem={erroResumo!} />
+        ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum evento recente." />
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {resumo.pedidosRecentes.map((pedido) => {
+              const situacao = configSituacaoPedido(pedido.situacao);
+              const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
+              return (
+                <EventoCard
+                  key={`pedido-${pedido.id}`}
+                  icone={<IconeClipboard />}
+                  corIcone={situacao.enfase ? "primary" : "laranja"}
+                  titulo={`Pedido ${pedido.numero ?? "—"}`}
+                  descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
+                  horario={formatarData(pedido.dataHoraUltimaAlteracao)}
+                  acaoRotulo="Ver pedido"
+                  acaoHref={`/pedidos/${pedido.id}`}
+                />
+              );
+            })}
+            {resumo.notasFiscaisRecentes.map((nota) => {
+              const status = configStatusNfe(nota.statusNfe);
+              const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
+              return (
+                <EventoCard
+                  key={`nota-${nota.id}`}
+                  icone={<IconeRecibo />}
+                  corIcone={status.enfase ? "primary" : "vermelho"}
+                  titulo={titulo}
+                  descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
+                  horario={formatarData(nota.dataEmissao)}
+                  acaoRotulo="Ver notas"
+                  acaoHref="/notas-fiscais"
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-ink">
@@ -225,59 +327,6 @@ export default async function PainelPage({
                 tag={<Badge enfase>Crítico</Badge>}
               />
             ))}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Pedidos recentes</h2>
-        {!resumo ? (
-          <ErroConexao mensagem={erroResumo!} />
-        ) : resumo.pedidosRecentes.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum pedido sincronizado ainda." />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {resumo.pedidosRecentes.map((pedido) => {
-              const situacao = configSituacaoPedido(pedido.situacao);
-              const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
-              return (
-                <ListItem
-                  key={pedido.id}
-                  href={`/pedidos/${pedido.id}`}
-                  avatar={titulo.charAt(0).toUpperCase()}
-                  titulo={titulo}
-                  subtitulo={`Pedido ${pedido.numero ?? "—"} · ${formatarData(pedido.dataHoraUltimaAlteracao)}`}
-                  valor={formatarMoeda(pedido.valorTotal)}
-                  tag={<Badge enfase={situacao.enfase}>{situacao.rotulo}</Badge>}
-                />
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Notas fiscais recentes</h2>
-        {!resumo ? (
-          <ErroConexao mensagem={erroResumo!} />
-        ) : resumo.notasFiscaisRecentes.length === 0 ? (
-          <EstadoVazio mensagem="Nenhuma nota fiscal sincronizada ainda." />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {resumo.notasFiscaisRecentes.map((nota) => {
-              const status = configStatusNfe(nota.statusNfe);
-              const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
-              return (
-                <ListItem
-                  key={nota.id}
-                  avatar={rotuloTipoNotaFiscal(nota.tipo).charAt(0)}
-                  titulo={titulo}
-                  subtitulo={`${clienteDaNotaFiscal(nota)} · ${formatarData(nota.dataEmissao)}`}
-                  valor={formatarMoeda(nota.valorTotalNotaFiscal)}
-                  tag={<Badge enfase={status.enfase}>{status.rotulo}</Badge>}
-                />
-              );
-            })}
           </div>
         )}
       </section>
