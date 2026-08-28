@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import type { PosicaoAtualVendedorDto, TrajetoVendedorDto } from "@/lib/rastreio";
+import type { VisitaEquipeDto } from "@/lib/visitas";
 import { formatarDataHora } from "@/lib/formatacao";
 import { Card } from "@/components/design/card";
 import { LoadingSkeleton } from "@/components/design/loading-skeleton";
@@ -32,34 +33,61 @@ export function PainelRastreioEquipe({ posicoes }: { posicoes: PosicaoAtualVende
   const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState<string | null>(null);
   const [data, setData] = useState<string>(hojeIso());
   const [trajeto, setTrajeto] = useState<TrajetoVendedorDto | null>(null);
+  const [visitas, setVisitas] = useState<VisitaEquipeDto[]>([]);
   const [carregandoTrajeto, setCarregandoTrajeto] = useState(false);
   const [erroTrajeto, setErroTrajeto] = useState<string | null>(null);
 
-  async function buscarTrajeto(vendedorId: string, dataEscolhida: string) {
+  // Busca trajeto (rota do dia) e visitas (pins de onde parou) do mesmo
+  // vendedor/dia em paralelo - duas chamadas independentes (extensão
+  // pedida pelo usuário sobre a OS-WEB-24 original: "pin de onde foi feita
+  // a visita e também a rota", tudo no mesmo mapa). Falha numa não derruba
+  // a outra - mesmo critério de resiliência já usado no painel (OS-WEB-29).
+  async function buscarDetalhesVendedor(vendedorId: string, dataEscolhida: string) {
     setVendedorSelecionadoId(vendedorId);
     setCarregandoTrajeto(true);
     setErroTrajeto(null);
-    try {
-      const resposta = await fetch(
+
+    const [resultadoTrajeto, resultadoVisitas] = await Promise.allSettled([
+      fetch(
         `/api/rastreio/equipe/${encodeURIComponent(vendedorId)}/trajeto?data=${encodeURIComponent(dataEscolhida)}`,
-      );
-      const corpo = await resposta.json();
-      if (!resposta.ok) {
-        throw new Error(corpo.message ?? "Falha ao buscar o trajeto.");
-      }
-      setTrajeto(corpo as TrajetoVendedorDto);
-    } catch (error) {
+      ).then(async (resposta) => {
+        const corpo = await resposta.json();
+        if (!resposta.ok) {
+          throw new Error(corpo.message ?? "Falha ao buscar o trajeto.");
+        }
+        return corpo as TrajetoVendedorDto;
+      }),
+      fetch(
+        `/api/rastreio/equipe/${encodeURIComponent(vendedorId)}/visitas?data=${encodeURIComponent(dataEscolhida)}`,
+      ).then(async (resposta) => {
+        const corpo = await resposta.json();
+        if (!resposta.ok) {
+          throw new Error(corpo.message ?? "Falha ao buscar as visitas.");
+        }
+        return corpo as VisitaEquipeDto[];
+      }),
+    ]);
+
+    if (resultadoTrajeto.status === "fulfilled") {
+      setTrajeto(resultadoTrajeto.value);
+      setErroTrajeto(null);
+    } else {
       setTrajeto(null);
-      setErroTrajeto(error instanceof Error ? error.message : "Erro desconhecido.");
-    } finally {
-      setCarregandoTrajeto(false);
+      setErroTrajeto(
+        resultadoTrajeto.reason instanceof Error
+          ? resultadoTrajeto.reason.message
+          : "Erro desconhecido.",
+      );
     }
+
+    setVisitas(resultadoVisitas.status === "fulfilled" ? resultadoVisitas.value : []);
+    setCarregandoTrajeto(false);
   }
 
   function selecionarData(novaData: string) {
     setData(novaData);
     if (vendedorSelecionadoId) {
-      buscarTrajeto(vendedorSelecionadoId, novaData);
+      buscarDetalhesVendedor(vendedorSelecionadoId, novaData);
     }
   }
 
@@ -86,7 +114,7 @@ export function PainelRastreioEquipe({ posicoes }: { posicoes: PosicaoAtualVende
             <button
               key={posicao.vendedorId}
               type="button"
-              onClick={() => buscarTrajeto(posicao.vendedorId, data)}
+              onClick={() => buscarDetalhesVendedor(posicao.vendedorId, data)}
               className={`rounded-card p-3 text-left text-sm transition ${
                 vendedorSelecionadoId === posicao.vendedorId
                   ? "bg-ink text-white"
@@ -105,10 +133,17 @@ export function PainelRastreioEquipe({ posicoes }: { posicoes: PosicaoAtualVende
           ))}
         </div>
 
-        {carregandoTrajeto && <p className="text-xs text-muted">Carregando trajeto...</p>}
+        {carregandoTrajeto && <p className="text-xs text-muted">Carregando trajeto e visitas...</p>}
         {erroTrajeto && <p className="text-xs text-muted">{erroTrajeto}</p>}
         {!carregandoTrajeto && vendedorSelecionadoId && trajeto && trajeto.pontos.length === 0 && (
-          <p className="text-xs text-muted">Sem pontos registrados nesse dia.</p>
+          <p className="text-xs text-muted">Sem pontos de rastreio registrados nesse dia.</p>
+        )}
+        {!carregandoTrajeto && vendedorSelecionadoId && (
+          <p className="text-xs text-muted">
+            {visitas.length === 0
+              ? "Sem visita registrada nesse dia."
+              : `${visitas.length} visita(s) registrada(s) nesse dia (pins laranja no mapa).`}
+          </p>
         )}
       </Card>
 
@@ -117,6 +152,7 @@ export function PainelRastreioEquipe({ posicoes }: { posicoes: PosicaoAtualVende
           posicoes={posicoes}
           vendedorSelecionadoId={vendedorSelecionadoId}
           trajeto={trajeto}
+          visitas={visitas}
         />
       </Card>
     </div>

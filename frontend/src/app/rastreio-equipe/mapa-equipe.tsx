@@ -7,6 +7,8 @@ import iconeMarcadorRetina from "leaflet/dist/images/marker-icon-2x.png";
 import sombraMarcador from "leaflet/dist/images/marker-shadow.png";
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
 import type { PosicaoAtualVendedorDto, TrajetoVendedorDto } from "@/lib/rastreio";
+import type { VisitaEquipeDto } from "@/lib/visitas";
+import { statusVisita } from "@/lib/visitas";
 import { formatarDataHora } from "@/lib/formatacao";
 
 // Fix conhecido do react-leaflet + bundler (webpack/turbopack): os ícones
@@ -35,6 +37,19 @@ const iconePadrao = L.icon({
 });
 L.Marker.prototype.options.icon = iconePadrao;
 
+// Pin de visita (extensão pedida pelo usuário sobre a OS-WEB-24: "pin de
+// onde foi feita a visita e também a rota", os dois no mesmo mapa) - cor
+// diferente do pin de posição do vendedor (accent-orange, ver
+// globals.css/design-system), pra distinguir "onde ele esteve numa
+// visita" de "onde ele está agora"/rota sem precisar de mais um ícone PNG.
+const iconeVisita = L.divIcon({
+  className: "",
+  html: '<span style="display:block;width:16px;height:16px;border-radius:9999px;background:#ffa53e;border:2px solid white;box-shadow:0 0 0 1px rgba(0,0,0,0.25);"></span>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+  popupAnchor: [0, -8],
+});
+
 const CENTRO_PADRAO: [number, number] = [-14.235, -51.9253]; // centro geográfico do Brasil - fallback sem nenhuma posição pra centralizar
 
 // Mapa (Leaflet + OpenStreetMap, OS-WEB-24 - decisão confirmada com o
@@ -48,10 +63,12 @@ export function MapaEquipe({
   posicoes,
   vendedorSelecionadoId,
   trajeto,
+  visitas,
 }: {
   posicoes: PosicaoAtualVendedorDto[];
   vendedorSelecionadoId: string | null;
   trajeto: TrajetoVendedorDto | null;
+  visitas: VisitaEquipeDto[];
 }) {
   const centro: [number, number] =
     posicoes.length > 0 ? [posicoes[0].latitude, posicoes[0].longitude] : CENTRO_PADRAO;
@@ -83,6 +100,24 @@ export function MapaEquipe({
       {linhaTrajeto && linhaTrajeto.length > 1 && (
         <Polyline positions={linhaTrajeto} pathOptions={{ color: "#4640DE" }} />
       )}
+      {visitas.map((visita) => {
+        const status = statusVisita(visita);
+        return (
+          <Marker
+            key={visita.id}
+            position={[visita.checkinLat, visita.checkinLng]}
+            icon={iconeVisita}
+          >
+            <Popup>
+              <strong>{visita.cliente.razaoSocial ?? "Cliente não identificado"}</strong>
+              <br />
+              Check-in às {formatarDataHora(visita.checkinEm)}
+              <br />
+              {status.rotulo}
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }
