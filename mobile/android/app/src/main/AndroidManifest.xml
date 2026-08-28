@@ -3,6 +3,13 @@
     <!-- connectivity_plus (OS-MOBILE-22) - detectar volta de conectividade
          pra disparar sincronizacao da fila offline (ver offline_provider.dart). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- geolocator (OS-MOBILE-20) - rastreio com app aberto/em segundo
+         plano (nao fechado, ver rastreio_service.dart) - so FINE/COARSE,
+         sem ACCESS_BACKGROUND_LOCATION (essa so' e' necessaria pra
+         servico em foreground com app fechado, fora de escopo desta OS
+         por decisao confirmada com o usuario). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- android:usesCleartextTraffic - todo o backend hoje roda em HTTP
          puro (ver docker-compose.yml, sem TLS local/de teste). Android
          bloqueia HTTP por padrao a partir da API 28. Revisitar (restringir

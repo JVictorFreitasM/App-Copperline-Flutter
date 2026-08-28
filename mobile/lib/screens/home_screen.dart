@@ -20,6 +20,7 @@ import 'notificacoes_config_screen.dart';
 import 'pedidos_screen.dart';
 import 'pedido_detalhe_screen.dart';
 import 'produtos_screen.dart';
+import 'rastreio_config_screen.dart';
 import 'roteiro_screen.dart';
 
 /// Tela inicial (OS-MOBILE-11) - reformulada na OS-MOBILE-14: antes era só
@@ -43,6 +44,13 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Copperline'),
         actions: [
+          IconButton(
+            tooltip: 'Rastreio',
+            icon: const Icon(Icons.my_location_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const RastreioConfigScreen())),
+          ),
           IconButton(
             tooltip: 'Notificações',
             icon: const Icon(Icons.notifications_outlined),

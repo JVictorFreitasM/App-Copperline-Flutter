@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/auth/auth_notifier.dart';
 import '../core/providers/offline_provider.dart';
 import '../core/push/push_service.dart';
+import '../core/rastreio/rastreio_config.dart';
+import '../core/rastreio/rastreio_service.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -36,6 +38,16 @@ class AuthGate extends ConsumerWidget {
         // to-refresh nas telas, fora de escopo re-tentar sozinho aqui).
         ref.read(snapshotServiceProvider.future).then((servico) => servico.baixar());
         ref.read(offlineSyncNotifierProvider);
+
+        // Retoma o rastreio automaticamente (OS-MOBILE-20) se o usuario
+        // tinha deixado ligado antes de fechar o app - "ativo" persistido
+        // reflete so a INTENCAO (ver rastreio_config.dart), o Timer em si
+        // sempre comeca zerado a cada abertura do app.
+        ref.read(rastreioConfigProvider.future).then((config) {
+          if (config.ativo) {
+            ref.read(rastreioNotifierProvider.notifier).iniciar(config.intervaloMinutos);
+          }
+        });
       }
     });
 
