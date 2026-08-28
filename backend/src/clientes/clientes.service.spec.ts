@@ -5,6 +5,10 @@ import type { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 
 const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
 
+function decimalFake(valor: number) {
+  return { toNumber: () => valor };
+}
+
 function prismaFake(overrides: {
   findMany?: unknown[];
   count?: number;
@@ -50,8 +54,37 @@ describe('ClientesService.listar', () => {
         inativo: false,
         incompleto: false,
         sincronizadoEm: new Date('2026-01-01'),
+        localizacaoLat: null,
+        localizacaoLng: null,
       },
     ]);
+  });
+
+  // OS-MOBILE-17 - localizacaoLat/Lng exposta pela primeira vez em
+  // GET /clientes (antes so' usada internamente pra validar distancia de
+  // check-in, ver VisitasService).
+  it('converte localizacaoLat/Lng (Decimal) pra number quando o cliente tem pin definido', async () => {
+    const clientesBrutos = [
+      {
+        id: '1',
+        idExternoErp: 'ext-1',
+        cpfCnpj: null,
+        razaoSocial: 'Cliente A',
+        nomeFantasia: null,
+        inativo: false,
+        incompleto: false,
+        sincronizadoEm: new Date('2026-01-01'),
+        localizacaoLat: decimalFake(-3.75),
+        localizacaoLng: decimalFake(-38.52),
+      },
+    ];
+    const prisma = prismaFake({ findMany: clientesBrutos, count: 1 });
+    const service = new ClientesService(prisma as never);
+
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    expect(resultado.data[0].localizacaoLat).toBe(-3.75);
+    expect(resultado.data[0].localizacaoLng).toBe(-38.52);
     expect(resultado.meta).toEqual({
       page: 1,
       limit: 20,

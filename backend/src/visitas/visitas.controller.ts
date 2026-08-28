@@ -19,6 +19,7 @@ import { UsuariosService } from '../usuarios/usuarios.service';
 import { CancelarVisitaDto } from './dto/cancelar-visita.dto';
 import { CheckinVisitaDto } from './dto/checkin-visita.dto';
 import { CheckoutVisitaDto } from './dto/checkout-visita.dto';
+import { ListarMinhasVisitasQueryDto } from './dto/listar-minhas-visitas-query.dto';
 import { ListarVisitasQueryDto } from './dto/listar-visitas-query.dto';
 import type { VisitaDto, VisitaEquipeDto } from './dto/visita-response.dto';
 import { VisitaFotoStorageService } from './visita-foto-storage.service';
@@ -52,6 +53,19 @@ export class VisitasController {
   ): Promise<PaginatedResult<VisitaEquipeDto>> {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     return this.visitasService.listarEquipe(idpUser, usuario.id, query);
+  }
+
+  // Agenda do proprio vendedor (OS-MOBILE-17) - "minhas" ANTES de
+  // ':id/foto' abaixo (mesmo criterio de rota literal antes de
+  // parametrizada usado no resto do projeto), embora aqui nao haja colisao
+  // real (':id/foto' exige 2 segmentos, 'minhas' e' 1 so).
+  @Get('minhas')
+  async listarMinhas(
+    @Query() query: ListarMinhasVisitasQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VisitaDto[]> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.visitasService.listarMinhas(usuario.id, query.data);
   }
 
   // Mesma foto de GET /admin/visitas/:id/foto (ApiKeyGuard, sem escopo),

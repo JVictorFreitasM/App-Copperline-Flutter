@@ -64,6 +64,7 @@ function prismaFake(overrides: {
   visitaAberta?: Record<string, unknown> | null;
   visitaExistente?: Record<string, unknown> | null;
   visitasDoCliente?: Record<string, unknown>[];
+  visitasMinhas?: Record<string, unknown>[];
   visitasEquipe?: Record<string, unknown>[];
   totalVisitasEquipe?: number;
   visitaPorId?: Record<string, unknown> | null;
@@ -117,10 +118,15 @@ function prismaFake(overrides: {
         }),
       ),
       findMany: jest.fn().mockImplementation(
-        async (args: { include?: unknown } = {}) =>
-          args.include
-            ? (overrides.visitasEquipe ?? [visitaBruta()])
-            : (overrides.visitasDoCliente ?? [visitaBruta()]),
+        async (args: { include?: unknown; where?: { vendedorId?: unknown } } = {}) => {
+          if (args.include) {
+            return overrides.visitasEquipe ?? [visitaBruta()];
+          }
+          if (args.where?.vendedorId) {
+            return overrides.visitasMinhas ?? [visitaBruta()];
+          }
+          return overrides.visitasDoCliente ?? [visitaBruta()];
+        },
       ),
       count: jest.fn().mockResolvedValue(
         overrides.totalVisitasEquipe ?? (overrides.visitasEquipe ?? [visitaBruta()]).length,
@@ -434,6 +440,43 @@ describe('VisitasService.listarPorCliente', () => {
       expect.objectContaining({ orderBy: { checkinEm: 'desc' } }),
     );
     expect(resultado.map((v) => v.id)).toEqual(['v2', 'v1']);
+  });
+});
+
+describe('VisitasService.listarMinhas', () => {
+  it('lanca ForbiddenException quando o usuario nao e um vendedor cadastrado', async () => {
+    const prisma = prismaFake({ vendedor: null });
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+
+    await expect(service.listarMinhas('usuario-1')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('funciona pra vendedor comum (sem papel de supervisao) - nao usa VendedorEscopoService', async () => {
+    const prisma = prismaFake({
+      visitasMinhas: [visitaBruta({ id: 'v1' })],
+    });
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+
+    const resultado = await service.listarMinhas('usuario-1');
+
+    expect(resultado.map((v) => v.id)).toEqual(['v1']);
+    expect(prisma.visita.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { vendedorId: 'vendedor-1' } }),
+    );
+  });
+
+  it('filtra por data (YYYY-MM-DD) quando informada', async () => {
+    const prisma = prismaFake({ visitasMinhas: [] });
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+
+    await service.listarMinhas('usuario-1', '2026-01-15');
+
+    const chamada = prisma.visita.findMany.mock.calls[0][0];
+    expect(chamada.where.vendedorId).toBe('vendedor-1');
+    expect(chamada.where.checkinEm).toEqual({
+      gte: new Date('2026-01-15'),
+      lte: new Date('2026-01-15T23:59:59.999Z'),
+    });
   });
 });
 

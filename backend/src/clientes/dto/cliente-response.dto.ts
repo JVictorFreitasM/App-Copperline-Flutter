@@ -12,6 +12,13 @@ export interface ClienteResumoDto {
   inativo: boolean;
   incompleto: boolean;
   sincronizadoEm: Date;
+  // "Pin" de localizacao (OS-BACKEND-28, PATCH /clientes/:id/localizacao) -
+  // ate a OS-MOBILE-17 nunca tinha sido exposto em nenhum GET, so usado
+  // internamente (validacao de distancia de check-in, ver
+  // VisitasService). Necessario pro mapa "clientes da carteira" do
+  // vendedor - null quando o cliente ainda nao teve o pin definido.
+  localizacaoLat: number | null;
+  localizacaoLng: number | null;
 }
 
 export interface ContatoClienteDto {
@@ -38,6 +45,8 @@ export function paraClienteResumoDto(cliente: Cliente): ClienteResumoDto {
     inativo: cliente.inativo,
     incompleto: cliente.incompleto,
     sincronizadoEm: cliente.sincronizadoEm,
+    localizacaoLat: cliente.localizacaoLat?.toNumber() ?? null,
+    localizacaoLng: cliente.localizacaoLng?.toNumber() ?? null,
   };
 }
 

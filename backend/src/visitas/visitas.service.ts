@@ -294,6 +294,26 @@ export class VisitasService {
     return visitas.map(paraVisitaDto);
   }
 
+  // Agenda do proprio vendedor (OS-MOBILE-17) - deliberadamente SEM o gate
+  // de escopo de listarEquipe (que exige papel de supervisao): aqui e'
+  // sempre "minhas visitas", nunca "da equipe", entao qualquer vendedor
+  // comum tambem pode chamar - resolverVendedor ja falha (403) se quem
+  // chama nao for um Vendedor cadastrado. Sem paginacao (mesmo criterio de
+  // listarPorCliente) - volume por dia e' sempre pequeno.
+  async listarMinhas(usuarioId: string, data?: string): Promise<VisitaDto[]> {
+    const vendedor = await this.resolverVendedor(usuarioId);
+
+    const visitas = await this.prisma.visita.findMany({
+      where: {
+        vendedorId: vendedor.id,
+        ...(data && { checkinEm: filtroPeriodo(data, data) }),
+      },
+      orderBy: { checkinEm: 'desc' },
+    });
+
+    return visitas.map(paraVisitaDto);
+  }
+
   async obterCaminhoFoto(visitaId: string): Promise<string> {
     const visita = await this.prisma.visita.findUnique({
       where: { id: visitaId },
