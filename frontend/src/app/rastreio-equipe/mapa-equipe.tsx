@@ -14,10 +14,20 @@ import { formatarDataHora } from "@/lib/formatacao";
 // resolve sozinho - sem isso, os pinos do mapa ficam sem ícone (só o
 // quadrado quebrado do navegador). Import direto dos assets já instalados
 // (pacote leaflet), sem depender de CDN externo.
+//
+// `.src` (não a string direto) é o shape do webpack clássico do Next -
+// Turbopack (Next 16, ver AGENTS.md) devolve a STRING do caminho direto
+// pra import de imagem de dentro de node_modules, sem objeto {src}. Sem
+// esse fallback, iconUrl ficava undefined e o Leaflet lançava "iconUrl not
+// set in Icon options" ao montar o primeiro marker, derrubando a página.
+function caminhoDoAsset(valor: string | { src: string }): string {
+  return typeof valor === "string" ? valor : valor.src;
+}
+
 const iconePadrao = L.icon({
-  iconUrl: iconeMarcador.src,
-  iconRetinaUrl: iconeMarcadorRetina.src,
-  shadowUrl: sombraMarcador.src,
+  iconUrl: caminhoDoAsset(iconeMarcador),
+  iconRetinaUrl: caminhoDoAsset(iconeMarcadorRetina),
+  shadowUrl: caminhoDoAsset(sombraMarcador),
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
