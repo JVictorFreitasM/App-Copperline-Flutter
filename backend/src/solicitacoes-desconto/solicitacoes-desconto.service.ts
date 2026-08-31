@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import type { PapelVendedor, Prisma } from '../../generated/prisma/client';
+import { registrarEventoNotificacao } from '../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
@@ -155,14 +156,31 @@ export class SolicitacoesDescontoService {
       solicitante.papel,
     );
 
-    const criada = await this.prisma.solicitacaoDesconto.create({
-      data: {
-        pedidoId: input.pedidoId,
-        percentualSolicitado: input.percentualSolicitado,
-        vendedorSolicitanteId: solicitante.id,
-        papelExigido,
-        aprovadorEsperadoId: solicitante.supervisorId,
-      },
+    const criada = await this.prisma.$transaction(async (tx) => {
+      const registro = await tx.solicitacaoDesconto.create({
+        data: {
+          pedidoId: input.pedidoId,
+          percentualSolicitado: input.percentualSolicitado,
+          vendedorSolicitanteId: solicitante.id,
+          papelExigido,
+          aprovadorEsperadoId: solicitante.supervisorId,
+        },
+      });
+
+      await registrarEventoNotificacao(tx, {
+        tipo: 'SOLICITACAO_DESCONTO_CRIADA',
+        referenciaId: registro.id,
+        titulo: 'Desconto pendente de aprovação',
+        corpo: `${solicitante.nome ?? 'Um vendedor'} solicitou ${input.percentualSolicitado}% de desconto - aguardando sua decisão.`,
+        // Sem pedidoId aqui de proposito - o supervisor deve cair na tela
+        // de Aprovacoes (lista), nao no detalhe de UM pedido especifico
+        // (ver push_navigation.dart no mobile: discriminador por qual
+        // chave esta presente, precisa ficar sem sobreposicao com
+        // PEDIDO_SITUACAO_ALTERADA).
+        dados: { solicitacaoId: registro.id },
+      });
+
+      return registro;
     });
 
     return { necessitaAprovacao: true, solicitacao: paraDto(criada) };
@@ -263,6 +281,21 @@ export class SolicitacoesDescontoService {
           },
         });
       }
+
+      await registrarEventoNotificacao(tx, {
+        tipo: 'SOLICITACAO_DESCONTO_DECIDIDA',
+        referenciaId: resultado.id,
+        titulo: novoStatus === 'APROVADO' ? 'Desconto aprovado' : 'Desconto rejeitado',
+        corpo:
+          novoStatus === 'APROVADO'
+            ? `Seu pedido de ${registro.percentualSolicitado}% de desconto foi aprovado.`
+            : `Seu pedido de ${registro.percentualSolicitado}% de desconto foi rejeitado.`,
+        dados: {
+          solicitacaoId: resultado.id,
+          status: novoStatus,
+          ...(resultado.pedidoId && { pedidoId: resultado.pedidoId }),
+        },
+      });
 
       return resultado;
     });

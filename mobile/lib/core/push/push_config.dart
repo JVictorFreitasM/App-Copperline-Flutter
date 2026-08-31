@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// pro usuário do app; `VISITA_CANCELADA` some do enum do backend mas vira
 /// aqui "Visitas da equipe" porque é o único tipo hoje endereçado a
 /// supervisor (os demais são pra vendedor).
-enum CategoriaNotificacao { pedidos, notasFiscais, estoque, visitasEquipe }
+enum CategoriaNotificacao { pedidos, notasFiscais, estoque, visitasEquipe, aprovacoesDesconto }
 
 extension CategoriaNotificacaoLabel on CategoriaNotificacao {
   String get rotulo => switch (this) {
@@ -15,6 +15,10 @@ extension CategoriaNotificacaoLabel on CategoriaNotificacao {
     CategoriaNotificacao.notasFiscais => 'Notas fiscais',
     CategoriaNotificacao.estoque => 'Estoque (produtos favoritados)',
     CategoriaNotificacao.visitasEquipe => 'Visitas da equipe',
+    // SOLICITACAO_DESCONTO_CRIADA (supervisor) e SOLICITACAO_DESCONTO_DECIDIDA
+    // (vendedor, cai em "Pedidos" - ver categoriaDoPayload) - só a CRIADA
+    // usa esta categoria, ver OS-MOBILE-26.
+    CategoriaNotificacao.aprovacoesDesconto => 'Aprovações de desconto',
   };
 }
 

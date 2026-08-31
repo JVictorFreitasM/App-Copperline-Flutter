@@ -91,10 +91,14 @@ function prismaFake(overrides: {
     pedidoHistoricoStatus: {
       create: jest.fn().mockResolvedValue(undefined),
     },
+    eventoNotificacao: {
+      create: jest.fn().mockResolvedValue(undefined),
+    },
     $transaction(callback: (tx: unknown) => unknown) {
       return callback({
         solicitacaoDesconto: this.solicitacaoDesconto,
         pedidoHistoricoStatus: this.pedidoHistoricoStatus,
+        eventoNotificacao: this.eventoNotificacao,
       });
     },
   };
@@ -145,6 +149,11 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
         percentualSolicitado: 25,
       });
     }
+    expect(prisma.eventoNotificacao.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tipo: 'SOLICITACAO_DESCONTO_CRIADA' }),
+      }),
+    );
   });
 
   it('lanca erro claro quando o vendedor solicitante nao tem hierarquia configurada', async () => {
@@ -221,6 +230,11 @@ describe('SolicitacoesDescontoService.aprovar/rejeitar', () => {
 
     expect(resultado.status).toBe('APROVADO');
     expect(resultado.aprovadorId).toBe('sup1');
+    expect(prisma.eventoNotificacao.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tipo: 'SOLICITACAO_DESCONTO_DECIDIDA' }),
+      }),
+    );
   });
 
   it('nao registra PedidoHistoricoStatus quando a solicitacao ainda nao tem pedidoId (OS-BACKEND-33)', async () => {

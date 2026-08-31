@@ -4,6 +4,7 @@ import '../core/auth/auth_notifier.dart';
 import '../core/health_provider.dart';
 import '../core/models/dashboard.dart';
 import '../core/models/pedido.dart';
+import '../core/providers/aprovacoes_provider.dart';
 import '../core/providers/dashboard_provider.dart';
 import '../core/providers/offline_provider.dart';
 import '../theme/app_colors.dart';
@@ -13,6 +14,7 @@ import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
 import '../core/formatacao.dart';
+import 'aprovacoes_screen.dart';
 import 'busca_screen.dart';
 import 'clientes_screen.dart';
 import 'estoque_screen.dart';
@@ -246,14 +248,29 @@ class _CarregandoInline extends StatelessWidget {
   }
 }
 
-class _FaixaAcoesRapidas extends StatelessWidget {
+class _FaixaAcoesRapidas extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Atalho de Aprovações (OS-MOBILE-26) só aparece pra quem tem papel de
+    // supervisão - mesmo critério do web (app-shell.tsx, GET
+    // /vendedores/me). `.value` ignora loading/erro de propósito (nesse
+    // caso o atalho simplesmente ainda não aparece, sem travar o resto da
+    // faixa por causa disso).
+    final podeAprovar = ref.watch(meuVendedorProvider).value?.podeAprovar ?? false;
+
     return SizedBox(
       height: 84,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
+          if (podeAprovar)
+            _AcaoRapida(
+              icone: Icons.fact_check_outlined,
+              titulo: 'Aprovações',
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AprovacoesScreen())),
+            ),
           _AcaoRapida(
             icone: Icons.inventory_2_outlined,
             titulo: 'Estoque',

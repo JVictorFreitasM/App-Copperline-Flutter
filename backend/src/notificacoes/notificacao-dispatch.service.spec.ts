@@ -21,6 +21,10 @@ function prismaFake(overrides: {
   dispositivos?: { token: string; usuarioId?: string }[];
   favoritos?: { usuario: { dispositivos: { token: string }[] } }[];
   visita?: { vendedor: { supervisor: { usuarioId: string | null } | null } } | null;
+  solicitacaoDesconto?: {
+    aprovadorEsperado?: { usuarioId: string | null } | null;
+    vendedorSolicitante?: { usuarioId: string | null };
+  } | null;
 } = {}) {
   return {
     eventoNotificacao: {
@@ -45,6 +49,13 @@ function prismaFake(overrides: {
       findUnique: jest
         .fn()
         .mockResolvedValue('visita' in overrides ? overrides.visita : null),
+    },
+    solicitacaoDesconto: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'solicitacaoDesconto' in overrides ? overrides.solicitacaoDesconto : null,
+        ),
     },
   };
 }
@@ -157,6 +168,43 @@ describe('NotificacaoDispatchService.processarPendentes', () => {
     expect(prisma.eventoNotificacao.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'ENVIADO' }) }),
     );
+  });
+
+  it('SOLICITACAO_DESCONTO_CRIADA: so vai pro dispositivo do aprovador esperado (nunca broadcast)', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake({ tipo: 'SOLICITACAO_DESCONTO_CRIADA', referenciaId: 'sol-1' })],
+      solicitacaoDesconto: { aprovadorEsperado: { usuarioId: 'usuario-supervisor' } },
+      dispositivos: [
+        { token: 'token-supervisor', usuarioId: 'usuario-supervisor' },
+        { token: 'token-outro', usuarioId: 'outro-usuario' },
+      ],
+    });
+    const pushClient = pushClientFake({ sucesso: ['token-supervisor'], falha: [] });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(prisma.solicitacaoDesconto.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sol-1' } }),
+    );
+    expect(pushClient.enviar).toHaveBeenCalledWith(['token-supervisor'], expect.anything());
+  });
+
+  it('SOLICITACAO_DESCONTO_DECIDIDA: so vai pro dispositivo do vendedor solicitante (nunca broadcast)', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake({ tipo: 'SOLICITACAO_DESCONTO_DECIDIDA', referenciaId: 'sol-1' })],
+      solicitacaoDesconto: { vendedorSolicitante: { usuarioId: 'usuario-vendedor' } },
+      dispositivos: [
+        { token: 'token-vendedor', usuarioId: 'usuario-vendedor' },
+        { token: 'token-outro', usuarioId: 'outro-usuario' },
+      ],
+    });
+    const pushClient = pushClientFake({ sucesso: ['token-vendedor'], falha: [] });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(pushClient.enviar).toHaveBeenCalledWith(['token-vendedor'], expect.anything());
   });
 
   it('marca ERRO e continua processando os outros eventos do lote quando um falha', async () => {

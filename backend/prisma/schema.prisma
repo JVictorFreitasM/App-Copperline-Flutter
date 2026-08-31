@@ -582,6 +582,12 @@ enum TipoEventoNotificacao {
   // avisa o supervisor DIRETO (nao broadcast, ver
   // NotificacaoDispatchService.resolverTokensAlvo).
   VISITA_CANCELADA
+  // Extensao pos-OS-BACKEND-22 (OS-MOBILE-26) - fecha o ciclo de aprovacao
+  // de desconto com notificacao direta (nao broadcast, mesmo criterio de
+  // VISITA_CANCELADA): CRIADA avisa o aprovador esperado (supervisor/
+  // gerente), DECIDIDA avisa de volta o vendedor solicitante.
+  SOLICITACAO_DESCONTO_CRIADA
+  SOLICITACAO_DESCONTO_DECIDIDA
 
   @@map("tipo_evento_notificacao")
 }

@@ -97,24 +97,47 @@ export class NotificacaoDispatchService {
         where: { id: evento.referenciaId },
         select: { vendedor: { select: { supervisor: { select: { usuarioId: true } } } } },
       });
-      const supervisorUsuarioId = visita?.vendedor.supervisor?.usuarioId;
-      if (!supervisorUsuarioId) {
-        // Vendedor sem supervisor configurado (hierarquia nao definida,
-        // ver OS-BACKEND-22) ou supervisor sem Usuario vinculado - ninguem
-        // pra avisar, nao e' erro (mesmo raciocinio de PRODUTO_REABASTECIDO
-        // sem favorito nenhum).
-        return [];
-      }
-      const dispositivosSupervisor = await this.prisma.dispositivoUsuario.findMany({
-        where: { usuarioId: supervisorUsuarioId },
+      return this.dispositivosDoUsuario(visita?.vendedor.supervisor?.usuarioId ?? null);
+    }
+
+    if (evento.tipo === 'SOLICITACAO_DESCONTO_CRIADA') {
+      // So o aprovador ESPERADO (referenciaId = SolicitacaoDesconto.id) -
+      // nunca broadcast (extensao pos-OS-BACKEND-22, OS-MOBILE-26).
+      const solicitacao = await this.prisma.solicitacaoDesconto.findUnique({
+        where: { id: evento.referenciaId },
+        select: { aprovadorEsperado: { select: { usuarioId: true } } },
       });
-      return dispositivosSupervisor.map((d) => d.token);
+      return this.dispositivosDoUsuario(solicitacao?.aprovadorEsperado?.usuarioId ?? null);
+    }
+
+    if (evento.tipo === 'SOLICITACAO_DESCONTO_DECIDIDA') {
+      // So o vendedor SOLICITANTE (referenciaId = SolicitacaoDesconto.id) -
+      // nunca broadcast.
+      const solicitacao = await this.prisma.solicitacaoDesconto.findUnique({
+        where: { id: evento.referenciaId },
+        select: { vendedorSolicitante: { select: { usuarioId: true } } },
+      });
+      return this.dispositivosDoUsuario(solicitacao?.vendedorSolicitante.usuarioId ?? null);
     }
 
     // PEDIDO_SITUACAO_ALTERADA / NOTA_FISCAL_REJEITADA: broadcast pra
     // todo mundo registrado (decisao confirmada com o usuario - sem
     // vinculo Cliente<->Usuario no sistema hoje).
     const dispositivos = await this.prisma.dispositivoUsuario.findMany();
+    return dispositivos.map((d) => d.token);
+  }
+
+  // Compartilhado pelos tipos de notificacao DIRETA (nunca broadcast) -
+  // usuarioId nulo (sem vinculo configurado, ex: hierarquia nao definida)
+  // devolve lista vazia, tratado como "ninguem pra avisar", nao erro
+  // (mesmo raciocinio de PRODUTO_REABASTECIDO sem favorito nenhum).
+  private async dispositivosDoUsuario(usuarioId: string | null): Promise<string[]> {
+    if (!usuarioId) {
+      return [];
+    }
+    const dispositivos = await this.prisma.dispositivoUsuario.findMany({
+      where: { usuarioId },
+    });
     return dispositivos.map((d) => d.token);
   }
 
