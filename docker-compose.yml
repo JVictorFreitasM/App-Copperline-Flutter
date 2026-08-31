@@ -7,6 +7,11 @@ services:
       POSTGRES_DB: copperline
     volumes:
       - copperline-postgres-data:/var/lib/postgresql/data
+    # Exposto no host (backend/.env já aponta DATABASE_URL pra
+    # localhost:5434) pra rodar `npx prisma migrate dev` direto da máquina
+    # - sem isso não dá pra gerar/aplicar migration nova, só via container.
+    ports:
+      - "5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
