@@ -77,3 +77,40 @@ class ClienteLocalizacaoService {
     });
   }
 }
+
+// Verificação de conflito por CPF/CNPJ antes de prospectar (OS-MOBILE-24,
+// GET /clientes/verificar-conflito) - rota SEM escopo por vendedor de
+// propósito (ver ClientesController): a pergunta é "esse documento já é
+// cliente de ALGUÉM", não "é meu cliente" - por isso não usa
+// clientesProvider/escopo nenhum aqui.
+class ConflitoCliente {
+  const ConflitoCliente({required this.existe, required this.vendedorResponsavel});
+
+  factory ConflitoCliente.fromJson(Map<String, dynamic> json) {
+    return ConflitoCliente(
+      existe: json['existe'] as bool,
+      vendedorResponsavel: json['vendedorResponsavel'] as String?,
+    );
+  }
+
+  final bool existe;
+  final String? vendedorResponsavel;
+}
+
+final conflitoClienteServiceProvider = Provider<ConflitoClienteService>((ref) {
+  return ConflitoClienteService(ref.watch(apiClientProvider));
+});
+
+class ConflitoClienteService {
+  ConflitoClienteService(this._apiClient);
+
+  final ApiClient _apiClient;
+
+  Future<ConflitoCliente> verificar(String documento) async {
+    final documentoNormalizado = documento.replaceAll(RegExp(r'\D'), '');
+    final json = await _apiClient.getJson(
+      '/clientes/verificar-conflito?documento=$documentoNormalizado',
+    );
+    return ConflitoCliente.fromJson(json);
+  }
+}

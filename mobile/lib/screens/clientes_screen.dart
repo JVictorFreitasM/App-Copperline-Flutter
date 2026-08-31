@@ -8,6 +8,7 @@ import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/pagination_bar.dart';
 import 'cliente_detalhe_screen.dart';
+import 'verificar_conflito_screen.dart';
 
 /// Listagem de clientes (mobile, equivalente à OS-WEB-11) - consome
 /// GET /clientes (OS-BACKEND-11). Filtro/paginação são estado efêmero de UI
@@ -48,7 +49,18 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     final resultadoAsync = ref.watch(clientesProvider(params));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Clientes')),
+      appBar: AppBar(
+        title: const Text('Clientes'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search_outlined),
+            tooltip: 'Verificar conflito por CPF/CNPJ',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VerificarConflitoScreen()),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -84,7 +96,23 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
               error: (erro, _) =>
                   ErroConexao(mensagem: '$erro', aoTentarNovamente: () => setState(() {})),
               data: (resultado) => resultado.data.isEmpty
-                  ? const EstadoVazio(mensagem: 'Nenhum cliente encontrado.')
+                  ? Column(
+                      children: [
+                        const EstadoVazio(mensagem: 'Nenhum cliente encontrado.'),
+                        if (_cpfCnpj != null && _cpfCnpj!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            icon: const Icon(Icons.person_search_outlined, size: 18),
+                            label: const Text('Verificar conflito antes de prospectar'),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const VerificarConflitoScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    )
                   : Column(
                       children: [
                         for (final cliente in resultado.data) ...[
