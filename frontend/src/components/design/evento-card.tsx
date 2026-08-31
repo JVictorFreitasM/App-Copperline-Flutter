@@ -33,7 +33,7 @@ export function EventoCard({
   return (
     <Card className="flex w-72 shrink-0 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <span className={`flex h-9 w-9 items-center justify-center rounded-full ${corFundo}`}>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${corFundo}`}>
           {icone}
         </span>
         <h3 className="truncate text-sm font-semibold text-ink">{titulo}</h3>

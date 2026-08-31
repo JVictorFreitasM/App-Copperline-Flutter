@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { IconeMenu, IconePino } from "./icons";
+import { IconeChevronDireita, IconeMenu, IconePino } from "./icons";
 
 const CHAVE_FIXADA = "sidebar_fixada";
 
@@ -37,7 +37,11 @@ export interface ItemNavSidebar {
   href: string;
   rotulo: string;
   icone: ReactNode;
+  // Contagem numérica (badge neutro) OU "NEW" (badge laranja) - nunca os
+  // dois ao mesmo tempo, mesmo padrão da referência "Constructive" (cada
+  // item da sidebar mostra no máximo um badge).
   badge?: string;
+  badgeNovo?: boolean;
 }
 
 export interface SecaoNavSidebar {
@@ -53,6 +57,11 @@ export interface SecaoNavSidebar {
 // de qualquer preferência puramente visual client-side do projeto) - lido
 // só depois de montar (evita mismatch de hydration entre servidor e a
 // preferência real salva no navegador).
+//
+// Visual: BRANCA (ver skill design-system - correção de uma versão
+// anterior que usava sidebar escura, que não existe na referência
+// "Constructive"). Separação do conteúdo vem só do fundo `background`
+// cinza-azulado atrás da área principal, não de cor própria da sidebar.
 export function Sidebar({
   secoes,
   nomeUsuario,
@@ -88,7 +97,7 @@ export function Sidebar({
 
       <aside
         onMouseLeave={() => !fixada && setSobreposta(false)}
-        className={`flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out ${
+        className={`flex h-screen flex-col border-r border-black/5 bg-surface transition-transform duration-200 ease-out ${
           fixada
             ? "sticky top-0 w-64 shrink-0"
             : `fixed top-0 left-0 z-40 w-64 shadow-2xl ${
@@ -97,14 +106,12 @@ export function Sidebar({
         }`}
       >
         <div className="flex items-center justify-between px-6 py-6">
-          <span className="text-lg font-bold text-sidebar-foreground-active">Copperline</span>
+          <span className="text-lg font-bold text-ink">Copperline</span>
           <button
             type="button"
             onClick={alternarFixada}
             title={fixada ? "Deixar a barra recolhível" : "Fixar a barra sempre visível"}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-sidebar-hover ${
-              fixada ? "text-sidebar-foreground-active" : "text-sidebar-foreground"
-            }`}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-background hover:text-ink"
           >
             {fixada ? <IconePino /> : <IconeMenu />}
           </button>
@@ -114,7 +121,7 @@ export function Sidebar({
           {secoes.map((secao, indice) => (
             <div key={secao.titulo ?? indice} className="flex flex-col gap-1">
               {secao.titulo && (
-                <p className="px-3 pb-1 text-xs font-semibold tracking-wide text-sidebar-foreground/70 uppercase">
+                <p className="px-3 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
                   {secao.titulo}
                 </p>
               )}
@@ -126,17 +133,22 @@ export function Sidebar({
                     href={item.href}
                     className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
                       ativo
-                        ? "bg-sidebar-hover font-medium text-sidebar-foreground-active"
-                        : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-foreground-active"
+                        ? "bg-primary-light font-medium text-primary"
+                        : "text-muted hover:bg-background hover:text-ink"
                     }`}
                   >
                     <span className="shrink-0">{item.icone}</span>
                     <span className="flex-1 truncate">{item.rotulo}</span>
-                    {item.badge && (
-                      <span className="rounded-full bg-accent-orange px-2 py-0.5 text-[10px] font-bold text-sidebar">
+                    {item.badgeNovo ? (
+                      <span className="rounded-full bg-accent-orange px-2 py-0.5 text-[10px] font-bold text-white">
+                        NEW
+                      </span>
+                    ) : item.badge ? (
+                      <span className="rounded-full bg-badge px-2 py-0.5 text-[10px] font-semibold text-muted">
                         {item.badge}
                       </span>
-                    )}
+                    ) : null}
+                    <IconeChevronDireita />
                   </Link>
                 );
               })}
@@ -144,8 +156,8 @@ export function Sidebar({
           ))}
         </nav>
 
-        <div className="border-t border-sidebar-border px-6 py-4 text-xs text-sidebar-foreground">
-          Logado como <span className="text-sidebar-foreground-active">{nomeUsuario}</span>
+        <div className="border-t border-black/5 px-6 py-4 text-xs text-muted">
+          Logado como <span className="font-medium text-ink">{nomeUsuario}</span>
         </div>
       </aside>
     </>

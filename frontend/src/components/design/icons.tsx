@@ -194,3 +194,14 @@ export function IconeMenu() {
     </svg>
   );
 }
+
+// Seta de item de navegação (referência "Constructive" - cada item da
+// sidebar termina com um ">" pequeno, decorativo, sem função de expandir
+// nada aqui).
+export function IconeChevronDireita() {
+  return (
+    <svg {...PROPS_BASE} width={16} height={16} aria-hidden="true">
+      <path d="m9.5 5 6.5 7-6.5 7" />
+    </svg>
+  );
+}

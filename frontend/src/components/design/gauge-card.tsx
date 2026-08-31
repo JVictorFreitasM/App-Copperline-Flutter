@@ -24,7 +24,9 @@ export function GaugeCard({
     <Card className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-ink">Saúde do estoque</h3>
-        <span className="text-xs font-medium text-accent-orange">Hoje</span>
+        <span className="text-xs text-muted">
+          Novo <span className="font-semibold text-ink">hoje</span>
+        </span>
       </div>
       <div className="flex items-center gap-4">
         <div className="relative h-28 w-28 shrink-0">
@@ -46,12 +48,12 @@ export function GaugeCard({
         </div>
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-accent-green" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-accent-green" />
             <span className="text-muted">{legendaVerde.rotulo}</span>
             <span className="font-semibold text-ink">{legendaVerde.valor}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-accent-red" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-accent-red" />
             <span className="text-muted">{legendaVermelha.rotulo}</span>
             <span className="font-semibold text-ink">{legendaVermelha.valor}</span>
           </div>

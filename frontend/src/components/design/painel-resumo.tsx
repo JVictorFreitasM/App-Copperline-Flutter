@@ -21,7 +21,12 @@ export function PainelResumo({ itens }: { itens: ItemResumo[] }) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-ink">Resumo</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-ink">Resumo</h3>
+        <span className="text-xs text-muted">
+          Novo <span className="font-semibold text-ink">hoje</span>
+        </span>
+      </div>
       <div className="flex flex-col gap-4">
         {itens.map((item) => (
           <div key={item.rotulo} className="flex flex-col gap-1.5">
