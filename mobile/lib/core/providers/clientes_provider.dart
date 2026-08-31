@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
 import '../local_db/offline_fallback.dart';
 import '../models/cliente.dart';
+import '../models/visita.dart';
 import '../pagination.dart';
 import 'offline_provider.dart';
 
@@ -49,6 +50,28 @@ final clienteDetalheProvider = FutureProvider.family<ClienteDetalhe, String>((re
   final apiClient = ref.watch(apiClientProvider);
   final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(id)}');
   return ClienteDetalhe.fromJson(json);
+});
+
+// Estatísticas de carteira (OS-MOBILE-25, GET /clientes/:id/estatisticas,
+// OS-BACKEND-26) - mesmo default de meses do backend
+// (ClienteEstatisticasQueryDto, 12).
+final clienteEstatisticasProvider = FutureProvider.family<ClienteEstatisticas, String>((
+  ref,
+  id,
+) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(id)}/estatisticas');
+  return ClienteEstatisticas.fromJson(json);
+});
+
+// Histórico de visitas DESTE cliente (OS-MOBILE-25, GET /clientes/:id/visitas,
+// OS-BACKEND-28) - diferente de minhasVisitasProvider (agenda do dia, ver
+// visitas_provider.dart): aqui é o histórico completo de um cliente
+// específico, sem filtro de data.
+final clienteVisitasProvider = FutureProvider.family<List<Visita>, String>((ref, id) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJsonList('/clientes/${Uri.encodeComponent(id)}/visitas');
+  return json.map(Visita.fromJson).toList();
 });
 
 // Define/redefine o "pin" de localização do cliente (PATCH

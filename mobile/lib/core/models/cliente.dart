@@ -39,6 +39,42 @@ class ClienteResumo {
   bool get temLocalizacao => localizacaoLat != null && localizacaoLng != null;
 }
 
+/// Mesmo shape de `backend/src/clientes/cliente-estatisticas.service.ts`
+/// (ClienteEstatisticasDto, GET /clientes/:id/estatisticas, OS-BACKEND-26) -
+/// exibido no detalhe do cliente do app (OS-MOBILE-25), mesmos rótulos do
+/// web (`frontend/src/app/clientes/[id]/page.tsx`).
+class ClienteEstatisticas {
+  const ClienteEstatisticas({
+    required this.clienteId,
+    required this.meses,
+    required this.totalUltimosMeses,
+    required this.totalGeral,
+    required this.quantidadePedidos,
+    required this.ticketMedio,
+    required this.vendedorResponsavel,
+  });
+
+  factory ClienteEstatisticas.fromJson(Map<String, dynamic> json) {
+    return ClienteEstatisticas(
+      clienteId: json['clienteId'] as String,
+      meses: json['meses'] as int,
+      totalUltimosMeses: (json['totalUltimosMeses'] as num).toDouble(),
+      totalGeral: (json['totalGeral'] as num).toDouble(),
+      quantidadePedidos: json['quantidadePedidos'] as int,
+      ticketMedio: (json['ticketMedio'] as num).toDouble(),
+      vendedorResponsavel: json['vendedorResponsavel'] as String?,
+    );
+  }
+
+  final String clienteId;
+  final int meses;
+  final double totalUltimosMeses;
+  final double totalGeral;
+  final int quantidadePedidos;
+  final double ticketMedio;
+  final String? vendedorResponsavel;
+}
+
 class ContatoCliente {
   const ContatoCliente({
     required this.id,

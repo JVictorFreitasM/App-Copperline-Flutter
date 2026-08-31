@@ -11,11 +11,13 @@ import '../core/models/visita.dart';
 import '../core/providers/clientes_provider.dart';
 import '../core/providers/cliente_resumo_llm_provider.dart';
 import '../core/providers/visitas_provider.dart';
+import '../core/formatacao.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_card.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
+import '../widgets/stat_card.dart';
 
 String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
 
@@ -76,6 +78,14 @@ class ClienteDetalheScreen extends ConsumerWidget {
                   style: const TextStyle(color: AppColors.ink),
                 ),
               ),
+              const SizedBox(height: 24),
+              Text('Estatísticas', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _CardEstatisticas(clienteId: id),
+              const SizedBox(height: 24),
+              Text('Histórico de visitas', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _CardHistoricoVisitas(clienteId: id),
               const SizedBox(height: 24),
               Text('Contatos', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
@@ -194,6 +204,122 @@ class _CardResumoLlmDados extends StatelessWidget {
           Text(dados.sugestaoAbordagem, style: const TextStyle(color: AppColors.ink)),
         ],
       ),
+    );
+  }
+}
+
+/// Estatísticas de carteira (OS-MOBILE-25, GET /clientes/:id/estatisticas) -
+/// mesmos 4 números do web (`frontend/src/app/clientes/[id]/page.tsx`),
+/// via StatCard (grid 2x2, ver skill `design-system`).
+class _CardEstatisticas extends ConsumerWidget {
+  const _CardEstatisticas({required this.clienteId});
+
+  final String clienteId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final estatisticas = ref.watch(clienteEstatisticasProvider(clienteId));
+
+    return estatisticas.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      error: (erro, _) => ErroConexao(
+        mensagem: '$erro',
+        aoTentarNovamente: () => ref.invalidate(clienteEstatisticasProvider(clienteId)),
+      ),
+      data: (dados) => GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.6,
+        children: [
+          StatCard(
+            icone: Icons.calendar_month_outlined,
+            label: 'Total (últimos ${dados.meses} meses)',
+            valor: formatarMoeda('${dados.totalUltimosMeses}'),
+          ),
+          StatCard(
+            icone: Icons.receipt_long_outlined,
+            label: 'Total geral (${dados.quantidadePedidos} pedido(s))',
+            valor: formatarMoeda('${dados.totalGeral}'),
+          ),
+          StatCard(
+            icone: Icons.trending_up_outlined,
+            label: 'Ticket médio',
+            valor: formatarMoeda('${dados.ticketMedio}'),
+          ),
+          StatCard(
+            icone: Icons.person_outline,
+            label: 'Vendedor responsável',
+            valor: dados.vendedorResponsavel ?? '—',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Histórico de visitas DESTE cliente (OS-MOBILE-25, GET
+/// /clientes/:id/visitas) - diferente da agenda do dia usada em
+/// roteiro_screen.dart/_CardVisita (minhasVisitasProvider): aqui é o
+/// histórico completo, sem filtro de data, mesmo critério de status
+/// (cancelada/em andamento/concluída) já usado em roteiro_screen.dart.
+class _CardHistoricoVisitas extends ConsumerWidget {
+  const _CardHistoricoVisitas({required this.clienteId});
+
+  final String clienteId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visitas = ref.watch(clienteVisitasProvider(clienteId));
+
+    return visitas.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      error: (erro, _) => ErroConexao(
+        mensagem: '$erro',
+        aoTentarNovamente: () => ref.invalidate(clienteVisitasProvider(clienteId)),
+      ),
+      data: (dados) => dados.isEmpty
+          ? const EstadoVazio(mensagem: 'Nenhuma visita registrada para este cliente.')
+          : Column(
+              children: [
+                for (final visita in dados) ...[
+                  _ItemHistoricoVisita(visita: visita),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _ItemHistoricoVisita extends StatelessWidget {
+  const _ItemHistoricoVisita({required this.visita});
+
+  final Visita visita;
+
+  @override
+  Widget build(BuildContext context) {
+    final String rotuloStatus;
+    final bool enfaseStatus;
+    if (visita.cancelada) {
+      rotuloStatus = 'Cancelada';
+      enfaseStatus = false;
+    } else if (visita.emAndamento) {
+      rotuloStatus = 'Em andamento';
+      enfaseStatus = false;
+    } else {
+      rotuloStatus = 'Concluída';
+      enfaseStatus = true;
+    }
+
+    return ListItemTile(
+      titulo: 'Check-in ${formatarDataHora(visita.checkinEm)}',
+      subtitulo: visita.checkoutEm != null
+          ? 'Checkout ${formatarDataHora(visita.checkoutEm)}'
+          : visita.nota ?? 'Sem nota',
+      tag: AppBadge(texto: rotuloStatus, enfase: enfaseStatus),
     );
   }
 }
