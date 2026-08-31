@@ -18,8 +18,14 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # of the product and file versions while build-number is used as the build suffix.
 version: 1.0.0+1
 
+# Piso baixado de ^3.13.0 pra '>=3.12.0' - a maquina de dev tem 3.13, mas
+# a imagem Docker usada pra buildar o APK (ghcr.io/cirruslabs/flutter,
+# rota alternativa pro build direto no Windows ser bloqueado por politica
+# de Controle de Aplicativo, ver impellerc.exe) so tem Dart 3.12 disponivel
+# sem conseguir fazer upgrade dentro do container (checkout git sem branch
+# "stable"). Nenhuma sintaxe 3.13-only usada no projeto, entao e' seguro.
 environment:
-  sdk: ^3.13.0
+  sdk: '>=3.12.0 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
