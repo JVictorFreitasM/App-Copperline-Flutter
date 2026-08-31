@@ -106,6 +106,46 @@ class ApiClient implements ApiJsonClient {
     }
   }
 
+  // PATCH /clientes/:id/localizacao (OS-MOBILE-21, fecha uma lacuna da
+  // OS-MOBILE-17 - roteiro_screen.dart já orientava "defina o pin no
+  // detalhe do cliente", mas não existia como fazer isso no app).
+  Future<Map<String, dynamic>> patchJson(String path, Map<String, dynamic> corpo) async {
+    try {
+      final resposta = await _dio.patch<Map<String, dynamic>>(path, data: corpo);
+      return resposta.data ?? <String, dynamic>{};
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
+  // POST multipart/form-data (foto + campos de texto) - só o check-in de
+  // visita usa isso hoje (OS-MOBILE-21, ver VisitasController.checkin no
+  // backend, que exige FileInterceptor('foto')). `campos` vira FormData com
+  // valores stringificados (mesmo formato que o Nest espera de multipart -
+  // class-transformer converte de volta pro tipo real via @Type()).
+  Future<Map<String, dynamic>> postMultipart(
+    String path,
+    Map<String, String> campos,
+    String caminhoArquivo,
+  ) async {
+    try {
+      final formData = FormData.fromMap({
+        ...campos,
+        'foto': await MultipartFile.fromFile(caminhoArquivo, filename: 'checkin.jpg'),
+      });
+      final resposta = await _dio.post<Map<String, dynamic>>(path, data: formData);
+      return resposta.data ?? <String, dynamic>{};
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
   // POST que responde array na raiz (ex: POST /mobile/fila-pendente,
   // OS-MOBILE-22 - ResultadoAcaoFilaDto[]).
   @override

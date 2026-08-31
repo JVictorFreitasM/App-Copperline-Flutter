@@ -8,10 +8,16 @@ import 'package:flutter/material.dart';
 class AppColors {
   const AppColors._();
 
-  static const background = Color(0xFFF4F4F2);
+  static const background = Color(0xFFF5F6FA);
   static const surface = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF0A0A0A);
-  static const muted = Color(0xFF8C8C8C);
-  static const primary = Color(0xFF4640DE);
-  static const primaryLight = Color(0xFFC7CBFA);
+  static const ink = Color(0xFF12141D);
+  static const muted = Color(0xFF8A8FA3);
+  static const primary = Color(0xFF4A6CF7);
+  static const primaryLight = Color(0xFFE7ECFE);
+  static const accentOrange = Color(0xFFFFA53E);
+  static const accentOrangeLight = Color(0xFFFFEAD2);
+  static const accentRed = Color(0xFFFF6B6B);
+  static const accentRedLight = Color(0xFFFFE1E1);
+  static const accentGreen = Color(0xFF2ED47A);
+  static const accentGreenLight = Color(0xFFD9F7E7);
 }

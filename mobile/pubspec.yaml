@@ -49,6 +49,11 @@ dependencies:
   uuid: ^4.6.0
   connectivity_plus: ^7.3.1
   geolocator: ^14.0.3
+  # Só source: ImageSource.camera é usado no app inteiro (ver
+  # cliente_detalhe_screen.dart, OS-MOBILE-21) - abre a câmera nativa
+  # direto, nunca a galeria (requisito de UI explícito da OS: sem opção de
+  # escolher foto existente no check-in de visita).
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

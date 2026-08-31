@@ -10,6 +10,9 @@
          por decisao confirmada com o usuario). -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- image_picker (OS-MOBILE-21) - só ImageSource.camera é usado no app
+         (nunca a galeria, requisito explícito da OS de check-in de visita). -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <!-- android:usesCleartextTraffic - todo o backend hoje roda em HTTP
          puro (ver docker-compose.yml, sem TLS local/de teste). Android
          bloqueia HTTP por padrao a partir da API 28. Revisitar (restringir

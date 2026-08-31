@@ -50,3 +50,30 @@ final clienteDetalheProvider = FutureProvider.family<ClienteDetalhe, String>((re
   final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(id)}');
   return ClienteDetalhe.fromJson(json);
 });
+
+// Define/redefine o "pin" de localização do cliente (PATCH
+// /clientes/:id/localizacao, OS-MOBILE-21) - fecha a lacuna deixada pela
+// OS-MOBILE-17 (o roteiro já orientava "defina o pin no detalhe do
+// cliente", mas essa ação não existia no app ainda). Deliberadamente
+// desacoplado do fluxo de check-in (mesma decisão já tomada no backend,
+// ver ClienteLocalizacaoService).
+final clienteLocalizacaoServiceProvider = Provider<ClienteLocalizacaoService>((ref) {
+  return ClienteLocalizacaoService(ref.watch(apiClientProvider));
+});
+
+class ClienteLocalizacaoService {
+  ClienteLocalizacaoService(this._apiClient);
+
+  final ApiClient _apiClient;
+
+  Future<void> definir({
+    required String clienteId,
+    required double latitude,
+    required double longitude,
+  }) {
+    return _apiClient.patchJson('/clientes/${Uri.encodeComponent(clienteId)}/localizacao', {
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+  }
+}

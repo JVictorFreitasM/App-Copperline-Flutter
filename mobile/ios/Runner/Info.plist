@@ -26,6 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- geolocator (OS-MOBILE-20) - faltava no iOS (gap pré-existente:
+	     a permissão nunca tinha sido declarada aqui, só no Android). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Usado para acompanhar seu roteiro em campo e validar a distância no check-in/checkout de visita.</string>
+	<!-- image_picker (OS-MOBILE-21) - só câmera, nunca galeria (requisito
+	     explícito da OS de check-in de visita). -->
+	<key>NSCameraUsageDescription</key>
+	<string>Usado para tirar a foto obrigatória da fachada no check-in de visita.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
