@@ -45,10 +45,19 @@ final contagemPendentesProvider = FutureProvider<int>((ref) async {
 class OfflineSyncNotifier {
   OfflineSyncNotifier(this._ref) {
     _assinatura = Connectivity().onConnectivityChanged.listen(_aoMudarConectividade);
+    // OS-MOBILE-36: a transição de conectividade sozinha não cobre o caso
+    // "rádio conectado mas sem internet de verdade" (wifi cativo, sem
+    // sinal real) - o ConnectivityResult fica "wifi" o tempo todo, sem
+    // nunca disparar uma nova transição pra reprocessar a fila quando a
+    // internet volta de fato. Esse timer é o fallback: reforça a
+    // sincronização periodicamente enquanto houver algo pendente, sem
+    // depender de uma mudança de estado do rádio acontecer.
+    _timerRetentativa = Timer.periodic(const Duration(seconds: 45), (_) => _retentarSePendente());
   }
 
   final Ref _ref;
   StreamSubscription<List<ConnectivityResult>>? _assinatura;
+  Timer? _timerRetentativa;
   bool _semRedeAnteriormente = false;
 
   void _aoMudarConectividade(List<ConnectivityResult> resultados) {
@@ -59,6 +68,13 @@ class OfflineSyncNotifier {
     _semRedeAnteriormente = semRede;
   }
 
+  Future<void> _retentarSePendente() async {
+    final fila = await _ref.read(filaPendenteServiceProvider.future);
+    if (await fila.contarPendentes() > 0) {
+      await sincronizarAgora();
+    }
+  }
+
   Future<void> sincronizarAgora() async {
     final fila = await _ref.read(filaPendenteServiceProvider.future);
     await fila.sincronizar();
@@ -67,6 +83,7 @@ class OfflineSyncNotifier {
 
   void dispose() {
     _assinatura?.cancel();
+    _timerRetentativa?.cancel();
   }
 }
 

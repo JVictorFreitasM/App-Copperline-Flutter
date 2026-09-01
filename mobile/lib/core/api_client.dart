@@ -1,8 +1,22 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_exception.dart';
 import 'auth/idp_user.dart';
 import 'auth/session_storage.dart';
+
+// OS-MOBILE-31: backoff pra falha transitória de rede (timeout/conexão
+// recusada/sem rota) em leituras. Não aplicado a POST/PATCH/multipart de
+// propósito - são não-idempotentes (ex: check-in), retry automático
+// arriscaria duplicar efeito no servidor; escritas críticas já têm sua
+// própria resiliência via fila offline (OS-MOBILE-22, FilaPendenteService).
+const _tentativasMaximas = 3;
+const _atrasosRetry = [
+  Duration(milliseconds: 400),
+  Duration(milliseconds: 1200),
+  Duration(milliseconds: 3000),
+];
 
 // URL base da API NestJS, injetada por ambiente (flutter run/build
 // --dart-define=API_BASE_URL=http://...) - nunca hardcoded (ver critério
@@ -29,18 +43,30 @@ abstract interface class ApiJsonClient {
 /// web (aqui o app precisa fazer isso manualmente, ver `login_screen.dart`
 /// pra como o cookie chega até aqui).
 class ApiClient implements ApiJsonClient {
-  ApiClient(this._sessionStorage)
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 15),
+  ApiClient(SessionStorage sessionStorage)
+    : this._(
+        Dio(
+          BaseOptions(
+            baseUrl: baseUrl,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 15),
+          ),
         ),
-      ) {
+        sessionStorage,
+      );
+
+  // OS-MOBILE-31/33: seam de teste pra injetar um Dio com adapter fake
+  // (simula timeout/SocketException sem rede real) - sem SessionStorage
+  // real, que depende de platform channel (FlutterSecureStorage) e não
+  // roda em teste unitário puro.
+  @visibleForTesting
+  ApiClient.paraTeste(Dio dio) : this._(dio, null);
+
+  ApiClient._(this._dio, this._sessionStorage) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final cookie = await _sessionStorage.lerCookie();
+          final cookie = await _sessionStorage?.lerCookie();
           if (cookie != null) {
             options.headers['cookie'] = cookie;
           }
@@ -51,7 +77,7 @@ class ApiClient implements ApiJsonClient {
   }
 
   final Dio _dio;
-  final SessionStorage _sessionStorage;
+  final SessionStorage? _sessionStorage;
 
   static String get baseUrl {
     if (_apiBaseUrl.isEmpty) {
@@ -67,7 +93,7 @@ class ApiClient implements ApiJsonClient {
   @override
   Future<Map<String, dynamic>> getJson(String path) async {
     try {
-      final resposta = await _dio.get<Map<String, dynamic>>(path);
+      final resposta = await _comRetry(() => _dio.get<Map<String, dynamic>>(path));
       return resposta.data ?? <String, dynamic>{};
     } on DioException catch (erro) {
       throw ApiException(
@@ -81,7 +107,7 @@ class ApiClient implements ApiJsonClient {
   // OS-MOBILE-17), diferente de getJson (objeto na raiz).
   Future<List<Map<String, dynamic>>> getJsonList(String path) async {
     try {
-      final resposta = await _dio.get<List<dynamic>>(path);
+      final resposta = await _comRetry(() => _dio.get<List<dynamic>>(path));
       return (resposta.data ?? const []).cast<Map<String, dynamic>>();
     } on DioException catch (erro) {
       throw ApiException(
@@ -90,6 +116,30 @@ class ApiClient implements ApiJsonClient {
       );
     }
   }
+
+  // Reexecuta `chamada` com backoff exponencial quando a falha é
+  // transitória de rede (timeout/conexão recusada/sem rota/DNS) - erro de
+  // negócio (4xx/5xx com resposta do servidor) nunca cai aqui, propaga na
+  // primeira tentativa mesmo.
+  Future<T> _comRetry<T>(Future<T> Function() chamada) async {
+    for (var tentativa = 0; ; tentativa++) {
+      try {
+        return await chamada();
+      } on DioException catch (erro) {
+        final ultimaTentativa = tentativa >= _tentativasMaximas - 1;
+        if (ultimaTentativa || !_erroTransitorio(erro)) {
+          rethrow;
+        }
+        await Future.delayed(_atrasosRetry[tentativa]);
+      }
+    }
+  }
+
+  bool _erroTransitorio(DioException erro) =>
+      erro.response == null &&
+      (erro.type == DioExceptionType.connectionError ||
+          erro.type == DioExceptionType.connectionTimeout ||
+          erro.type == DioExceptionType.receiveTimeout);
 
   // Primeiro POST do app (OS-MOBILE-16, registro de dispositivo pra push) -
   // resposta pode vir vazia (ex: 204 No Content, como POST /dispositivos),
@@ -196,7 +246,33 @@ class ApiClient implements ApiJsonClient {
       return _mensagemDoCorpo(erro.response!.data) ??
           'API respondeu ${erro.response!.statusCode} para ${erro.requestOptions.path}';
     }
+    if (erro.type == DioExceptionType.connectionError) {
+      return _mensagemConexao(erro);
+    }
     return 'Falha ao conectar com a API: ${erro.message}';
+  }
+
+  // OS-MOBILE-33: antes disso, todo SocketException (recusada, sem rota,
+  // DNS) virava a mesma mensagem genérica do Dio, escondendo se o problema
+  // é "servidor fora do ar" ou "dispositivo fora da rede que alcança
+  // API_BASE_URL" (ver README - hoje é IP privado, OS-MOBILE-32 trata a
+  // solução de infra pra isso).
+  String _mensagemConexao(DioException erro) {
+    final interno = erro.error;
+    if (interno is SocketException) {
+      final descricao = (interno.osError?.message ?? interno.message).toLowerCase();
+      if (descricao.contains('refused')) {
+        return 'Conexão recusada por $baseUrl - confirme se o servidor está no ar.';
+      }
+      if (descricao.contains('no route to host') || descricao.contains('unreachable')) {
+        return 'Não foi possível alcançar $baseUrl a partir desta rede - '
+            'confirme se o dispositivo está na mesma rede da API.';
+      }
+      if (descricao.contains('failed host lookup')) {
+        return 'Não foi possível resolver o endereço $baseUrl - confirme a rede/DNS do dispositivo.';
+      }
+    }
+    return 'Não foi possível conectar a $baseUrl.';
   }
 
   // NestJS devolve {message, error, statusCode} no corpo de erro -
