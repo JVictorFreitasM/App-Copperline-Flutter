@@ -52,32 +52,66 @@ class ClienteDetalheScreen extends ConsumerWidget {
                 : ErroConexao(mensagem: '$erro'),
           ),
           data: (cliente) => ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      cliente.titulo,
-                      style: Theme.of(context).textTheme.headlineSmall,
+              // Cabeçalho centralizado (replica a referência "Nexo
+              // Comercial", Downloads/aplicativo-comercial-interno, tela
+              // cliente.jpg). Sem os 2 botões de ação da referência
+              // ("Novo pedido"/"Check-in") aqui em cima - criação de
+              // pedido não existe no app ainda (bloqueada por decisão de
+              // negócio) e check-in já tem seu próprio card funcional
+              // logo abaixo (_CardVisita), duplicar o atalho aqui só
+              // levaria a um botão sem destino real.
+              Center(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        cliente.titulo.isNotEmpty ? cliente.titulo.substring(0, 1).toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                        ),
+                      ),
                     ),
-                  ),
-                  BadgeAtivoInativo(inativo: cliente.inativo),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      cliente.titulo,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    if (cliente.nomeFantasia != null && cliente.nomeFantasia != cliente.razaoSocial)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          cliente.nomeFantasia!,
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    BadgeAtivoInativo(inativo: cliente.inativo),
+                    const SizedBox(height: 8),
+                    Text(
+                      'CNPJ ${cliente.cpfCnpj ?? "—"}',
+                      style: const TextStyle(color: AppColors.muted, fontSize: 10),
+                    ),
+                  ],
+                ),
               ),
-              if (cliente.nomeFantasia != null && cliente.nomeFantasia != cliente.razaoSocial)
-                Text(cliente.nomeFantasia!, style: const TextStyle(color: AppColors.muted)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              const Divider(color: AppColors.line, height: 1),
+              const SizedBox(height: 18),
               _CardVisita(cliente: cliente),
               const SizedBox(height: 16),
               _CardResumoLlm(clienteId: id),
-              const SizedBox(height: 16),
-              AppCard(
-                child: Text(
-                  'CPF/CNPJ: ${cliente.cpfCnpj ?? "—"}',
-                  style: const TextStyle(color: AppColors.ink),
-                ),
-              ),
               const SizedBox(height: 24),
               Text('Estatísticas', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),

@@ -5,8 +5,8 @@ import '../core/providers/offline_provider.dart';
 import '../core/push/push_service.dart';
 import '../core/rastreio/rastreio_config.dart';
 import '../core/rastreio/rastreio_service.dart';
-import 'home_screen.dart';
 import 'login_screen.dart';
+import 'shell/app_shell.dart';
 
 /// Raiz de navegação (OS-MOBILE-12) - decide entre [LoginScreen] e
 /// [HomeScreen] com base no [authProvider], mesmo papel do `proxy.ts` +
@@ -53,7 +53,7 @@ class AuthGate extends ConsumerWidget {
 
     return auth.when(
       data: (estado) =>
-          estado.autenticado ? const HomeScreen() : const LoginScreen(),
+          estado.autenticado ? const AppShell() : const LoginScreen(),
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),

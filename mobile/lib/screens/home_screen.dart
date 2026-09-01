@@ -1,173 +1,324 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/auth/auth_notifier.dart';
-import '../core/health_provider.dart';
-import '../core/models/dashboard.dart';
-import '../core/models/pedido.dart';
+import '../core/formatacao.dart';
 import '../core/providers/aprovacoes_provider.dart';
 import '../core/providers/dashboard_provider.dart';
 import '../core/providers/offline_provider.dart';
+import '../core/providers/visitas_provider.dart';
 import '../theme/app_colors.dart';
-import '../widgets/app_badge.dart';
-import '../widgets/app_card.dart';
-import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
-import '../widgets/stat_card.dart';
-import '../core/formatacao.dart';
 import 'aprovacoes_screen.dart';
 import 'busca_screen.dart';
 import 'clientes_screen.dart';
-import 'estoque_screen.dart';
-import 'notificacoes_config_screen.dart';
 import 'pedidos_screen.dart';
-import 'pedido_detalhe_screen.dart';
-import 'produtos_screen.dart';
-import 'rastreio_config_screen.dart';
-import 'roteiro_screen.dart';
+import 'shell/documentos_screen.dart';
 
-/// Tela inicial (OS-MOBILE-11) - reformulada na OS-MOBILE-14: antes era só
-/// um menu de atalhos (ver histórico do arquivo), agora mostra resumo do
-/// dia (pedidos recentes + alertas de estoque crítico, GET /dashboard/*,
-/// OS-BACKEND-17 - mesmos endpoints do painel web, OS-WEB-19) como
-/// conteúdo PRINCIPAL, com os atalhos de navegação reduzidos a uma faixa
-/// compacta secundária (ver skill design-system, "Exemplo aplicado":
-/// "resumo do dia... com ações rápidas").
+String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
+
+String _saudacao() {
+  final hora = DateTime.now().hour;
+  if (hora < 12) return 'Bom dia';
+  if (hora < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+const _diasSemana = [
+  'segunda',
+  'terça',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sábado',
+  'domingo',
+];
+const _meses = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+String _dataPorExtenso() {
+  final agora = DateTime.now();
+  final dia = _diasSemana[agora.weekday - 1];
+  return '$dia, ${agora.day} de ${_meses[agora.month - 1]}'.toUpperCase();
+}
+
+/// Aba "Início" - replica a referência "Nexo Comercial"
+/// (Downloads/aplicativo-comercial-interno, tela 1.jpg): saudação +
+/// card de prioridade (aprovações pendentes) + grade de acesso rápido
+/// 2x2 + resumo de hoje. Tudo com dado real já buscado no backend
+/// (OS-BACKEND-17/OS-MOBILE-26) - a referência também mostra uma barra de
+/// "rota concluída X de Y", omitida aqui de propósito: não existe conceito
+/// de rota/meta diária planejada no backend, seria inventar dado.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final usuario = ref.watch(authProvider).value?.usuario;
-    final saude = ref.watch(healthProvider);
     final resumo = ref.watch(resumoDashboardProvider);
-    final estoqueCritico = ref.watch(estoqueCriticoDashboardProvider);
+    final visitasHoje = ref.watch(minhasVisitasProvider(_hojeIso()));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Copperline'),
-        actions: [
-          IconButton(
-            tooltip: 'Rastreio',
-            icon: const Icon(Icons.my_location_outlined),
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const RastreioConfigScreen())),
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(resumoDashboardProvider);
+        ref.invalidate(minhasVisitasProvider(_hojeIso()));
+        await ref.read(resumoDashboardProvider.future);
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _dataPorExtenso(),
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      usuario != null
+                          ? '${_saudacao()}, ${usuario.name.split(' ').first}.'
+                          : '${_saudacao()}.',
+                      style: Theme.of(context).textTheme.displayLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Veja o que precisa da sua atenção hoje.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              if (usuario != null)
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppColors.primaryLight,
+                  child: Text(
+                    _iniciais(usuario.name),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Notificações',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => Navigator.of(
+          const SizedBox(height: 20),
+          const _IndicadorAcoesPendentes(),
+          const _CardPrioridade(),
+          _CampoBuscaAtalho(
+            onTap: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen())),
+            ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
           ),
-          IconButton(
-            tooltip: 'Sair',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Acesso rápido', style: Theme.of(context).textTheme.titleMedium),
+              _RotuloPapel(usuario: usuario, ref: ref),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.55,
+            children: [
+              _AcaoRapida(
+                icone: Icons.add,
+                titulo: 'Pedidos',
+                subtitulo: 'Ver carteira',
+                destaque: true,
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const PedidosScreen())),
+              ),
+              _AcaoRapida(
+                icone: Icons.location_on_outlined,
+                titulo: 'Check-in',
+                subtitulo: 'Registrar visita',
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
+              ),
+              _AcaoRapida(
+                icone: Icons.search,
+                titulo: 'Buscar cliente',
+                subtitulo: 'Carteira completa',
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
+              ),
+              _AcaoRapida(
+                icone: Icons.description_outlined,
+                titulo: 'Documentos',
+                subtitulo: 'Notas e arquivos',
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen())),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: AppColors.line, height: 1),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Resumo de hoje', style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 14),
+          resumo.when(
+            data: (dados) => Row(
+              children: [
+                Expanded(
+                  child: _Metrica(
+                    valor: visitasHoje.maybeWhen(
+                      data: (v) => '${v.length}'.padLeft(2, '0'),
+                      orElse: () => '—',
+                    ),
+                    rotulo: 'visitas',
+                  ),
+                ),
+                Expanded(
+                  child: _Metrica(
+                    valor: '${dados.pedidosEmAberto}'.padLeft(2, '0'),
+                    rotulo: 'pedidos em aberto',
+                  ),
+                ),
+                Expanded(
+                  child: _Metrica(
+                    valor: formatarMoeda(dados.valorFaturadoRecente),
+                    rotulo: 'faturado (${dados.periodoValorFaturadoDias}d)',
+                    ultimo: true,
+                  ),
+                ),
+              ],
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            ),
+            error: (erro, _) => ErroConexao(
+              mensagem: '$erro',
+              aoTentarNovamente: () => ref.invalidate(resumoDashboardProvider),
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(resumoDashboardProvider);
-            ref.invalidate(estoqueCriticoDashboardProvider);
-            await Future.wait([
-              ref.read(resumoDashboardProvider.future),
-              ref.read(estoqueCriticoDashboardProvider.future),
-            ]);
-          },
-          child: ListView(
-            padding: const EdgeInsets.all(24),
+    );
+  }
+
+  String _iniciais(String nome) {
+    final partes = nome.trim().split(RegExp(r'\s+'));
+    if (partes.isEmpty) return '?';
+    if (partes.length == 1) return partes.first.substring(0, 1).toUpperCase();
+    return (partes.first.substring(0, 1) + partes.last.substring(0, 1)).toUpperCase();
+  }
+}
+
+class _RotuloPapel extends StatelessWidget {
+  const _RotuloPapel({required this.usuario, required this.ref});
+
+  final dynamic usuario;
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context) {
+    final papel = ref.watch(meuVendedorProvider).value?.papel;
+    if (papel == null || papel == 'VENDEDOR') return const SizedBox.shrink();
+    return Text(
+      papel == 'GERENTE' ? 'GERENTE' : 'SUPERVISOR',
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontWeight: FontWeight.w800,
+        fontSize: 9,
+        letterSpacing: 1,
+      ),
+    );
+  }
+}
+
+/// Card de prioridade (âmbar) - só aparece quando existe algo real
+/// aguardando: solicitações de desconto pendentes (OS-MOBILE-26), pra
+/// quem tem papel de supervisão. Sem dado real, o card simplesmente não
+/// aparece - a referência sempre mostra um valor fixo ("2 aprovações"),
+/// aqui é sempre o que existir de verdade.
+class _CardPrioridade extends ConsumerWidget {
+  const _CardPrioridade();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final podeAprovar = ref.watch(meuVendedorProvider).value?.podeAprovar ?? false;
+    if (!podeAprovar) return const SizedBox.shrink();
+
+    final solicitacoes = ref.watch(solicitacoesPendentesProvider);
+    final total = solicitacoes.maybeWhen(data: (lista) => lista.length, orElse: () => 0);
+    if (total == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AprovacoesScreen())),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.amberLight,
+            border: Border.all(color: const Color(0xFFF1D39E)),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
             children: [
-              if (usuario != null) ...[
-                Text('Olá, ${usuario.name}', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 16),
-              ],
-
-              // Campo de busca sempre visível na navegação principal
-              // (OS-MOBILE-15, critério de aceite explícito) - "botão que
-              // parece campo de busca" (mesmo padrão de apps como
-              // Google/Spotify): não abre teclado aqui, só navega pra
-              // BuscaScreen, que aí sim tem o TextField de verdade.
-              _CampoBuscaAtalho(
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
-              ),
-              const SizedBox(height: 20),
-
-              _IndicadorAcoesPendentes(),
-              const SizedBox(height: 16),
-
-              saude.when(
-                data: (status) => _StatusApi(status: status),
-                loading: () => const SizedBox.shrink(),
-                error: (erro, _) => ErroConexao(
-                  mensagem: erro.toString(),
-                  aoTentarNovamente: () => ref.read(healthProvider.notifier).recarregar(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              _FaixaAcoesRapidas(),
-              const SizedBox(height: 24),
-
-              resumo.when(
-                data: (dados) => _StatsResumo(resumo: dados),
-                loading: () => const _CarregandoInline(),
-                error: (erro, _) => ErroConexao(
-                  mensagem: erro.toString(),
-                  aoTentarNovamente: () => ref.invalidate(resumoDashboardProvider),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              Text('Estoque crítico', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              estoqueCritico.when(
-                data: (dados) => dados.produtos.isEmpty
-                    ? const EstadoVazio(
-                        mensagem: 'Nenhum produto com estoque crítico e pedido pendente no momento.',
-                      )
-                    : Column(
-                        children: [
-                          for (final produto in dados.produtos) ...[
-                            ListItemTile(
-                              titulo: produto.titulo,
-                              subtitulo:
-                                  'Código ${produto.codigo} · ${produto.quantidadePedidosPendentes} pedido(s) pendente(s)',
-                              valor: '${produto.quantidadeDisponivel} disponível',
-                              tag: const AppBadge(texto: 'Crítico', enfase: true),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ],
+              const Icon(Icons.error_outline, color: AppColors.amber, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PRIORIDADE DO DIA',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        color: AppColors.amber,
                       ),
-                loading: () => const _CarregandoInline(),
-                error: (erro, _) => ErroConexao(
-                  mensagem: erro.toString(),
-                  aoTentarNovamente: () => ref.invalidate(estoqueCriticoDashboardProvider),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      total == 1
+                          ? '1 aprovação aguardando'
+                          : '$total aprovações aguardando',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Revise as solicitações de desconto da sua equipe.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF6F562E)),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              Text('Pedidos recentes', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              resumo.when(
-                data: (dados) => dados.pedidosRecentes.isEmpty
-                    ? const EstadoVazio(mensagem: 'Nenhum pedido sincronizado ainda.')
-                    : Column(
-                        children: [
-                          for (final pedido in dados.pedidosRecentes) ...[
-                            _ItemPedidoRecente(pedido: pedido),
-                            const SizedBox(height: 8),
-                          ],
-                        ],
-                      ),
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-              ),
+              const Icon(Icons.chevron_right, color: AppColors.muted, size: 18),
             ],
           ),
         ),
@@ -176,136 +327,36 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _StatsResumo extends StatelessWidget {
-  const _StatsResumo({required this.resumo});
+class _Metrica extends StatelessWidget {
+  const _Metrica({required this.valor, required this.rotulo, this.ultimo = false});
 
-  final ResumoDashboard resumo;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: [
-        StatCard(
-          icone: Icons.people_outline,
-          label: 'Clientes ativos',
-          valor: '${resumo.clientesAtivos}',
-        ),
-        StatCard(
-          icone: Icons.category_outlined,
-          label: 'Produtos ativos',
-          valor: '${resumo.produtosAtivos}',
-        ),
-        StatCard(
-          icone: Icons.pending_actions_outlined,
-          label: 'Pedidos em aberto',
-          valor: '${resumo.pedidosEmAberto}',
-        ),
-        StatCard(
-          icone: Icons.payments_outlined,
-          label: 'Faturado (${resumo.periodoValorFaturadoDias}d)',
-          valor: formatarMoeda(resumo.valorFaturadoRecente),
-        ),
-      ],
-    );
-  }
-}
-
-class _ItemPedidoRecente extends StatelessWidget {
-  const _ItemPedidoRecente({required this.pedido});
-
-  final PedidoResumo pedido;
+  final String valor;
+  final String rotulo;
+  final bool ultimo;
 
   @override
   Widget build(BuildContext context) {
-    final situacaoConfig = configSituacaoPedido(pedido.situacao);
-    return ListItemTile(
-      titulo: pedido.tituloCliente,
-      subtitulo: 'Pedido ${pedido.numero ?? "—"} · ${formatarData(pedido.dataHoraUltimaAlteracao)}',
-      valor: formatarMoeda(pedido.valorTotal),
-      tag: AppBadge(texto: situacaoConfig.rotulo, enfase: situacaoConfig.enfase),
-      onTap: () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => PedidoDetalheScreen(id: pedido.id))),
-    );
-  }
-}
-
-class _CarregandoInline extends StatelessWidget {
-  const _CarregandoInline();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 16),
-      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-    );
-  }
-}
-
-class _FaixaAcoesRapidas extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Atalho de Aprovações (OS-MOBILE-26) só aparece pra quem tem papel de
-    // supervisão - mesmo critério do web (app-shell.tsx, GET
-    // /vendedores/me). `.value` ignora loading/erro de propósito (nesse
-    // caso o atalho simplesmente ainda não aparece, sem travar o resto da
-    // faixa por causa disso).
-    final podeAprovar = ref.watch(meuVendedorProvider).value?.podeAprovar ?? false;
-
-    return SizedBox(
-      height: 84,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
+    return Container(
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        border: ultimo
+            ? null
+            : const Border(right: BorderSide(color: AppColors.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (podeAprovar)
-            _AcaoRapida(
-              icone: Icons.fact_check_outlined,
-              titulo: 'Aprovações',
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const AprovacoesScreen())),
+          Text(
+            valor,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
             ),
-          _AcaoRapida(
-            icone: Icons.inventory_2_outlined,
-            titulo: 'Estoque',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const EstoqueScreen())),
+            overflow: TextOverflow.ellipsis,
           ),
-          _AcaoRapida(
-            icone: Icons.people_outline,
-            titulo: 'Clientes',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
-          ),
-          _AcaoRapida(
-            icone: Icons.category_outlined,
-            titulo: 'Produtos',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const ProdutosScreen())),
-          ),
-          _AcaoRapida(
-            icone: Icons.receipt_long_outlined,
-            titulo: 'Pedidos',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const PedidosScreen())),
-          ),
-          _AcaoRapida(
-            icone: Icons.map_outlined,
-            titulo: 'Roteiro',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const RoteiroScreen())),
-          ),
+          const SizedBox(height: 2),
+          Text(rotulo, style: const TextStyle(color: AppColors.muted, fontSize: 9)),
         ],
       ),
     );
@@ -313,42 +364,67 @@ class _FaixaAcoesRapidas extends ConsumerWidget {
 }
 
 class _AcaoRapida extends StatelessWidget {
-  const _AcaoRapida({required this.icone, required this.titulo, required this.onTap});
+  const _AcaoRapida({
+    required this.icone,
+    required this.titulo,
+    required this.subtitulo,
+    required this.onTap,
+    this.destaque = false,
+  });
 
   final IconData icone;
   final String titulo;
+  final String subtitulo;
   final VoidCallback onTap;
+  final bool destaque;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
+    return Material(
+      color: destaque ? AppColors.navy : AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
         child: Container(
-          width: 76,
-          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [
-              BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 2)),
-            ],
+            borderRadius: BorderRadius.circular(14),
+            border: destaque ? null : Border.all(color: AppColors.line),
           ),
+          padding: const EdgeInsets.all(14),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primaryLight,
-                child: Icon(icone, size: 18, color: AppColors.primary),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: destaque ? AppColors.primary : AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icone,
+                  size: 17,
+                  color: destaque ? Colors.white : AppColors.primary,
+                ),
               ),
-              const SizedBox(height: 6),
+              const Spacer(),
               Text(
                 titulo,
-                style: const TextStyle(fontSize: 11, color: AppColors.ink),
-                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: destaque ? Colors.white : AppColors.foreground,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitulo,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: destaque ? const Color(0xFFB7C7CF) : AppColors.muted,
+                ),
               ),
             ],
           ),
@@ -358,12 +434,11 @@ class _AcaoRapida extends StatelessWidget {
   }
 }
 
-/// Indicador de "pendente de envio" (OS-MOBILE-22, critério de aceite
-/// explícito) - só aparece quando há ação offline aguardando sincronizar
-/// (ver contagemPendentesProvider). Ainda sem nenhuma tela criando ações
-/// offline (OS-MOBILE-20/21/23) - fica pronto e invisível até a primeira
-/// dessas telas chamar FilaPendenteService.enfileirar.
+/// Indicador de "pendente de envio" (OS-MOBILE-22) - só aparece quando há
+/// ação offline aguardando sincronizar.
 class _IndicadorAcoesPendentes extends ConsumerWidget {
+  const _IndicadorAcoesPendentes();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final contagem = ref.watch(contagemPendentesProvider);
@@ -371,59 +446,40 @@ class _IndicadorAcoesPendentes extends ConsumerWidget {
     return contagem.when(
       data: (total) {
         if (total == 0) return const SizedBox.shrink();
-        return InkWell(
-          onTap: () async {
-            await ref.read(offlineSyncNotifierProvider).sincronizarAgora();
-          },
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.cloud_upload_outlined, size: 16, color: AppColors.muted),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    total == 1
-                        ? '1 ação aguardando envio - toque para tentar agora'
-                        : '$total ações aguardando envio - toque para tentar agora',
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: InkWell(
+            onTap: () async {
+              await ref.read(offlineSyncNotifierProvider).sincronizarAgora();
+            },
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                border: Border.all(color: AppColors.line),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_upload_outlined, size: 15, color: AppColors.muted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      total == 1
+                          ? '1 ação aguardando envio - toque para tentar agora'
+                          : '$total ações aguardando envio - toque para tentar agora',
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
-    );
-  }
-}
-
-class _StatusApi extends StatelessWidget {
-  const _StatusApi({required this.status});
-
-  final HealthStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Row(
-        children: [
-          Icon(
-            status.ok ? Icons.check_circle_outline : Icons.error_outline,
-            color: status.ok ? AppColors.primary : AppColors.muted,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Text('API: ${status.status}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-        ],
-      ),
     );
   }
 }
@@ -437,23 +493,21 @@ class _CampoBuscaAtalho extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: const [
-            BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 2)),
-          ],
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: const Row(
           children: [
-            Icon(Icons.search, size: 20, color: AppColors.muted),
-            SizedBox(width: 10),
+            Icon(Icons.search, size: 18, color: AppColors.muted),
+            SizedBox(width: 9),
             Text(
               'Buscar cliente, produto ou pedido...',
-              style: TextStyle(color: AppColors.muted, fontSize: 14),
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
             ),
           ],
         ),

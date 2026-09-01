@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Tema fixo (sem alternância claro/escuro, ver skill `design-system`) -
-/// `ThemeData` estático resolve; só usar `NotifierProvider` se um dia o
-/// tema precisar ser dinâmico (ver skill `flutter-ui-ux`, seção "Theme").
+/// Tema fixo (sem alternância claro/escuro) - replica a referência "Nexo
+/// Comercial" (Downloads/aplicativo-comercial-interno): cantos moderados
+/// (14px em cards, ~9-10px em botões/inputs - NUNCA o raio extremo/pill de
+/// uma versão anterior desta skill), botão primário AZUL (não preto),
+/// cards brancos com borda sutil `line` (a referência usa borda visível,
+/// não só sombra).
 class AppTheme {
   const AppTheme._();
 
-  // Raio grande em tudo (cards, botões, inputs) - ver skill design-system,
-  // "Cantos bem arredondados, em tudo".
-  static const double cardRadius = 24;
+  static const double cardRadius = 14;
+  static const double controlRadius = 10;
 
   static ThemeData get light {
     return ThemeData(
@@ -19,59 +21,91 @@ class AppTheme {
         seedColor: AppColors.primary,
         primary: AppColors.primary,
         surface: AppColors.surface,
-        onSurface: AppColors.ink,
+        onSurface: AppColors.foreground,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.ink,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.foreground,
         elevation: 0,
         centerTitle: false,
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadius),
+          side: const BorderSide(color: AppColors.line),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.ink,
-          foregroundColor: AppColors.surface,
-          shape: const StadiumBorder(),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(controlRadius),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: const BorderSide(color: Color(0xFFA9C6EE)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(controlRadius),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(controlRadius),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(controlRadius),
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(controlRadius),
+          borderSide: const BorderSide(color: AppColors.primary),
         ),
       ),
       textTheme: const TextTheme(
         displayLarge: TextStyle(
-          fontSize: 36,
+          fontSize: 25,
           fontWeight: FontWeight.bold,
-          color: AppColors.ink,
+          letterSpacing: -0.5,
+          color: AppColors.foreground,
         ),
         headlineMedium: TextStyle(
-          fontSize: 26,
+          fontSize: 19,
           fontWeight: FontWeight.bold,
-          color: AppColors.ink,
+          letterSpacing: -0.3,
+          color: AppColors.foreground,
         ),
         titleMedium: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: AppColors.ink,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.foreground,
         ),
         bodyMedium: TextStyle(
-          fontSize: 15,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
-          color: AppColors.ink,
+          color: AppColors.foreground,
         ),
         bodySmall: TextStyle(
-          fontSize: 13,
+          fontSize: 11,
           fontWeight: FontWeight.normal,
           color: AppColors.muted,
         ),
         labelSmall: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.normal,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
           color: AppColors.muted,
         ),
       ),
