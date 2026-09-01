@@ -134,8 +134,15 @@ services:
       # Hostname interno do compose - chamadas servidor-a-servidor do
       # Next.js pro NestJS nao passam pelo host.
       API_URL: http://backend:3000
-      # O que o NAVEGADOR do usuario efetivamente acessa (login/logout).
-      API_PUBLIC_URL: http://localhost:3010
+      # O que o NAVEGADOR do usuario efetivamente acessa (login/logout) -
+      # PRECISA bater com a mesma origem usada em IDP_REDIRECT_URI do
+      # backend (ver acima) - se forem origens diferentes (ex: localhost
+      # aqui vs IP da rede la), o cookie de sessao criado no /auth/login
+      # nao e enviado de volta no /auth/callback (cookie e por origem,
+      # nao so por porta/caminho), e a validacao de "state" (CSRF) sempre
+      # falha com "Login expirado". Testando no celular fisico agora -
+      # IP da rede local, mesmo motivo/valor do IDP_REDIRECT_URI.
+      API_PUBLIC_URL: http://192.168.2.49:3010
       # Mesma chave do backend (ver ApiKeyGuard) - a Central de
       # Sincronizacao (OS-WEB-18) chama admin/sync/* server-side
       # (lib/admin-api.ts), nunca exposta ao navegador.
