@@ -502,8 +502,13 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     }
 
     // Só câmera nativa - ImageSource.camera nunca abre a galeria (requisito
-    // explícito da OS: sem opção de escolher foto existente).
-    final foto = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 85);
+    // explícito da OS: sem opção de escolher foto existente). SEM
+    // imageQuality: com compressão, o image_picker recodifica o arquivo em
+    // muitos Android e derruba o EXIF (inclusive DateTimeOriginal) - o
+    // backend EXIGE esse metadado pra aceitar o check-in (anti-fraude, ver
+    // validar-exif-foto.ts), então comprimir aqui quebra o check-in
+    // inteiro com "Foto sem metadado de data/hora (EXIF)".
+    final foto = await ImagePicker().pickImage(source: ImageSource.camera);
     if (foto == null || !context.mounted) return;
 
     final nota = await _pedirNotaOpcional(
