@@ -652,7 +652,18 @@ Future<String?> _pedirNotaOpcional(
             if (caminhoFoto != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(File(caminhoFoto), height: 160, fit: BoxFit.cover),
+                // cacheWidth só reduz a resolução DECODIFICADA pra exibir a
+                // miniatura - o arquivo em si (enviado pro backend, com o
+                // EXIF intacto) não é alterado. Sem isso, decodificar a
+                // foto em resolução total (sem compressão desde o fix do
+                // EXIF) dentro de um diálogo já causou falha de asserção
+                // do framework em aparelho mais fraco.
+                child: Image.file(
+                  File(caminhoFoto),
+                  height: 160,
+                  fit: BoxFit.cover,
+                  cacheWidth: 800,
+                ),
               ),
               const SizedBox(height: 12),
             ],

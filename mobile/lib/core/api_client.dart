@@ -193,9 +193,23 @@ class ApiClient implements ApiJsonClient {
       return 'Tempo de conexão com a API esgotado.';
     }
     if (erro.response != null) {
-      return 'API respondeu ${erro.response!.statusCode} para ${erro.requestOptions.path}';
+      return _mensagemDoCorpo(erro.response!.data) ??
+          'API respondeu ${erro.response!.statusCode} para ${erro.requestOptions.path}';
     }
     return 'Falha ao conectar com a API: ${erro.message}';
+  }
+
+  // NestJS devolve {message, error, statusCode} no corpo de erro -
+  // `message` pode ser string (ex: ForbiddenException) ou array de string
+  // (ValidationPipe, um item por campo inválido). Sem isso, todo erro de
+  // negócio (raio de 50m, EXIF ausente, visita em aberto, etc.) virava só
+  // "API respondeu 400/403", escondendo a causa real do usuário.
+  String? _mensagemDoCorpo(dynamic corpo) {
+    if (corpo is! Map) return null;
+    final mensagem = corpo['message'];
+    if (mensagem is String) return mensagem;
+    if (mensagem is List) return mensagem.join('; ');
+    return null;
   }
 }
 
