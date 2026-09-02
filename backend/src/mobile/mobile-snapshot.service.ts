@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { paraClienteResumoDto, type ClienteResumoDto } from '../clientes/dto/cliente-response.dto';
+import type { EstoqueConsultaDto } from '../estoque/dto/estoque-response.dto';
 import { paraPedidoResumoDto, type PedidoResumoDto } from '../pedidos/dto/pedido-response.dto';
 import { paraProdutoResumoDto, type ProdutoResumoDto } from '../produtos/dto/produto-response.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +15,13 @@ export interface MobileSnapshotDto {
   clientes: ClienteResumoDto[];
   produtos: ProdutoResumoDto[];
   pedidos: PedidoResumoDto[];
+  // Consulta offline de estoque (gap encontrado na auditoria da
+  // OS-BACKEND-42 - mobile so' tinha clientes/produtos/pedidos no
+  // snapshot). Mesmo shape de GET /estoque/:identificador
+  // (EstoqueConsultaDto) pra reaproveitar o mesmo parser no app, so' que
+  // em lote - ja e' leitura da tabela local SaldoEstoque (nao chama o
+  // Estoque.svc), entao incluir aqui nao adiciona dependencia externa.
+  estoque: EstoqueConsultaDto[];
 }
 
 // Tetos de seguranca (nao paginacao real - decisao confirmada com o
@@ -24,6 +32,9 @@ export interface MobileSnapshotDto {
 const LIMITE_CLIENTES = 5000;
 const LIMITE_PRODUTOS = 20000;
 const LIMITE_PEDIDOS_RECENTES = 200;
+// saldos_estoque tem ~1500 linhas hoje (ver auditoria OS-BACKEND-42) -
+// teto generoso, mesmo raciocinio dos demais.
+const LIMITE_SALDOS_ESTOQUE = 20000;
 
 // "Nao e' exportar o banco inteiro" (texto da OS) - clientes seguem o
 // MESMO escopo por vendedor de GET /clientes (OS-BACKEND-23,
@@ -50,7 +61,7 @@ export class MobileSnapshotService {
     const escopo = await this.vendedorEscopoService.resolverEscopoClientes(idpUser, usuarioId);
     const whereClientes = construirWhereClientePorEscopo(escopo);
 
-    const [clientes, produtos, pedidos] = await Promise.all([
+    const [clientes, produtos, pedidos, saldosEstoque] = await Promise.all([
       whereClientes
         ? this.prisma.cliente.findMany({
             where: whereClientes,
@@ -69,13 +80,45 @@ export class MobileSnapshotService {
         orderBy: { sincronizadoEm: 'desc' },
         include: { cliente: true },
       }),
+      this.prisma.saldoEstoque.findMany({ take: LIMITE_SALDOS_ESTOQUE }),
     ]);
+
+    // Junta por codigo (SaldoEstoque nao tem FK pra Produto, mesmo padrao
+    // ja usado em dashboard.service.ts/obterEstoqueCritico) - reaproveita
+    // os `produtos` ja buscados acima em vez de uma query extra; saldo de
+    // um codigo fora dessa lista (produto inativo/nao sincronizado) e'
+    // ignorado aqui pelo mesmo motivo que o app tambem nao teria o
+    // produto correspondente pra exibir.
+    const produtoPorCodigo = new Map(
+      produtos.filter((p) => p.codigo).map((p) => [p.codigo as string, p]),
+    );
+    const estoque: EstoqueConsultaDto[] = saldosEstoque.flatMap((saldo) => {
+      const produto = produtoPorCodigo.get(saldo.codigoProduto);
+      if (!produto) return [];
+      return [
+        {
+          produtoId: produto.id,
+          codigo: saldo.codigoProduto,
+          itens: [
+            {
+              localCodigo: null,
+              localNome: null,
+              lote: null,
+              fabricadoEm: null,
+              quantidade: saldo.quantidadeDisponivel.toString(),
+            },
+          ],
+          atualizadoEm: saldo.atualizadoEm.toISOString(),
+        },
+      ];
+    });
 
     return {
       geradoEm: new Date().toISOString(),
       clientes: clientes.map(paraClienteResumoDto),
       produtos: produtos.map(paraProdutoResumoDto),
       pedidos: pedidos.map(paraPedidoResumoDto),
+      estoque,
     };
   }
 }

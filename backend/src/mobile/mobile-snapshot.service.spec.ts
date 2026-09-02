@@ -9,6 +9,7 @@ function prismaFake(overrides: {
   clientes?: Record<string, unknown>[];
   produtos?: Record<string, unknown>[];
   pedidos?: Record<string, unknown>[];
+  saldosEstoque?: Record<string, unknown>[];
 } = {}) {
   return {
     vendedor: {
@@ -24,6 +25,9 @@ function prismaFake(overrides: {
     },
     pedido: {
       findMany: jest.fn().mockResolvedValue(overrides.pedidos ?? []),
+    },
+    saldoEstoque: {
+      findMany: jest.fn().mockResolvedValue(overrides.saldosEstoque ?? []),
     },
   };
 }
@@ -109,5 +113,62 @@ describe('MobileSnapshotService.obter', () => {
     expect(resultado.geradoEm).toEqual(expect.any(String));
     expect(resultado.clientes).toHaveLength(1);
     expect(resultado.clientes[0].id).toBe('c1');
+  });
+
+  it('inclui estoque no snapshot, juntando saldo com produto pelo codigo', async () => {
+    const prisma = prismaFake({
+      produtos: [{ id: 'p1', codigo: 'COD-1', nome: 'Produto 1', inativo: false }],
+      saldosEstoque: [
+        {
+          codigoProduto: 'COD-1',
+          quantidadeDisponivel: { toString: () => '42' },
+          atualizadoEm: new Date('2026-09-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    const service = new MobileSnapshotService(
+      prisma as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.obter(IDP_USER, 'u1');
+
+    expect(resultado.estoque).toEqual([
+      {
+        produtoId: 'p1',
+        codigo: 'COD-1',
+        itens: [
+          {
+            localCodigo: null,
+            localNome: null,
+            lote: null,
+            fabricadoEm: null,
+            quantidade: '42',
+          },
+        ],
+        atualizadoEm: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('ignora saldo de estoque cujo codigo nao bate com nenhum produto retornado', async () => {
+    const prisma = prismaFake({
+      produtos: [{ id: 'p1', codigo: 'COD-1', nome: 'Produto 1', inativo: false }],
+      saldosEstoque: [
+        {
+          codigoProduto: 'COD-ORFAO',
+          quantidadeDisponivel: { toString: () => '10' },
+          atualizadoEm: new Date(),
+        },
+      ],
+    });
+    const service = new MobileSnapshotService(
+      prisma as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.obter(IDP_USER, 'u1');
+
+    expect(resultado.estoque).toEqual([]);
   });
 });
