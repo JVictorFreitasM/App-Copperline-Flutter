@@ -63,6 +63,7 @@ dependencies:
   path_provider: ^2.1.6
   open_filex: ^4.7.0
   google_fonts: ^8.2.1
+  workmanager: ^0.10.9
 
 dev_dependencies:
   flutter_test:

@@ -36,6 +36,24 @@ class RastreioConfigScreen extends ConsumerWidget {
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
+              const SizedBox(height: 12),
+              // OS-MOBILE-39 - gerenciamento de bateria agressivo de
+              // alguns fabricantes (Xiaomi, Samsung, etc.) pode matar a
+              // sincronização em segundo plano da fila offline mesmo com
+              // o WorkManager configurado corretamente - fora do controle
+              // do app, só orientação (fora de escopo automatizar aqui:
+              // abrir a tela certa de exceção de bateria varia por
+              // fabricante/versão do Android).
+              AppCard(
+                child: Text(
+                  'Se notar pedidos ou check-ins "aguardando envio" por muito '
+                  'tempo mesmo com internet, procure nas configurações do '
+                  'celular por "Bateria" > "Copperline" e libere a opção de '
+                  '"Sem restrições"/"Não otimizar" - alguns celulares limitam '
+                  'apps em segundo plano por padrão.',
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ),
               const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

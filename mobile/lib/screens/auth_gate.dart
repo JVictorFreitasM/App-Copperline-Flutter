@@ -5,6 +5,7 @@ import '../core/providers/offline_provider.dart';
 import '../core/push/push_service.dart';
 import '../core/rastreio/rastreio_config.dart';
 import '../core/rastreio/rastreio_service.dart';
+import '../core/sync/background_sync.dart';
 import 'login_screen.dart';
 import 'shell/app_shell.dart';
 
@@ -38,6 +39,12 @@ class AuthGate extends ConsumerWidget {
         // to-refresh nas telas, fora de escopo re-tentar sozinho aqui).
         ref.read(snapshotServiceProvider.future).then((servico) => servico.baixar());
         ref.read(offlineSyncNotifierProvider);
+
+        // Sincronização em segundo plano mesmo com o app fechado
+        // (OS-MOBILE-39, WorkManager/Android) - complementa o
+        // offlineSyncNotifierProvider acima, que só reage a mudança de
+        // conectividade enquanto o app está aberto.
+        ref.read(backgroundSyncServiceProvider).registrar();
 
         // Retoma o rastreio automaticamente (OS-MOBILE-20) se o usuario
         // tinha deixado ligado antes de fechar o app - "ativo" persistido
