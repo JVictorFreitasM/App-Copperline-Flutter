@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 /// Tema fixo (sem alternância claro/escuro) - replica a referência "Nexo
@@ -16,6 +17,13 @@ class AppTheme {
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
+      // Referência usa Arial/Helvetica (proprietárias, não embutidas no
+      // Flutter) - Inter via google_fonts como substituta visualmente
+      // próxima (mesma família geométrica), decisão do usuário
+      // (ajustes-layout item 4). fontFamily no nível do ThemeData cobre
+      // tanto o textTheme abaixo quanto qualquer TextStyle inline que não
+      // declare a própria família (maioria das telas do app).
+      fontFamily: GoogleFonts.inter().fontFamily,
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
