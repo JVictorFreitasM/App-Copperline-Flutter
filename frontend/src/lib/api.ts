@@ -56,5 +56,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     );
   }
 
-  return response.json() as Promise<T>;
+  // Algumas rotas respondem 2xx sem corpo (ex: DELETE, 204 No Content) -
+  // .json() direto lançaria SyntaxError num corpo vazio (mesmo tratamento
+  // já usado em adminApiFetch, admin-api.ts).
+  const corpo = await response.text();
+  return (corpo ? JSON.parse(corpo) : undefined) as T;
 }
