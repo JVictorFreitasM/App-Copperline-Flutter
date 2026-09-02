@@ -140,6 +140,13 @@ class HomeScreen extends ConsumerWidget {
             childAspectRatio: 1.55,
             children: [
               _AcaoRapida(
+                // A referência ("Nexo Comercial") chama este card de "Novo
+                // pedido" e leva direto à criação - mas criação de pedido
+                // não existe no app (mesmo bloqueio de negócio da
+                // OS-MOBILE-23: falta definição de tipoVenda/IDs do ERP,
+                // ver OS-BACKEND-24/25). Renomear pra "Novo pedido" sem ter
+                // pra onde levar prometeria uma função que não existe -
+                // mantido como "Pedidos"/listagem até o bloqueio cair.
                 icone: Icons.add,
                 titulo: 'Pedidos',
                 subtitulo: 'Ver carteira',
@@ -149,20 +156,30 @@ class HomeScreen extends ConsumerWidget {
                 ).push(MaterialPageRoute(builder: (_) => const PedidosScreen())),
               ),
               _AcaoRapida(
+                // Check-in em si fica no detalhe do cliente (ver
+                // cliente_detalhe_screen.dart) - ClientesScreen aqui é o
+                // passo intermediário "escolha o cliente pra registrar a
+                // visita" (OS-ajustes-layout-mobile, item 2).
                 icone: Icons.location_on_outlined,
                 titulo: 'Check-in',
-                subtitulo: 'Registrar visita',
+                subtitulo: 'Escolher cliente',
                 onTap: () => Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
               ),
               _AcaoRapida(
+                // Antes apontava pra ClientesScreen, igual ao card de
+                // Check-in acima - redundante com o atalho de busca já no
+                // topo da Home (_CampoBuscaAtalho) e sem diferenciação
+                // nenhuma entre os dois cards (OS-ajustes-layout-mobile,
+                // item 2). BuscaScreen é a busca global de verdade
+                // (cliente/produto/pedido), já usada no menu lateral.
                 icone: Icons.search,
                 titulo: 'Buscar cliente',
-                subtitulo: 'Carteira completa',
+                subtitulo: 'Busca global',
                 onTap: () => Navigator.of(
                   context,
-                ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
+                ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
               ),
               _AcaoRapida(
                 icone: Icons.description_outlined,
