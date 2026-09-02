@@ -221,7 +221,7 @@ class _LinhaCliente extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       cliente.cpfCnpj ?? 'Sem CPF/CNPJ',
-                      style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

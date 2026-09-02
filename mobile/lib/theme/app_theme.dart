@@ -98,12 +98,15 @@ class AppTheme {
           color: AppColors.foreground,
         ),
         bodySmall: TextStyle(
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: FontWeight.normal,
           color: AppColors.muted,
         ),
+        // Eyebrow (maiúsculo, letterSpacing largo) - piso de leitura maior
+        // que o valor 1:1 do CSS de referência (9px), que fica pequeno
+        // demais como sp real de dispositivo (ajustes-layout item 4).
         labelSmall: TextStyle(
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: FontWeight.w800,
           letterSpacing: 1.2,
           color: AppColors.muted,

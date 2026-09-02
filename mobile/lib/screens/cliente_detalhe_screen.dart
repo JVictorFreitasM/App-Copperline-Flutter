@@ -101,7 +101,7 @@ class ClienteDetalheScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       'CNPJ ${cliente.cpfCnpj ?? "—"}',
-                      style: const TextStyle(color: AppColors.muted, fontSize: 10),
+                      style: const TextStyle(color: AppColors.muted, fontSize: 11),
                     ),
                   ],
                 ),

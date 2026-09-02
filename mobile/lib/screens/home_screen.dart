@@ -78,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
                     Text(
                       _dataPorExtenso(),
                       style: const TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
                         color: AppColors.muted,
@@ -265,7 +265,7 @@ class _RotuloPapel extends StatelessWidget {
       style: const TextStyle(
         color: AppColors.primary,
         fontWeight: FontWeight.w800,
-        fontSize: 9,
+        fontSize: 10,
         letterSpacing: 1,
       ),
     );
@@ -314,7 +314,7 @@ class _CardPrioridade extends ConsumerWidget {
                     const Text(
                       'PRIORIDADE DO DIA',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1,
                         color: AppColors.amber,
@@ -373,7 +373,7 @@ class _Metrica extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
-          Text(rotulo, style: const TextStyle(color: AppColors.muted, fontSize: 9)),
+          Text(rotulo, style: const TextStyle(color: AppColors.muted, fontSize: 10)),
         ],
       ),
     );
@@ -439,7 +439,7 @@ class _AcaoRapida extends StatelessWidget {
               Text(
                 subtitulo,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   color: destaque ? const Color(0xFFB7C7CF) : AppColors.muted,
                 ),
               ),

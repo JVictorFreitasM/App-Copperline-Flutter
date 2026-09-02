@@ -105,7 +105,7 @@ class _CabecalhoApp extends StatelessWidget implements PreferredSizeWidget {
           const Text(
             'COPPERLINE',
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.4,
               color: AppColors.muted,

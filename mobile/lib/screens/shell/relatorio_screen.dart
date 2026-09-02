@@ -167,7 +167,7 @@ class _CardMetrica extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(rotulo, style: const TextStyle(color: AppColors.muted, fontSize: 10)),
+          Text(rotulo, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
           const SizedBox(height: 8),
           Text(
             valor,
@@ -213,7 +213,7 @@ class _ItemPedido extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${pedido.tituloCliente} · ${formatarData(pedido.dataHoraUltimaAlteracao)}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

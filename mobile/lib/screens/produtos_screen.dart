@@ -95,7 +95,7 @@ class _ProdutosScreenState extends ConsumerState<ProdutosScreen> {
                     const Text(
                       'CATÁLOGO',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1,
                         color: Color(0xFFB7C7CF),
@@ -113,7 +113,7 @@ class _ProdutosScreenState extends ConsumerState<ProdutosScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Busque por nome ou código.',
-                      style: const TextStyle(color: Color(0xFFB7C7CF), fontSize: 10),
+                      style: const TextStyle(color: Color(0xFFB7C7CF), fontSize: 11),
                     ),
                   ],
                 ),
@@ -204,7 +204,7 @@ class _LinhaProduto extends StatelessWidget {
                     Text(
                       '${produto.codigo ?? "—"} · ${rotuloTipoProduto(produto.tipo)}'
                       '${produto.inativo ? " · Inativo" : ""}',
-                      style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

@@ -167,7 +167,7 @@ class _LinhaDocumentoState extends ConsumerState<_LinhaDocumento> {
                     Text(
                       '${documento.categoria} · ${formatarTamanhoArquivo(documento.tamanhoBytes)} · '
                       '${formatarData(documento.criadoEm.toIso8601String())}',
-                      style: const TextStyle(fontSize: 10, color: AppColors.muted),
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
