@@ -68,7 +68,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Scaffold(
       appBar: _CabecalhoApp(titulo: _titulos[_aba]),
       drawer: _MenuLateral(abaAtual: _aba, aoSelecionar: _irPara),
-      body: IndexedStack(index: _aba, children: _telas),
+      body: Column(
+        children: [
+          const _FaixaOffline(),
+          Expanded(child: IndexedStack(index: _aba, children: _telas)),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _aba,
         onDestinationSelected: (i) => setState(() => _aba = i),
@@ -83,6 +88,37 @@ class _AppShellState extends ConsumerState<AppShell> {
               selectedIcon: Icon(item.iconeAtivo, color: AppColors.primary),
               label: item.rotulo,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// Indicador persistente de "modo offline" (OS-MOBILE-38) - só aparece
+// quando a tela está mostrando o cache local ainda não revalidado contra o
+// servidor nesta sessão (ver AuthState.usandoCacheOffline), pra o vendedor
+// sempre saber se o que está vendo é dado local ou recém-atualizado.
+class _FaixaOffline extends ConsumerWidget {
+  const _FaixaOffline();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final usandoCache = ref.watch(authProvider).value?.usandoCacheOffline ?? false;
+    if (!usandoCache) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      color: AppColors.amberLight,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_outlined, size: 14, color: AppColors.amber),
+          const SizedBox(width: 6),
+          const Text(
+            'Modo offline - mostrando dados salvos localmente',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.amber),
+          ),
         ],
       ),
     );

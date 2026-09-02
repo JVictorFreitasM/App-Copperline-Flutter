@@ -25,4 +25,15 @@ class IdpUser {
   final String name;
   final String? role;
   final String system;
+
+  // OS-MOBILE-38 (inicialização offline-first) - serializado pro cache
+  // local (SessionStorage), pra liberar a UI com o usuário já conhecido
+  // sem esperar GET /auth/me numa abertura do app sem rede.
+  Map<String, dynamic> toJson() => {
+    'sub': sub,
+    'email': email,
+    'name': name,
+    'role': role,
+    'system': system,
+  };
 }
