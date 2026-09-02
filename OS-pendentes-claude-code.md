@@ -626,7 +626,19 @@ reais encontrados): sessão expirada quebrava a checagem de auth
 plano do `AuthNotifier`, check-in/checkout/cancelamento de visita
 **perdiam a ação** se offline no momento (nunca enfileiravam, diferente
 do rastreio - corrigido), estoque nunca tinha fallback offline (snapshot
-+ cache local + UI, corrigido).
++ cache local + UI, corrigido), e um segundo bug real em `nota-fiscal`
+encontrado na mesma auditoria (independente da migração pro Job
+Scheduler): `SyncService.obterDesde()` montava o nome da variável de
+ambiente a partir do nome da entidade em maiúsculas sem tratar hífen -
+"nota-fiscal" virava `WK_RADAR_NOTA-FISCAL_DATA_INICIO_CARGA`, inválido
+tanto pro `.env` quanto pra interpolação `${...}` do docker-compose.
+Como a entidade nunca teve `ultimaSincronizacao` gravada, toda tentativa
+de sync lançava erro **antes** de gravar em `sync_logs` - por fora
+parecia sincronização travada para sempre, quando na real falhava
+instantânea e silenciosamente a cada execução. Corrigido sanitizando o
+hífen (`.replace(/-/g, '_')`) em `sync.service.ts`, com teste de
+regressão dedicado; confirmado funcionando ponta a ponta após redeploy
+(autenticou no WK Radar e começou a buscar nota fiscal normalmente).
 
 ## Bloqueada
 
