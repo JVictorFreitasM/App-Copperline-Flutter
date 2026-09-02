@@ -19,10 +19,16 @@ class EstadoVazio extends StatelessWidget {
 }
 
 class ErroConexao extends StatelessWidget {
-  const ErroConexao({super.key, required this.mensagem, this.aoTentarNovamente});
+  const ErroConexao({
+    super.key,
+    required this.mensagem,
+    this.aoTentarNovamente,
+    this.titulo = 'Falha ao conectar com a API',
+  });
 
   final String mensagem;
   final VoidCallback? aoTentarNovamente;
+  final String titulo;
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +36,9 @@ class ErroConexao extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Falha ao conectar com a API',
-            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink),
+          Text(
+            titulo,
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink),
           ),
           const SizedBox(height: 4),
           Text(mensagem, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
