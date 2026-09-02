@@ -588,3 +588,135 @@ OS-BACKEND-39, OS-MOBILE-16.
 
 **Critérios de aceite**
 Notificação abre a tela já carregada; pedido pendente há vários dias é visualmente distinguível de pendente do próprio dia.
+
+---
+---
+
+# Adendo — rodada `OS-novas-rodada.md` / `OS-ajustes-layout-mobile.md`
+
+As OS acima (BACKEND-30 a 39, WEB-25/28-34, MOBILE-14-27) refletem o
+estado do backlog numa rodada anterior — várias já foram concluídas desde
+então (conferir `git log` antes de assumir pendente; ex.: OS-BACKEND-33/38,
+OS-WEB-25/27 já aparecem commitadas). O que segue é o adendo desta rodada,
+cobrindo `OS-novas-rodada.md` e `OS-ajustes-layout-mobile.md`.
+
+Já concluídas e enviadas nesta rodada (não repetir): OS-MOBILE-31/33/36
+(estabilidade de conexão), OS-BACKEND-41 + extensão DELETE (módulo de
+documentos), OS-MOBILE-34 e OS-WEB-38 (documentos, mobile + painel admin).
+
+## Em andamento
+
+### OS-MOBILE-34 — Aba de documentos para consulta (mobile)
+Código escrito (`documentos_screen.dart`, `documento_download_service.dart`,
+`documentos_provider.dart`, dependências `path_provider`/`open_filex`
+adicionadas). `flutter analyze` e suíte de testes já passaram limpos.
+**Falta**: confirmar que o `flutter build apk --debug` compila com o
+plugin nativo `open_filex` antes de commitar/enviar essa parte (a
+verificação anterior foi interrompida junto com a sessão, precisa rodar
+de novo).
+
+## Bloqueada
+
+### OS-MOBILE-32 — URL pública (fora da rede interna)
+Bloqueada até o túnel Cloudflare (domínio público apontando pro backend)
+existir no servidor — confirmado com o usuário que ainda não está
+configurado. Sem isso, trocar `API_BASE_URL` não tem pra onde apontar.
+
+## Não iniciadas — `OS-novas-rodada.md`
+
+### OS-MOBILE-28 — Tratamento de erro e camuflagem de telas do WebView
+Interceptar erro de carregamento do WebView de login (tela nativa em vez
+da tela de erro do navegador), esconder chrome de URL, timeout tratado.
+
+### OS-MOBILE-29 — Validação ponta a ponta do push do Firebase
+Não é código novo, é roteiro de teste manual (foreground/background/app
+morto, renovação de token, dispositivo sem Google Play Services) —
+resultado esperado é um relatório de passou/falhou por cenário, com
+evidência.
+
+### OS-MOBILE-30 — Atualização de UI conforme novo design system
+Auditar `app_theme.dart`/`app_colors.dart` e as telas já implementadas
+contra os tokens atuais do design system — depende de confirmar qual foi
+a última decisão de design tomada no web antes de começar.
+
+### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
+Decisão de adotar uma ferramenta nova (Shorebird) antes de implementar —
+vale alinhar com o usuário antes de integrar ao pipeline de build.
+
+### OS-MOBILE-37 — Auto-limpeza de cache local de rotas
+Cache de rota/trajeto com versão, comparação com o servidor, limpeza
+restrita **só** à store de rota (nunca clientes/produtos/pedidos/estoque).
+
+### OS-WEB-35 — Verificar dependência da skill `frontend-design` na UI
+Investigação: desabilitar a skill, rodar build/dev, navegar por todas as
+telas, confirmar que nada depende dela em runtime.
+
+### OS-WEB-36 — Atualização de UI no restante das telas do painel
+Revisar `clientes`/`estoque`/`notas-fiscais`/`painel`/`pedidos`/`produtos`
+contra os tokens/componentes mais recentes de `src/components/design/`.
+
+### OS-WEB-37 — Gráficos de ranking maiores e horizontais
+Trocar os 3 gráficos de ranking (clientes/produtos/vendedores) pra barra
+horizontal, largura total — confirmar se `GET /dashboard/ranking` já cobre
+vendedor ou precisa de extensão pequena no backend.
+
+### OS-BACKEND-40 — Mapeamento de casos de uso de IA
+Tarefa de documentação (não código) — gerar `docs/casos-de-uso-ia.md`
+categorizando: já implementado / viável com dado atual / precisaria de
+dado adicional não sincronizado hoje.
+
+### OS-BACKEND-42 — Auditoria da sincronização incremental por entidade
+Investigação/relatório (não é suposto mudar código, a menos que algo
+esteja errado) — cadência configurada, última execução, status, volume
+processado por entidade, via `GET /admin/sync/:nomeEntidade/logs`.
+
+## Não iniciadas — `OS-ajustes-layout-mobile.md`
+
+### 1. Card "Novo pedido" (hoje "Pedidos") — bug de navegação
+Título/subtítulo errados e destino aponta pra listagem, não pra criação.
+Confirmar em `cliente_detalhe_screen.dart` se a criação de pedido parte
+de lá antes de trocar o destino do card.
+
+### 2. "Buscar cliente" e "Check-in" na home vão pro mesmo lugar
+Ambos os cards da home apontam pra `ClientesScreen`, sem diferenciação —
+provável causa do "erro" percebido pelo usuário. Precisa reproduzir o
+clique em dispositivo real, capturar o stack trace exato, antes de
+corrigir o sintoma errado. "Buscar cliente" provavelmente devia ir pra
+`BuscaScreen` (busca global já existe).
+
+### 3. Barra de progresso de visitas sumiu (home)
+Omitida de propósito (sem dado real de roteiro/meta no backend). Precisa
+de decisão: expor endpoint de "visitas planejadas vs. realizadas" no
+backend, ou ajustar a referência visual pra não depender desse dado. Não
+implementar com número inventado.
+
+### 4. Fonte pequena — tamanho e família tipográfica
+`TextTheme` sem `fontFamily` definida (usa Roboto/San Francisco padrão em
+vez de Arial/Helvetica da referência); vários tamanhos copiados 1:1 do CSS
+em `px` ficam pequenos demais como `sp` do Flutter. Ajuste centralizado no
+tema, revisão de piso mínimo de leitura (~11-12sp pro corpo).
+
+### 5. "Documentos" falta no menu lateral (drawer)
+Ajuste simples e isolado, sem dependência de backend — adicionar item no
+`_MenuLateral` de `app_shell.dart`, acima do "Sair", mesmo padrão de
+Mapa/Buscar/Rastreio. Agora que `DocumentosScreen` tem conteúdo real
+(OS-MOBILE-34), esse item fica ainda mais relevante de fazer logo.
+
+### 6. Clientes: faltam chips de filtro e botão "Ver todos os clientes"
+Filtros "Todos"/"Com pedido"/"Sem visita" exigem parâmetro/contagem
+agregada nova no `GET /clientes` (hoje só aceita `nome`/`cpfCnpj`) — não
+implementar com número decorativo. Botão "Ver todos": confirmar se não é
+redundante com a paginação já existente, ou se a intenção é outra (carteira
+completa da empresa vs. só do vendedor — implicação de permissão/escopo).
+
+### 7. Relatório: falta "Resultado do dia" / "Acima da meta" / "Meta diária"
+Mesma causa raiz do item 3 — sem meta configurável no backend hoje. Decisão
+necessária: backend expõe meta (por vendedor ou global) antes de completar
+o card, ou referência visual é ajustada pra não depender disso.
+
+## Ordem sugerida (do próprio `OS-ajustes-layout-mobile.md`)
+1. Itens 1 e 2 (bugs de navegação) — maior impacto.
+2. Item 5 (Documentos no menu) — simples, isolado, sem dependência.
+3. Item 4 (fonte) — sem dependência de backend, mas exige validação visual.
+4. Itens 3, 6 e 7 — dependem de alinhamento sobre dado real de backend
+   antes de qualquer código.
