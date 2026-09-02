@@ -610,7 +610,11 @@ login), OS-WEB-35 (skill não existe com esse nome no projeto - é
 código-fonte do frontend; UI não tem dependência de runtime com skill
 nenhuma, por arquitetura), OS-WEB-36 (auditoria feita - as 6 telas já
 estão consistentes com os tokens/componentes atuais, sem retrofit
-necessário), OS-WEB-37 (rankings horizontais, largura total; ranking de
+necessário), OS-MOBILE-30 (achado: web e mobile usam paletas diferentes
+hoje - "Constructive" no web vs. "Nexo Comercial" no mobile, da rodada de
+redesign desta sessão; decisão do usuário foi manter como está, dois
+produtos com identidade visual própria - sem mudança de código),
+OS-BACKEND-40 (docs/casos-de-uso-ia.md entregue), OS-WEB-37 (rankings horizontais, largura total; ranking de
 vendedores ficou de fora por decisão do usuário - sem "principal" no
 vínculo N:N Cliente-Vendedor), OS-BACKEND-42 (auditoria + correção
 aplicada: pedido/nota-fiscal/vendedor migrados pra BullMQ Job Scheduler,
@@ -648,11 +652,6 @@ Não é código novo, é roteiro de teste manual (foreground/background/app
 morto, renovação de token, dispositivo sem Google Play Services) —
 resultado esperado é um relatório de passou/falhou por cenário, com
 evidência. Precisa de dispositivo físico, não dá pra fazer sem isso.
-
-### OS-MOBILE-30 — Atualização de UI conforme novo design system
-Auditar `app_theme.dart`/`app_colors.dart` e as telas já implementadas
-contra os tokens atuais do design system — depende de confirmar qual foi
-a última decisão de design tomada no web antes de começar.
 
 ### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
 Decisão de adotar uma ferramenta nova (Shorebird) antes de implementar —
