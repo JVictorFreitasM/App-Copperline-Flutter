@@ -244,7 +244,14 @@ class ApiClient implements ApiJsonClient {
   // (401). followRedirects:false + validateStatus aceitando <400 evita que
   // o Dio siga o redirect e tente parsear a página de login como JSON.
   Future<IdpUser?> obterUsuarioAtual() async {
-    final resposta = await _dio.get<Map<String, dynamic>>(
+    // Corpo pedido como `dynamic`, não `Map<String, dynamic>` - quando a
+    // sessão salva está expirada, /auth/me devolve 3xx (redirect, não
+    // 401 - requireAuth "puro" do idp-client) e o corpo do redirect não é
+    // JSON. Forçar o tipo genérico aqui fazia o Dio tentar castear a
+    // string crua do redirect pra Map ANTES do check de status abaixo
+    // rodar, derrubando a checagem de sessão inteira com um erro cru pro
+    // usuário em vez de silenciosamente tratar como "sessão expirada".
+    final resposta = await _dio.get<dynamic>(
       '/auth/me',
       options: Options(
         followRedirects: false,
@@ -254,10 +261,11 @@ class ApiClient implements ApiJsonClient {
     if (resposta.statusCode == null || resposta.statusCode! >= 300) {
       return null;
     }
-    if (resposta.data == null) {
+    final dados = resposta.data;
+    if (dados is! Map<String, dynamic>) {
       return null;
     }
-    return IdpUser.fromJson(resposta.data!);
+    return IdpUser.fromJson(dados);
   }
 
   String _mensagemErro(DioException erro) {

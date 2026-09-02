@@ -97,6 +97,24 @@ void main() {
       ),
     );
   });
+
+  // Regressão: sessão salva expirada faz /auth/me devolver 3xx (requireAuth
+  // "puro" do idp-client redireciona em vez de 401) com corpo de redirect
+  // (não-JSON) - pedir o corpo já tipado Map<String, dynamic> fazia o Dio
+  // tentar castear a string crua pro tipo genérico ANTES do check de
+  // status, derrubando a checagem inteira com "type 'String' is not a
+  // subtype of type 'Map<String, dynamic>?'" em vez de tratar como
+  // "sessão expirada" silenciosamente.
+  test('obterUsuarioAtual trata redirect (sessão expirada) como não-autenticado', () async {
+    final adapter = _AdapterFake([
+      _RespostaFake.textoBruto(302, 'Found. Redirecting to /auth/login'),
+    ]);
+    final apiClient = ApiClient.paraTeste(_dioComAdapter(adapter));
+
+    final usuario = await apiClient.obterUsuarioAtual();
+
+    expect(usuario, isNull);
+  });
 }
 
 Dio _dioComAdapter(HttpClientAdapter adapter) {
@@ -118,14 +136,25 @@ _RespostaFake _respostaErro(int status, Map<String, dynamic> corpo) =>
     _RespostaFake.sucesso(status, corpo);
 
 class _RespostaFake {
-  _RespostaFake.sucesso(this.status, this.corpo) : tipoExcecao = null, erroInterno = null;
+  _RespostaFake.sucesso(this.status, this.corpo)
+    : tipoExcecao = null,
+      erroInterno = null,
+      corpoBruto = null;
   _RespostaFake.excecao({required DioExceptionType tipo, this.erroInterno})
     : status = null,
       corpo = null,
+      corpoBruto = null,
       tipoExcecao = tipo;
+  // Corpo texto não-JSON com status arbitrário (ex: redirect do
+  // requireAuth "puro" - ver teste de obterUsuarioAtual acima).
+  _RespostaFake.textoBruto(this.status, this.corpoBruto)
+    : corpo = null,
+      tipoExcecao = null,
+      erroInterno = null;
 
   final int? status;
   final Map<String, dynamic>? corpo;
+  final String? corpoBruto;
   final DioExceptionType? tipoExcecao;
   final Object? erroInterno;
 }
@@ -150,6 +179,12 @@ class _AdapterFake implements HttpClientAdapter {
         type: resposta.tipoExcecao!,
         error: resposta.erroInterno,
       );
+    }
+    if (resposta.corpoBruto != null) {
+      final bytes = utf8.encode(resposta.corpoBruto!);
+      return ResponseBody.fromBytes(bytes, resposta.status!, headers: {
+        Headers.contentTypeHeader: ['text/html'],
+      });
     }
     final bytes = utf8.encode(jsonEncode(resposta.corpo));
     return ResponseBody.fromBytes(bytes, resposta.status!, headers: {
