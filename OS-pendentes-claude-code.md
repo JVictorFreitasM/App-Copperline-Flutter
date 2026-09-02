@@ -605,10 +605,24 @@ OS-BACKEND-41 + extensão DELETE (módulo de documentos), OS-MOBILE-34 e
 OS-WEB-38 (documentos, mobile + painel admin), OS-MOBILE-38 (inicialização
 offline-first), OS-MOBILE-39 (sincronização em segundo plano via
 WorkManager), OS-MOBILE-28 (tratamento de erro/timeout do WebView de
-login). Também corrigido no caminho (fora do escopo original das OS, bugs
+login), OS-WEB-35 (skill não existe com esse nome no projeto - é
+`design-system` - e não há nenhuma referência a `.claude/` em nenhum
+código-fonte do frontend; UI não tem dependência de runtime com skill
+nenhuma, por arquitetura), OS-WEB-36 (auditoria feita - as 6 telas já
+estão consistentes com os tokens/componentes atuais, sem retrofit
+necessário), OS-WEB-37 (rankings horizontais, largura total; ranking de
+vendedores ficou de fora por decisão do usuário - sem "principal" no
+vínculo N:N Cliente-Vendedor), OS-BACKEND-42 (auditoria + correção
+aplicada: pedido/nota-fiscal/vendedor migrados pra BullMQ Job Scheduler,
+mesmo mecanismo que produto já usava - causa raiz era @Cron simples sem
+persistência/catch-up). Também corrigido no caminho (fora do escopo
+original das OS, bugs
 reais encontrados): sessão expirada quebrava a checagem de auth
 (`obterUsuarioAtual`), `ref.mounted` faltando na revalidação em segundo
-plano do `AuthNotifier`.
+plano do `AuthNotifier`, check-in/checkout/cancelamento de visita
+**perdiam a ação** se offline no momento (nunca enfileiravam, diferente
+do rastreio - corrigido), estoque nunca tinha fallback offline (snapshot
++ cache local + UI, corrigido).
 
 ## Bloqueada
 
@@ -643,14 +657,6 @@ a última decisão de design tomada no web antes de começar.
 ### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
 Decisão de adotar uma ferramenta nova (Shorebird) antes de implementar —
 vale alinhar com o usuário antes de integrar ao pipeline de build.
-
-### OS-WEB-35 — Verificar dependência da skill `frontend-design` na UI
-Investigação: desabilitar a skill, rodar build/dev, navegar por todas as
-telas, confirmar que nada depende dela em runtime.
-
-### OS-WEB-36 — Atualização de UI no restante das telas do painel
-Revisar `clientes`/`estoque`/`notas-fiscais`/`painel`/`pedidos`/`produtos`
-contra os tokens/componentes mais recentes de `src/components/design/`.
 
 ### OS-WEB-37 — Gráficos de ranking maiores e horizontais
 Trocar os 3 gráficos de ranking (clientes/produtos/vendedores) pra barra
