@@ -117,6 +117,30 @@ class ApiClient implements ApiJsonClient {
     }
   }
 
+  // Download de arquivo binário (ex: GET /documentos/:id/download,
+  // OS-MOBILE-34) - responseType bytes em vez de json, com callback de
+  // progresso pra UI mostrar indicador de download.
+  Future<List<int>> getBytes(
+    String path, {
+    void Function(int recebidos, int total)? aoProgredir,
+  }) async {
+    try {
+      final resposta = await _comRetry(
+        () => _dio.get<List<int>>(
+          path,
+          options: Options(responseType: ResponseType.bytes),
+          onReceiveProgress: aoProgredir,
+        ),
+      );
+      return resposta.data ?? const [];
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
   // Reexecuta `chamada` com backoff exponencial quando a falha é
   // transitória de rede (timeout/conexão recusada/sem rota/DNS) - erro de
   // negócio (4xx/5xx com resposta do servidor) nunca cai aqui, propaga na

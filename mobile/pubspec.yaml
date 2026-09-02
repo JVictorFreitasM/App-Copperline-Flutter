@@ -60,6 +60,8 @@ dependencies:
   # direto, nunca a galeria (requisito de UI explícito da OS: sem opção de
   # escolher foto existente no check-in de visita).
   image_picker: ^1.1.2
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

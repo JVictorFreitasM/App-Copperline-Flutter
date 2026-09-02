@@ -23,3 +23,13 @@ String formatarDataHora(String? valorIso) {
   if (data == null) return '—';
   return DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(data.toLocal());
 }
+
+// OS-MOBILE-34 (aba de documentos) - tamanho em bytes vindo da API vira
+// KB/MB legível.
+String formatarTamanhoArquivo(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kb = bytes / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
+  final mb = kb / 1024;
+  return '${mb.toStringAsFixed(1)} MB';
+}
