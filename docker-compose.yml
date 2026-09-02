@@ -115,10 +115,14 @@ services:
       # sobreviver a recriacao do container (docker compose up -d
       # backend), senao a foto some a cada deploy.
       VISITAS_FOTOS_DIR: /workspace/backend/uploads/visitas
+      # Documentos institucionais (OS-BACKEND-41) - mesmo padrao de disco
+      # local + volume persistente ja usado acima pra fotos de visita.
+      DOCUMENTOS_DIR: /workspace/backend/uploads/documentos
     ports:
       - "3010:3000"
     volumes:
       - copperline-visitas-fotos:/workspace/backend/uploads/visitas
+      - copperline-documentos:/workspace/backend/uploads/documentos
     depends_on:
       postgres:
         condition: service_healthy
@@ -155,3 +159,4 @@ services:
 volumes:
   copperline-postgres-data:
   copperline-visitas-fotos:
+  copperline-documentos:

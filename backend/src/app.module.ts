@@ -25,6 +25,7 @@ import { RastreioModule } from './rastreio/rastreio.module';
 import { VisitasModule } from './visitas/visitas.module';
 import { MobileModule } from './mobile/mobile.module';
 import { AdminEndpointsModule } from './admin-endpoints/admin-endpoints.module';
+import { DocumentosModule } from './documentos/documentos.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AdminEndpointsModule } from './admin-endpoints/admin-endpoints.module';
     VisitasModule,
     MobileModule,
     AdminEndpointsModule,
+    DocumentosModule,
   ],
 })
 export class AppModule {}
