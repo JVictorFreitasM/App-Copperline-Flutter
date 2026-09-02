@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../api_client.dart';
 import '../models/cliente.dart';
+import '../models/estoque.dart';
 import '../models/pedido.dart';
 import '../models/produto.dart';
 import 'local_database.dart';
@@ -28,6 +29,7 @@ class SnapshotService {
       await tx.delete('clientes');
       await tx.delete('produtos');
       await tx.delete('pedidos');
+      await tx.delete('estoque');
 
       final batch = tx.batch();
       for (final cliente in (json['clientes'] as List).cast<Map<String, dynamic>>()) {
@@ -46,6 +48,16 @@ class SnapshotService {
         batch.insert('pedidos', {
           'id': pedido['id'] as String,
           'dados': jsonEncode(pedido),
+        });
+      }
+      // `estoque` (gap encontrado na auditoria da OS-BACKEND-42) - null-
+      // safe: snapshot de um app antigo (backend ainda sem essa OS
+      // deployada) simplesmente não manda a chave, não quebra o parse.
+      for (final item in (json['estoque'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        batch.insert('estoque', {
+          'codigo': item['codigo'] as String,
+          'dados': jsonEncode(item),
         });
       }
       await batch.commit(noResult: true);
@@ -80,5 +92,19 @@ class SnapshotService {
   Future<List<PedidoResumo>> pedidos() async {
     final linhas = await _localDatabase.db.query('pedidos');
     return linhas.map((l) => PedidoResumo.fromJson(jsonDecode(l['dados'] as String))).toList();
+  }
+
+  // Consulta offline de estoque (OS-BACKEND-42) - só por código exato
+  // (chave da tabela local), diferente da busca ao vivo (que também aceita
+  // idExternoErp) - simplificação aceita: o caso comum é buscar por
+  // código, que é o que aparece na etiqueta/embalagem do produto.
+  Future<ResultadoEstoque?> estoquePorCodigo(String codigo) async {
+    final linhas = await _localDatabase.db.query(
+      'estoque',
+      where: 'codigo = ?',
+      whereArgs: [codigo],
+    );
+    if (linhas.isEmpty) return null;
+    return ResultadoEstoque.fromJson(jsonDecode(linhas.first['dados'] as String));
   }
 }

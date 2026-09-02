@@ -60,6 +60,55 @@ void main() {
       expect(await service.geradoEm(), '2026-01-01T00:00:00.000Z');
     });
 
+    test('baixar persiste estoque e permite consulta offline por codigo (OS-BACKEND-42)', () async {
+      final db = await LocalDatabase.abrir(caminhoOverride: inMemoryDatabasePath);
+      final apiClient = _ApiClientFake({
+        'geradoEm': '2026-01-01T00:00:00.000Z',
+        'clientes': <Map<String, dynamic>>[],
+        'produtos': <Map<String, dynamic>>[],
+        'pedidos': <Map<String, dynamic>>[],
+        'estoque': [
+          {
+            'produtoId': 'p1',
+            'codigo': 'COD-1',
+            'itens': [
+              {
+                'localCodigo': null,
+                'localNome': null,
+                'lote': null,
+                'fabricadoEm': null,
+                'quantidade': '42',
+              },
+            ],
+            'atualizadoEm': '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+      final service = SnapshotService(apiClient, db);
+
+      await service.baixar();
+
+      final resultado = await service.estoquePorCodigo('COD-1');
+      expect(resultado, isNotNull);
+      expect(resultado!.itens.single.quantidade, '42');
+      expect(await service.estoquePorCodigo('INEXISTENTE'), isNull);
+    });
+
+    test('baixar sem chave estoque no JSON (snapshot de backend antigo) nao quebra', () async {
+      final db = await LocalDatabase.abrir(caminhoOverride: inMemoryDatabasePath);
+      final apiClient = _ApiClientFake({
+        'geradoEm': '2026-01-01T00:00:00.000Z',
+        'clientes': <Map<String, dynamic>>[],
+        'produtos': <Map<String, dynamic>>[],
+        'pedidos': <Map<String, dynamic>>[],
+      });
+      final service = SnapshotService(apiClient, db);
+
+      await service.baixar();
+
+      expect(await service.estoquePorCodigo('QUALQUER'), isNull);
+    });
+
     test('segunda baixa substitui a primeira (nao acumula)', () async {
       final db = await LocalDatabase.abrir(caminhoOverride: inMemoryDatabasePath);
       final service = SnapshotService(

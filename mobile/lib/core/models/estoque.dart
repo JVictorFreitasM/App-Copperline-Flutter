@@ -29,7 +29,12 @@ class EstoqueItem {
 }
 
 class ResultadoEstoque {
-  const ResultadoEstoque({required this.produtoId, required this.codigo, required this.itens});
+  const ResultadoEstoque({
+    required this.produtoId,
+    required this.codigo,
+    required this.itens,
+    required this.atualizadoEm,
+  });
 
   factory ResultadoEstoque.fromJson(Map<String, dynamic> json) {
     return ResultadoEstoque(
@@ -39,10 +44,14 @@ class ResultadoEstoque {
           .cast<Map<String, dynamic>>()
           .map(EstoqueItem.fromJson)
           .toList(),
+      atualizadoEm: json['atualizadoEm'] as String?,
     );
   }
 
   final String produtoId;
   final String codigo;
   final List<EstoqueItem> itens;
+  // Momento da ultima sincronizacao (nao da consulta em si) - null quando
+  // o produto existe mas nunca teve saldo sincronizado.
+  final String? atualizadoEm;
 }

@@ -1,15 +1,18 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/api_exception.dart';
+import '../core/local_db/acao_pendente.dart';
 import '../core/localizacao_atual.dart';
 import '../core/models/cliente.dart';
 import '../core/models/cliente_resumo_llm.dart';
 import '../core/models/visita.dart';
 import '../core/providers/clientes_provider.dart';
 import '../core/providers/cliente_resumo_llm_provider.dart';
+import '../core/providers/offline_provider.dart';
 import '../core/providers/visitas_provider.dart';
 import '../core/formatacao.dart';
 import '../theme/app_colors.dart';
@@ -553,19 +556,40 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     );
     if (nota == null || !context.mounted) return;
 
-    await _executar(context, () async {
-      await ref
-          .read(visitasAcoesServiceProvider)
-          .checkin(
-            clienteId: widget.cliente.id,
-            latitude: posicao.latitude,
-            longitude: posicao.longitude,
-            caminhoFoto: foto.path,
-            nota: nota,
-          );
-      ref.invalidate(minhasVisitasProvider(_hojeIso()));
-      return 'Check-in registrado.';
-    });
+    await _executar(
+      context,
+      () async {
+        await ref
+            .read(visitasAcoesServiceProvider)
+            .checkin(
+              clienteId: widget.cliente.id,
+              latitude: posicao.latitude,
+              longitude: posicao.longitude,
+              caminhoFoto: foto.path,
+              nota: nota,
+            );
+        ref.invalidate(minhasVisitasProvider(_hojeIso()));
+        return 'Check-in registrado.';
+      },
+      aoFalharPorRede: () async {
+        final fotoBase64 = base64Encode(await File(foto.path).readAsBytes());
+        final fila = await ref.read(filaPendenteServiceProvider.future);
+        await fila.enfileirar(
+          tipo: TipoAcaoFila.checkinVisita,
+          timestamp: DateTime.now(),
+          payload: {
+            'clienteId': widget.cliente.id,
+            'latitude': posicao.latitude,
+            'longitude': posicao.longitude,
+            'foto': fotoBase64,
+            if (nota.isNotEmpty) 'nota': nota,
+          },
+        );
+        ref.invalidate(contagemPendentesProvider);
+        return 'Sem conexão agora - check-in salvo e será enviado automaticamente '
+            'quando a internet voltar.';
+      },
+    );
   }
 
   Future<void> _fazerCheckout(BuildContext context, Visita visita) async {
@@ -594,18 +618,37 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     );
     if (nota == null || !context.mounted) return;
 
-    await _executar(context, () async {
-      await ref
-          .read(visitasAcoesServiceProvider)
-          .checkout(
-            visitaId: visita.id,
-            latitude: posicao.latitude,
-            longitude: posicao.longitude,
-            nota: nota,
-          );
-      ref.invalidate(minhasVisitasProvider(_hojeIso()));
-      return 'Checkout registrado.';
-    });
+    await _executar(
+      context,
+      () async {
+        await ref
+            .read(visitasAcoesServiceProvider)
+            .checkout(
+              visitaId: visita.id,
+              latitude: posicao.latitude,
+              longitude: posicao.longitude,
+              nota: nota,
+            );
+        ref.invalidate(minhasVisitasProvider(_hojeIso()));
+        return 'Checkout registrado.';
+      },
+      aoFalharPorRede: () async {
+        final fila = await ref.read(filaPendenteServiceProvider.future);
+        await fila.enfileirar(
+          tipo: TipoAcaoFila.checkoutVisita,
+          timestamp: DateTime.now(),
+          payload: {
+            'visitaId': visita.id,
+            'latitude': posicao.latitude,
+            'longitude': posicao.longitude,
+            if (nota.isNotEmpty) 'nota': nota,
+          },
+        );
+        ref.invalidate(contagemPendentesProvider);
+        return 'Sem conexão agora - checkout salvo e será enviado automaticamente '
+            'quando a internet voltar.';
+      },
+    );
   }
 
   Future<void> _cancelarVisita(BuildContext context, Visita visita) async {
@@ -616,13 +659,27 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     );
     if (comentario == null || !context.mounted) return;
 
-    await _executar(context, () async {
-      await ref
-          .read(visitasAcoesServiceProvider)
-          .cancelar(visitaId: visita.id, comentario: comentario);
-      ref.invalidate(minhasVisitasProvider(_hojeIso()));
-      return 'Visita cancelada.';
-    });
+    await _executar(
+      context,
+      () async {
+        await ref
+            .read(visitasAcoesServiceProvider)
+            .cancelar(visitaId: visita.id, comentario: comentario);
+        ref.invalidate(minhasVisitasProvider(_hojeIso()));
+        return 'Visita cancelada.';
+      },
+      aoFalharPorRede: () async {
+        final fila = await ref.read(filaPendenteServiceProvider.future);
+        await fila.enfileirar(
+          tipo: TipoAcaoFila.cancelarVisita,
+          timestamp: DateTime.now(),
+          payload: {'visitaId': visita.id, 'comentario': comentario},
+        );
+        ref.invalidate(contagemPendentesProvider);
+        return 'Sem conexão agora - cancelamento salvo e será enviado automaticamente '
+            'quando a internet voltar.';
+      },
+    );
   }
 
   Future<Position?> _obterPosicaoOuAvisar(BuildContext context) async {
@@ -645,13 +702,32 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
   // com o resultado (sucesso, com a mensagem que `acao` devolve) ou com
   // `erro.message` (ApiException - já é a mensagem clara vinda do backend,
   // ex: "fora do raio máximo", "visita em aberto", divergência de EXIF).
-  Future<void> _executar(BuildContext context, Future<String> Function() acao) async {
+  // `aoFalharPorRede` (OS-MOBILE-22, gap encontrado nesta rodada) - só
+  // check-in/checkout/cancelamento passam isso: em falha de REDE
+  // especificamente (erro.statusCode == null - sem resposta nenhuma do
+  // servidor, ver ApiClient._mensagemErro), em vez de mostrar erro e
+  // PERDER a ação, enfileira pra reenvio automático (mesma fila do
+  // rastreio, OS-MOBILE-31/36 já cobre o reenvio automático). Erro de
+  // NEGÓCIO (statusCode preenchido - fora do raio, EXIF ausente, visita
+  // já em aberto) continua caindo no fallback de baixo, mostrado direto -
+  // enfileirar um erro que o servidor já rejeitou de propósito só adiaria
+  // a mesma rejeição.
+  Future<void> _executar(
+    BuildContext context,
+    Future<String> Function() acao, {
+    Future<String> Function()? aoFalharPorRede,
+  }) async {
     setState(() => _processando = true);
     try {
       final mensagem = await acao();
       if (context.mounted) _mostrarSnackBar(context, mensagem);
     } on ApiException catch (erro) {
-      if (context.mounted) _mostrarSnackBar(context, erro.message);
+      if (erro.statusCode == null && aoFalharPorRede != null) {
+        final mensagem = await aoFalharPorRede();
+        if (context.mounted) _mostrarSnackBar(context, mensagem);
+      } else if (context.mounted) {
+        _mostrarSnackBar(context, erro.message);
+      }
     } catch (erro) {
       if (context.mounted) _mostrarSnackBar(context, 'Erro inesperado: $erro');
     } finally {

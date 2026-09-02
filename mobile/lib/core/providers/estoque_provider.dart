@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
 import '../api_exception.dart';
 import '../models/estoque.dart';
+import 'offline_provider.dart';
 
 /// Mesmos estados de `frontend/src/app/estoque/actions.ts`
 /// (`ResultadoConsultaEstoque`) - busca pontual disparada por ação do
@@ -36,8 +37,12 @@ class EstoqueSemSaldo extends EstoqueState {
 }
 
 class EstoqueComSaldo extends EstoqueState {
-  const EstoqueComSaldo(this.resultado);
+  const EstoqueComSaldo(this.resultado, {this.offline = false});
   final ResultadoEstoque resultado;
+  // true quando veio do cache local (OS-BACKEND-42) por falha de rede -
+  // UI mostra aviso de "dado offline, pode estar desatualizado" (mesmo
+  // atualizadoEm do resultado já indica QUANDO foi sincronizado).
+  final bool offline;
 }
 
 class EstoqueNotifier extends Notifier<EstoqueState> {
@@ -57,10 +62,30 @@ class EstoqueNotifier extends Notifier<EstoqueState> {
           ? EstoqueSemSaldo(identificador)
           : EstoqueComSaldo(resultado);
     } on ApiException catch (erro) {
+      if (erro.statusCode == null) {
+        // Falha de rede (sem resposta do servidor) - tenta o cache local
+        // do snapshot antes de desistir (OS-BACKEND-42, gap encontrado:
+        // estoque nunca tinha fallback offline, diferente de clientes/
+        // produtos/pedidos).
+        final estadoOffline = await _tentarCacheLocal(identificador);
+        if (estadoOffline != null) {
+          state = estadoOffline;
+          return;
+        }
+      }
       state = erro.statusCode == 404
           ? EstoqueNaoEncontrado(identificador)
           : EstoqueErro(erro.message);
     }
+  }
+
+  Future<EstoqueState?> _tentarCacheLocal(String identificador) async {
+    final snapshotService = await ref.read(snapshotServiceProvider.future);
+    final resultado = await snapshotService.estoquePorCodigo(identificador);
+    if (resultado == null) return null;
+    return resultado.itens.isEmpty
+        ? EstoqueSemSaldo(identificador)
+        : EstoqueComSaldo(resultado, offline: true);
   }
 }
 

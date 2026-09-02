@@ -30,7 +30,7 @@ class LocalDatabase {
     final caminho = caminhoOverride ?? join(await getDatabasesPath(), 'copperline_offline.db');
     final db = await openDatabase(
       caminho,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE clientes (id TEXT PRIMARY KEY, dados TEXT NOT NULL)
@@ -40,6 +40,12 @@ class LocalDatabase {
         ''');
         await db.execute('''
           CREATE TABLE pedidos (id TEXT PRIMARY KEY, dados TEXT NOT NULL)
+        ''');
+        // codigo do produto como chave (mesma chave de EstoqueConsultaDto
+        // no backend, ver mobile-snapshot.service.ts) - consulta offline
+        // de estoque (gap encontrado na auditoria da OS-BACKEND-42).
+        await db.execute('''
+          CREATE TABLE estoque (codigo TEXT PRIMARY KEY, dados TEXT NOT NULL)
         ''');
         await db.execute('''
           CREATE TABLE snapshot_meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)
@@ -56,6 +62,16 @@ class LocalDatabase {
             criado_em TEXT NOT NULL
           )
         ''');
+      },
+      // Instalação existente (banco já criado na v1, sem a tabela
+      // `estoque`) - onCreate não roda de novo, só onUpgrade (dispositivo
+      // que já tinha o app antes desta OS).
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS estoque (codigo TEXT PRIMARY KEY, dados TEXT NOT NULL)
+          ''');
+        }
       },
     );
     _instancia = LocalDatabase._(db);

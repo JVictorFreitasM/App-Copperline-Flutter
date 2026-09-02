@@ -90,8 +90,18 @@ class _EstoqueScreenState extends ConsumerState<EstoqueScreen> {
               EstoqueSemSaldo(:final identificador) => EstadoVazio(
                 mensagem: "Produto '$identificador' encontrado, mas sem saldo em estoque.",
               ),
-              EstoqueComSaldo(:final resultado) => Column(
+              EstoqueComSaldo(:final resultado, :final offline) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (offline)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Sem conexão agora - mostrando o último saldo salvo '
+                        '${resultado.atualizadoEm != null ? "(sincronizado em ${resultado.atualizadoEm})" : ""}.',
+                        style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                      ),
+                    ),
                   for (final item in resultado.itens) ...[
                     ListItemTile(
                       titulo: item.tituloLocal,
