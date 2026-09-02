@@ -600,20 +600,15 @@ então (conferir `git log` antes de assumir pendente; ex.: OS-BACKEND-33/38,
 OS-WEB-25/27 já aparecem commitadas). O que segue é o adendo desta rodada,
 cobrindo `OS-novas-rodada.md` e `OS-ajustes-layout-mobile.md`.
 
-Já concluídas e enviadas nesta rodada (não repetir): OS-MOBILE-31/33/36
-(estabilidade de conexão), OS-BACKEND-41 + extensão DELETE (módulo de
-documentos), OS-MOBILE-34 e OS-WEB-38 (documentos, mobile + painel admin).
-
-## Em andamento
-
-### OS-MOBILE-34 — Aba de documentos para consulta (mobile)
-Código escrito (`documentos_screen.dart`, `documento_download_service.dart`,
-`documentos_provider.dart`, dependências `path_provider`/`open_filex`
-adicionadas). `flutter analyze` e suíte de testes já passaram limpos.
-**Falta**: confirmar que o `flutter build apk --debug` compila com o
-plugin nativo `open_filex` antes de commitar/enviar essa parte (a
-verificação anterior foi interrompida junto com a sessão, precisa rodar
-de novo).
+Já concluídas e enviadas: OS-MOBILE-31/33/36 (estabilidade de conexão),
+OS-BACKEND-41 + extensão DELETE (módulo de documentos), OS-MOBILE-34 e
+OS-WEB-38 (documentos, mobile + painel admin), OS-MOBILE-38 (inicialização
+offline-first), OS-MOBILE-39 (sincronização em segundo plano via
+WorkManager), OS-MOBILE-28 (tratamento de erro/timeout do WebView de
+login). Também corrigido no caminho (fora do escopo original das OS, bugs
+reais encontrados): sessão expirada quebrava a checagem de auth
+(`obterUsuarioAtual`), `ref.mounted` faltando na revalidação em segundo
+plano do `AuthNotifier`.
 
 ## Bloqueada
 
@@ -622,17 +617,23 @@ Bloqueada até o túnel Cloudflare (domínio público apontando pro backend)
 existir no servidor — confirmado com o usuário que ainda não está
 configurado. Sem isso, trocar `API_BASE_URL` não tem pra onde apontar.
 
-## Não iniciadas — `OS-novas-rodada.md`
+### OS-MOBILE-37 — Auto-limpeza de cache local de rotas
+Bloqueada por decisão do usuário - a OS pede limpeza automática de um
+cache local de rota/trajeto no APP MOBILE, mas esse cache não existe: o
+app só *envia* pontos de rastreio (captura e enfileira pra upload,
+`rastreio_service.dart`), nunca *lê/exibe* um trajeto de volta - a
+exibição de percurso (polyline) só existe hoje no painel web (OS-WEB-32,
+visão do supervisor). Sem base pra implementar sem antes construir uma
+tela de trajeto no mobile que não foi pedida por nenhuma OS - decisão do
+usuário foi não inventar essa tela só pra ter o que limpar.
 
-### OS-MOBILE-28 — Tratamento de erro e camuflagem de telas do WebView
-Interceptar erro de carregamento do WebView de login (tela nativa em vez
-da tela de erro do navegador), esconder chrome de URL, timeout tratado.
+## Não iniciadas — `OS-novas-rodada.md`
 
 ### OS-MOBILE-29 — Validação ponta a ponta do push do Firebase
 Não é código novo, é roteiro de teste manual (foreground/background/app
 morto, renovação de token, dispositivo sem Google Play Services) —
 resultado esperado é um relatório de passou/falhou por cenário, com
-evidência.
+evidência. Precisa de dispositivo físico, não dá pra fazer sem isso.
 
 ### OS-MOBILE-30 — Atualização de UI conforme novo design system
 Auditar `app_theme.dart`/`app_colors.dart` e as telas já implementadas
@@ -642,10 +643,6 @@ a última decisão de design tomada no web antes de começar.
 ### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
 Decisão de adotar uma ferramenta nova (Shorebird) antes de implementar —
 vale alinhar com o usuário antes de integrar ao pipeline de build.
-
-### OS-MOBILE-37 — Auto-limpeza de cache local de rotas
-Cache de rota/trajeto com versão, comparação com o servidor, limpeza
-restrita **só** à store de rota (nunca clientes/produtos/pedidos/estoque).
 
 ### OS-WEB-35 — Verificar dependência da skill `frontend-design` na UI
 Investigação: desabilitar a skill, rodar build/dev, navegar por todas as
