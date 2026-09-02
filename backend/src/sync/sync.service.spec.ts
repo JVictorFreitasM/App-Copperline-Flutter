@@ -101,6 +101,33 @@ describe('SyncService.executar - carga inicial vs incremental', () => {
     expect(janela.desde).toBe(cursor);
   });
 
+  it('nome de entidade com hifen vira underscore no nome da variavel de ambiente (bug real - OS-BACKEND-42)', async () => {
+    // "nota-fiscal" virava WK_RADAR_NOTA-FISCAL_DATA_INICIO_CARGA (hifen),
+    // uma variavel que nem .env nem docker-compose ${...} aceitam como
+    // identificador valido - a entidade falhava em toda tentativa, ANTES
+    // de gravar syncLog (nunca aparecia nem sucesso nem erro).
+    const prisma = prismaFake({ ultimaSincronizacao: null });
+    const fetchMock = jest.fn() as jest.MockedFunction<FetchFn>;
+    fetchMock.mockResolvedValue({ registros: [], avisos: [] });
+    const strategy: SyncStrategy = {
+      nomeEntidade: 'nota-fiscal',
+      fetch: fetchMock,
+      map: (bruto: unknown) => bruto,
+      upsert: () => Promise.resolve(),
+    };
+    const service = new SyncService(
+      prisma as never,
+      configServiceFake({
+        WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA: '2024-01-01',
+      }) as never,
+      [strategy],
+    );
+
+    await service.executar('nota-fiscal');
+
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it('lanca erro claro quando WK_RADAR_<ENTIDADE>_DATA_INICIO_CARGA configurada nao e uma data valida', async () => {
     const prisma = prismaFake({ ultimaSincronizacao: null });
     const { strategy } = strategyFake();

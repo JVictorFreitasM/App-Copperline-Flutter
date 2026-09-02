@@ -129,7 +129,13 @@ export class SyncService {
       return ultimaSincronizacao;
     }
 
-    const chaveEnv = `WK_RADAR_${nomeEntidade.toUpperCase()}_DATA_INICIO_CARGA`;
+    // replace(/-/g, '_') - nome de entidade com hifen (ex: "nota-fiscal")
+    // vira variavel de ambiente invalida sem isso ("WK_RADAR_NOTA-FISCAL_...",
+    // que nem o .env nem a interpolacao ${...} do docker-compose aceitam
+    // como identificador). Bug real encontrado na auditoria OS-BACKEND-42:
+    // nota-fiscal falhava aqui em toda tentativa, ANTES de gravar syncLog -
+    // por isso nunca aparecia nem sucesso nem erro em sync_logs.
+    const chaveEnv = `WK_RADAR_${nomeEntidade.toUpperCase().replace(/-/g, '_')}_DATA_INICIO_CARGA`;
     const valor = this.configService.get<string>(chaveEnv);
     if (!valor) {
       throw new Error(
