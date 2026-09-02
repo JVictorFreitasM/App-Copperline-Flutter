@@ -10,6 +10,7 @@ import '../notificacoes_config_screen.dart';
 import '../produtos_screen.dart';
 import '../rastreio_config_screen.dart';
 import '../roteiro_screen.dart';
+import 'documentos_screen.dart';
 import 'relatorio_screen.dart';
 
 /// Casca de navegação (replica a referência "Nexo Comercial",
@@ -270,6 +271,20 @@ class _MenuLateral extends ConsumerWidget {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const RastreioConfigScreen()));
+              },
+            ),
+            // Faltava no menu lateral (OS-ajustes-layout-mobile, item 5) -
+            // só existia como card de acesso rápido na Home. Mesmo padrão
+            // de Mapa/Buscar/Rastreio acima.
+            _ItemMenu(
+              icone: Icons.description_outlined,
+              rotulo: 'Documentos',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen()));
               },
             ),
             const Spacer(),
