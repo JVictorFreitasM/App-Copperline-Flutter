@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -33,5 +33,18 @@ export class DocumentoStorageService {
 
   async ler(caminho: string): Promise<Buffer> {
     return readFile(caminho);
+  }
+
+  // ENOENT (arquivo ja ausente do disco) nao e' erro pra este metodo -
+  // efeito desejado (arquivo nao existe mais) ja foi alcancado, nao ha
+  // porque falhar a remocao do Documento por isso.
+  async remover(caminho: string): Promise<void> {
+    try {
+      await unlink(caminho);
+    } catch (erro) {
+      if ((erro as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw erro;
+      }
+    }
   }
 }

@@ -13,6 +13,7 @@ function prismaFake(overrides: {
       count: jest.fn().mockResolvedValue(overrides.count ?? 0),
       findUnique: jest.fn().mockResolvedValue(overrides.findUnique ?? null),
       create: jest.fn().mockResolvedValue(overrides.create ?? null),
+      delete: jest.fn().mockResolvedValue(undefined),
     },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -22,6 +23,7 @@ function storageFake(overrides: { salvar?: string; ler?: Buffer } = {}) {
   return {
     salvar: jest.fn().mockResolvedValue(overrides.salvar ?? '/uploads/documentos/x.pdf'),
     ler: jest.fn().mockResolvedValue(overrides.ler ?? Buffer.from('conteudo')),
+    remover: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -124,5 +126,25 @@ describe('DocumentosService.obterParaDownload', () => {
     expect(storage.ler).toHaveBeenCalledWith('/uploads/documentos/x.pdf');
     expect(resultado.nome).toBe('Tabela de preços');
     expect(resultado.tipoMime).toBe('application/pdf');
+  });
+});
+
+describe('DocumentosService.remover', () => {
+  it('lança NotFoundException quando o documento nao existe', async () => {
+    const prisma = prismaFake({ findUnique: null });
+    const service = new DocumentosService(prisma as never, storageFake() as never);
+
+    await expect(service.remover('inexistente')).rejects.toThrow(NotFoundException);
+  });
+
+  it('remove o registro e o arquivo do disco no caminho gravado', async () => {
+    const prisma = prismaFake({ findUnique: DOCUMENTO_BRUTO });
+    const storage = storageFake();
+    const service = new DocumentosService(prisma as never, storage as never);
+
+    await service.remover('doc-1');
+
+    expect(prisma.documento.delete).toHaveBeenCalledWith({ where: { id: 'doc-1' } });
+    expect(storage.remover).toHaveBeenCalledWith('/uploads/documentos/x.pdf');
   });
 });

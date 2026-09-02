@@ -91,4 +91,19 @@ export class DocumentosService {
     const buffer = await this.storage.ler(documento.caminhoArquivo);
     return { buffer, nome: documento.nome, tipoMime: documento.tipoMime };
   }
+
+  // OS-WEB-38 (painel admin) - "substituir" nao tem endpoint dedicado,
+  // e' remover + novo upload (sem versionamento, decisao confirmada com o
+  // usuario). Apaga o registro primeiro: se a remocao do arquivo em disco
+  // falhar depois, nao deixa um Documento "fantasma" ainda listado/
+  // baixavel apontando pra um caminho que sera removido de qualquer forma.
+  async remover(id: string): Promise<void> {
+    const documento = await this.prisma.documento.findUnique({ where: { id } });
+    if (!documento) {
+      throw new NotFoundException(`Documento '${id}' não encontrado`);
+    }
+
+    await this.prisma.documento.delete({ where: { id } });
+    await this.storage.remover(documento.caminhoArquivo);
+  }
 }

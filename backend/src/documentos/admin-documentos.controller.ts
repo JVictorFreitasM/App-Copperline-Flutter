@@ -2,6 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
+  HttpCode,
+  HttpStatus,
+  Param,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -39,5 +43,13 @@ export class AdminDocumentosController {
     }
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     return this.documentosService.criar(usuario.id, dto, arquivo);
+  }
+
+  // "Substituir" (critério da OS-WEB-38) não tem endpoint próprio - é
+  // remover + novo upload do painel, sem versionamento.
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remover(@Param('id') id: string): Promise<void> {
+    return this.documentosService.remover(id);
   }
 }
