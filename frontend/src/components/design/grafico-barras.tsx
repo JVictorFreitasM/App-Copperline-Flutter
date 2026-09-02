@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatarMoeda } from "@/lib/formatacao";
 
 // Gráfico de barras minimalista (OS-WEB-19) - sem grid de fundo, duas
@@ -20,6 +20,7 @@ export function GraficoBarras({
   dados,
   altura = 220,
   formato,
+  orientacao = "vertical",
 }: {
   dados: ItemGraficoBarras[];
   altura?: number;
@@ -28,9 +29,62 @@ export function GraficoBarras({
   // serializa função através do boundary), entao a formatação fica aqui
   // dentro, escolhida por um valor serializável (string).
   formato?: "moeda";
+  // "horizontal" = barras deitadas, rótulo no eixo Y (OS-WEB-37, rankings
+  // do painel - nome completo de cliente/produto legível sem cortar/
+  // rotacionar texto). Nome do prop já na convenção do design visual do
+  // gráfico (não usa o "layout" invertido do Recharts diretamente).
+  orientacao?: "vertical" | "horizontal";
 }) {
   const valorMaximo = Math.max(...dados.map((item) => item.valor), 0);
   const formatarValor = formato === "moeda" ? (valor: number) => formatarMoeda(String(valor)) : undefined;
+
+  if (orientacao === "horizontal") {
+    // altura proporcional à quantidade de itens (uma barra por linha) em
+    // vez de um valor fixo - senão barras demais ficam espremidas.
+    const alturaCalculada = Math.max(altura, dados.length * 40);
+    return (
+      <div style={{ height: alturaCalculada }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={dados}
+            layout="vertical"
+            margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+          >
+            <XAxis type="number" hide />
+            <YAxis
+              type="category"
+              dataKey="rotulo"
+              width={140}
+              tick={{ fill: "var(--color-muted)", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--color-background)" }}
+              formatter={(valor) => {
+                const numero = Number(valor);
+                return formatarValor ? formatarValor(numero) : numero;
+              }}
+              contentStyle={{
+                borderRadius: 12,
+                border: "none",
+                boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
+              }}
+            />
+            <Bar dataKey="valor" radius={[0, 8, 8, 0]} maxBarSize={28}>
+              {dados.map((item, indice) => (
+                <Cell
+                  key={indice}
+                  fill={item.valor === valorMaximo ? "var(--color-primary)" : "var(--color-primary-light)"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: altura }}>

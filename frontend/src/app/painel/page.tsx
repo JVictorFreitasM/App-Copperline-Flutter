@@ -225,43 +225,52 @@ export default async function PainelPage({
             />
           )}
         </Card>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card>
-            <h2 className="mb-1 text-lg font-semibold text-ink">Top clientes</h2>
-            {!ranking ? (
-              <ErroConexao mensagem={erroRanking!} />
-            ) : ranking.topClientes.length === 0 ? (
-              <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
-            ) : (
-              <GraficoBarras
-                dados={ranking.topClientes.map((item) => ({
-                  rotulo: item.nome,
-                  valor: Number(item.valorTotal),
-                }))}
-                formato="moeda"
-              />
-            )}
-          </Card>
-
-          <Card>
-            <h2 className="mb-1 text-lg font-semibold text-ink">Top produtos</h2>
-            {!ranking ? (
-              <ErroConexao mensagem={erroRanking!} />
-            ) : ranking.topProdutos.length === 0 ? (
-              <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
-            ) : (
-              <GraficoBarras
-                dados={ranking.topProdutos.map((item) => ({
-                  rotulo: item.nome,
-                  valor: Number(item.valorTotal),
-                }))}
-                formato="moeda"
-              />
-            )}
-          </Card>
-        </div>
       </div>
+
+      {/* Ranking horizontal, largura total (OS-WEB-37) - cada um em sua
+          própria seção (não mais lado a lado num grid de 2 colunas), nome
+          completo de cliente/produto legível sem cortar/rotacionar texto.
+          Ranking de vendedores fica pendente - Pedido.vendedorId só cobre
+          pedido criado localmente (ainda bloqueado por decisão de
+          negócio, ver OS-MOBILE-23) e o vínculo Cliente-Vendedor é N:N
+          sem "principal" marcado, então não dá pra atribuir o valor do
+          pedido a um vendedor sem inventar um critério - decisão do
+          usuário foi deixar de fora por agora. */}
+      <Card>
+        <h2 className="mb-1 text-lg font-semibold text-ink">Top clientes</h2>
+        {!ranking ? (
+          <ErroConexao mensagem={erroRanking!} />
+        ) : ranking.topClientes.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
+        ) : (
+          <GraficoBarras
+            dados={ranking.topClientes.map((item) => ({
+              rotulo: item.nome,
+              valor: Number(item.valorTotal),
+            }))}
+            formato="moeda"
+            orientacao="horizontal"
+          />
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 text-lg font-semibold text-ink">Top produtos</h2>
+        {!ranking ? (
+          <ErroConexao mensagem={erroRanking!} />
+        ) : ranking.topProdutos.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
+        ) : (
+          <GraficoBarras
+            dados={ranking.topProdutos.map((item) => ({
+              rotulo: item.nome,
+              valor: Number(item.valorTotal),
+            }))}
+            formato="moeda"
+            orientacao="horizontal"
+          />
+        )}
+      </Card>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-ink">Eventos recentes</h2>
