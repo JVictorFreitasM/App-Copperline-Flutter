@@ -108,8 +108,9 @@ services:
       # Estoque.svc (SOAP/WCF) - sincronizacao periodica de saldo de
       # estoque, reaproveita as credenciais WK_BI_* acima.
       WK_RADAR_ESTOQUE_SVC_URL: ${WK_RADAR_ESTOQUE_SVC_URL}
-      # Financeiro.svc (OS-BACKEND-36, revisao) - mesmo padrao do
-      # Estoque.svc acima, reaproveita as credenciais WK_BI_*.
+      # Financeiro.svc (OS-BACKEND-36/OS-BACKEND-43) - URL BASE (sem
+      # operacao no final, 3 operacoes diferentes chamadas daqui), mesmas
+      # credenciais WK_BI_* do Estoque.svc.
       WK_RADAR_FINANCEIRO_SVC_URL: ${WK_RADAR_FINANCEIRO_SVC_URL}
       # Firebase Cloud Messaging - vazio ate ser configurado (fail-closed
       # so no envio, nao no boot - ver PushNotificationClientService).

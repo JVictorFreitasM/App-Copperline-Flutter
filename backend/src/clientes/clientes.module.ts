@@ -9,6 +9,7 @@ import { RedisModule } from '../redis/redis.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
+import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
@@ -20,9 +21,10 @@ import { ClientesService } from './clientes.service';
   // LlmClientModule/RedisModule importados so pelo GET /clientes/:id/resumo
   // (OS-BACKEND-20). UsuariosModule/VendedoresModule (OS-BACKEND-23) pro
   // escopo por vendedor (VendedorEscopoService). VisitasModule (OS-BACKEND-28)
-  // pro GET /clientes/:id/visitas. FinanceiroSvcClientModule (OS-BACKEND-36,
-  // revisao) pro GET /clientes/:id/financeiro - SOAP Financeiro.svc
-  // (BuscarPosicaoFinanceira), nao mais REST/ErpClientModule.
+  // pro GET /clientes/:id/visitas. FinanceiroSvcClientModule (OS-BACKEND-36
+  // revisao + OS-BACKEND-43) pro GET /clientes/:id/financeiro (SOAP
+  // Financeiro.svc, BuscarPosicaoFinanceira) e /:id/titulos/:numeroDocumento/
+  // boleto (BuscarTokenBoleto + DownloadBoleto).
   imports: [
     PrismaModule,
     LlmClientModule,
@@ -39,6 +41,7 @@ import { ClientesService } from './clientes.service';
     ClienteEstatisticasService,
     ClienteLocalizacaoService,
     ClienteFinanceiroService,
+    ClienteBoletoService,
   ],
 })
 export class ClientesModule implements NestModule {

@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, StreamableFile } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
+import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import type { ClienteEstatisticasDto } from './cliente-estatisticas.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
@@ -37,6 +38,7 @@ export class ClientesController {
     private readonly clienteResumoLlmService: ClienteResumoLlmService,
     private readonly clienteEstatisticasService: ClienteEstatisticasService,
     private readonly clienteFinanceiroService: ClienteFinanceiroService,
+    private readonly clienteBoletoService: ClienteBoletoService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly visitasService: VisitasService,
@@ -107,6 +109,29 @@ export class ClientesController {
   ): Promise<ClienteFinanceiroDto> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clienteFinanceiroService.obter(id, escopo);
+  }
+
+  // OS-BACKEND-43 - "/:id/titulos/:numeroDocumento/boleto" (nao
+  // "/titulos/:id/boleto" solto, ver comentario em ClienteBoletoService)
+  // pra reaproveitar o mesmo escopo por vendedor de todo endpoint de
+  // cliente - obtem token via BuscarTokenBoleto e baixa o PDF via
+  // DownloadBoleto (Financeiro.svc), sem persistir localmente.
+  @Get(':id/titulos/:numeroDocumento/boleto')
+  async obterBoleto(
+    @Param('id') id: string,
+    @Param('numeroDocumento') numeroDocumento: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<StreamableFile> {
+    const escopo = await this.resolverEscopo(idpUser);
+    const { buffer, nomeArquivo } = await this.clienteBoletoService.obter(
+      id,
+      escopo,
+      numeroDocumento,
+    );
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${encodeURIComponent(nomeArquivo)}"`,
+    });
   }
 
   // OS-BACKEND-28 - historico de visitas, pra exibir junto das

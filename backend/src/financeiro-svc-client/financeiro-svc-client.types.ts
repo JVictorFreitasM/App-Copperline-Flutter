@@ -17,3 +17,14 @@ export interface PosicaoFinanceiraBruta {
   DataUltimaFatura: string | null;
   VendaBloqueada: boolean;
 }
+
+// FiltroCobrancaContaReceber (WSDL) - identifica o titulo/cliente pra
+// BuscarTokenBoleto (OS-BACKEND-43). Todos os campos sao opcionais no WSDL
+// (minOccurs=0), mas sem NENHUM identificador o Radar devolveria a
+// cobranca de qualquer titulo em aberto - sempre informar pelo menos
+// CodigoClienteSacado (idExternoErp do Cliente) pra nunca depender so do
+// NumeroDocumento (evita IDOR: numero de documento sozinho e adivinhavel).
+export interface FiltroCobrancaContaReceber {
+  CodigoClienteSacado: string;
+  NumeroDocumento: string;
+}
