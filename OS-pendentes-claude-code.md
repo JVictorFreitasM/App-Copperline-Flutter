@@ -640,50 +640,111 @@ hífen (`.replace(/-/g, '_')`) em `sync.service.ts`, com teste de
 regressão dedicado; confirmado funcionando ponta a ponta após redeploy
 (autenticou no WK Radar e começou a buscar nota fiscal normalmente).
 
-## Bloqueada
+## Bloqueada — movidas de `OS-novas-rodada.md` (texto original completo)
 
-### OS-MOBILE-32 — URL pública (fora da rede interna)
-Bloqueada até o túnel Cloudflare (domínio público apontando pro backend)
-existir no servidor — confirmado com o usuário que ainda não está
-configurado. Sem isso, trocar `API_BASE_URL` não tem pra onde apontar.
+As 4 OS abaixo são as únicas ainda pendentes de `OS-novas-rodada.md` (as
+demais 15 já constam concluídas no parágrafo "Já concluídas e enviadas"
+acima) - texto movido na íntegra do arquivo original, com o status atual
+anotado ao final de cada uma.
 
-### OS-MOBILE-37 — Auto-limpeza de cache local de rotas
-Bloqueada por decisão do usuário - a OS pede limpeza automática de um
-cache local de rota/trajeto no APP MOBILE, mas esse cache não existe: o
-app só *envia* pontos de rastreio (captura e enfileira pra upload,
-`rastreio_service.dart`), nunca *lê/exibe* um trajeto de volta - a
-exibição de percurso (polyline) só existe hoje no painel web (OS-WEB-32,
-visão do supervisor). Sem base pra implementar sem antes construir uma
-tela de trajeto no mobile que não foi pedida por nenhuma OS - decisão do
-usuário foi não inventar essa tela só pra ter o que limpar.
+### OS-MOBILE-29 — Validação ponta a ponta do push do Firebase
 
-### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
-Decisão de adotar já confirmada com o usuário ("Sim, integrar agora").
-Shorebird CLI 1.6.120 instalado e empacotado numa imagem Docker própria
-(`copperline-flutter-shorebird`), pronta pra uso. **Bloqueada em ação do
-usuário**: o login browser-based (`shorebird login`) não funciona de
-dentro de um container headless (callback OAuth bind numa porta local
-aleatória, sem como pré-mapear no Docker) - o caminho correto pra CI/
-automação é API key, não login interativo. Falta o usuário:
+**Objetivo**
+Testar o fluxo completo de notificação push já implementado (OS-MOBILE-16 + OS-BACKEND-19), cobrindo os casos que mais falham silenciosamente em produção. Apenas android, esse app não tem versão para iOS.
+
+**Escopo (roteiro de teste, não é feature nova)**
+- App em foreground: notificação aparece corretamente (não é comportamento padrão do FCM — precisa de handler explícito, confirmar que existe).
+- App em background: notificação aparece na bandeja do sistema e, ao tocar, abre na tela correta.
+- App fechado (matado pelo sistema): mesma validação do item acima.
+- Token expirado/renovado: confirmar que o app re-registra o novo token no backend automaticamente, sem exigir novo login.
+- Dispositivo sem Google Play Services (raro, mas existe em alguns Android de fábrica alternativa) — confirmar que o app não trava, só falha silenciosamente sem push.
+- Reportar como bug (não corrigir nesta OS) qualquer cenário acima que falhar, para virar OS de correção específica.
+
+**Critérios de aceite**
+Cada cenário acima documentado como passou/falhou, com print/log de evidência.
+
+**Status**: não iniciada. Não é código novo, é roteiro de teste manual — precisa de dispositivo físico, não dá pra fazer daqui.
+
+---
+
+### OS-MOBILE-32 — Configuração do app para acesso fora da rede interna da empresa
+
+**Objetivo**
+Definir e implementar como o app conversa com o backend quando o dispositivo está fora da rede da empresa — isso provavelmente é a causa raiz da OS-MOBILE-31.
+
+**Contexto necessário antes de implementar**
+O app hoje provavelmente está configurado com a URL interna do backend (IP local ou hostname só resolvível dentro da rede da empresa). Para funcionar fora, o backend precisa estar acessível por um domínio público — a decisão de infraestrutura (Cloudflare Tunnel + Access, já discutida e recomendada anteriormente neste projeto, dado que a empresa já usa Cloudflare) precisa estar implementada no lado do servidor **antes** desta OS fazer sentido no app.
+
+**Escopo**
+- Confirmar com quem administra o servidor se o túnel/domínio público já está configurado (ex: `api.suaempresa.com.br` via Cloudflare Tunnel). Se ainda não estiver, esta OS fica bloqueada até isso existir — não adianta mudar a URL no app para um endereço que ainda não é público.
+- Trocar a URL base do app do endereço interno para o domínio público.
+- Se o backend estiver atrás de Cloudflare Access, testar se o fluxo de autenticação completa corretamente dentro do WebView do app (ponto de atenção já identificado anteriormente — alguns fluxos de Access assumem browser completo, não WebView embutido; testar isso é obrigatório antes de considerar a OS concluída).
+- Variável de ambiente/config de build para trocar facilmente entre URL interna (desenvolvimento) e URL pública (produção), sem precisar editar código a cada build.
+
+**Dependências**
+Domínio público do backend configurado no servidor (fora do escopo desta OS — é infraestrutura, não código do app).
+
+**Critérios de aceite**
+- App funciona corretamente com o dispositivo fora da rede wifi da empresa (testar em dados móveis e wifi doméstico).
+- Login completo funcional mesmo fora da rede da empresa.
+
+**Status**: bloqueada. Confirmado com o usuário que o túnel Cloudflare ainda não está configurado no servidor. Sem isso, trocar `API_BASE_URL` não tem pra onde apontar.
+
+---
+
+### OS-MOBILE-35 — Atualização automática do app (OTA) sem passar pela loja a cada vez
+
+**Objetivo**
+Permitir atualizar o app sem exigir que o usuário baixe uma nova versão completa pela Play Store/App Store a cada mudança pequena.
+
+**Contexto necessário antes de implementar**
+Existem duas naturezas de "atualização" diferentes, e a solução muda completamente dependendo de qual você quer:
+1. **Atualização de código Dart/lógica de negócio** (telas, regras, textos) — isso pode usar OTA de verdade via **Shorebird** (ferramenta específica para apps Flutter, permite enviar patch de código sem passar pela loja).
+2. **Atualização de código nativo** (nova permissão, nova dependência nativa, mudança de ícone, mudança de versão do Flutter/SDK) — isso **nunca** pode ser OTA, sempre exige passar pela loja, é limitação de plataforma (Google/Apple), não do projeto.
+
+**Escopo**
+- Avaliar e, se aprovado, integrar o Shorebird ao pipeline de build do app — ele permite enviar "patches" de código Dart direto aos dispositivos já instalados, sem re-submissão à loja.
+- Implementar verificação de patch disponível na inicialização do app (o Shorebird já cobre isso automaticamente na maior parte dos casos, mas confirmar o comportamento de UX: aplica silenciosamente, ou avisa o usuário).
+- Deixar explícito, inclusive em documentação interna, que mudanças nativas continuam exigindo publicação normal na loja — não prometer OTA para tudo.
+
+**Fora de escopo**
+Atualização de recursos nativos (permissões, versão de SDK) — isso é ciclo normal de loja, sem solução de contorno real.
+
+**Critérios de aceite**
+- Uma mudança de código Dart simples (ex: texto de uma tela) é enviada e aplicada nos dispositivos já instalados sem exigir nova instalação via loja.
+- Mudança que envolve código nativo é claramente identificada como exigindo publicação tradicional, não é forçada por essa via.
+
+**Status**: bloqueada em ação do usuário. Decisão de adotar já confirmada ("Sim, integrar agora"). Shorebird CLI 1.6.120 instalado e empacotado numa imagem Docker própria (`copperline-flutter-shorebird`), pronta pra uso. O login browser-based (`shorebird login`) não funciona de dentro de um container headless (callback OAuth bind numa porta local aleatória, sem como pré-mapear no Docker) - o caminho correto pra CI/automação é API key, não login interativo. Falta o usuário:
 1. Criar conta em https://console.shorebird.dev (ou logar, se já tiver).
 2. Ir em Account → API Keys → Create API Key.
 3. Copiar o valor da chave (mostrado só uma vez) e enviar aqui.
-Com a chave em mãos, o resto (`SHOREBIRD_TOKEN` no ambiente de build,
-`shorebird init` no `mobile/`, wiring no fluxo de release/patch) segue
-sem precisar de mais nenhuma ação manual do usuário.
+Com a chave em mãos, o resto (`SHOREBIRD_TOKEN` no ambiente de build, `shorebird init` no `mobile/`, wiring no fluxo de release/patch) segue sem precisar de mais nenhuma ação manual do usuário.
 
-## Não iniciadas — `OS-novas-rodada.md`
+---
 
-### OS-MOBILE-29 — Validação ponta a ponta do push do Firebase
-Não é código novo, é roteiro de teste manual (foreground/background/app
-morto, renovação de token, dispositivo sem Google Play Services) —
-resultado esperado é um relatório de passou/falhou por cenário, com
-evidência. Precisa de dispositivo físico, não dá pra fazer sem isso.
+### OS-MOBILE-37 — Auto-limpeza de cache local de rotas ao detectar alteração no servidor
 
-OS-WEB-37, OS-BACKEND-40 e OS-BACKEND-42, junto com os itens 1/2/4/5 de
-`OS-ajustes-layout-mobile.md`, já constam concluídos (ver parágrafo "Já
-concluídas e enviadas" acima) — removidos daqui pra não duplicar/ficar
-desatualizado.
+**Objetivo**
+Garantir que o cache de **rotas/trajeto de rastreio** exibido no app não fique desatualizado — ao haver alteração relevante no servidor, o app deve atualizar automaticamente essa informação, sem exigir o usuário limpar o cache manualmente.
+
+**Importante — escopo restrito**
+Esta limpeza automática se aplica **exclusivamente aos dados de rota/trajeto** (pontos de rastreio exibidos no mapa, histórico de percurso). Os demais dados salvos localmente pela sincronização offline (OS-MOBILE-22) — **estoque, clientes, pedidos, produtos** — **não** devem ser apagados ou invalidados por esta rotina em nenhuma hipótese. Esses dados seguem exclusivamente a lógica de sincronização incremental já definida na OS-MOBILE-22/OS-BACKEND-29 (snapshot + fila), que já trata atualização corretamente sem apagar nada indevidamente.
+
+**Escopo**
+- Cache local de rota guarda um identificador de versão (ex: timestamp do último ponto sincronizado daquele dia/vendedor).
+- Ao abrir a tela de rastreio/percurso (ou em intervalo definido), comparar a versão local com a do servidor; se divergente, buscar e atualizar só os pontos de rota novos/alterados.
+- Caso raro de inconsistência real do cache de rota (não simples atualização incremental) pode disparar limpeza total **apenas da tabela/coleção de rota**, nunca de outra entidade.
+- Validar explicitamente, como parte do critério de aceite, que a rotina de limpeza não toca em nenhuma tabela/coleção fora da de rota — isso deve ser garantido por escopo de código (a função de limpeza só deve ter acesso à store de rota, não a um "limpar tudo" genérico).
+
+**Dependências**
+OS-BACKEND-37 (percurso completo), OS-MOBILE-20 (captura de rota offline).
+
+**Critérios de aceite**
+- Alteração de dado de rota no servidor reflete no app na próxima sincronização automática, sem exigir ação manual.
+- Dados de estoque, clientes, pedidos e produtos permanecem intactos no banco local durante e após qualquer execução desta rotina — testar explicitamente populando o app com dados de todas as entidades, disparando a limpeza de rota, e confirmando que as demais entidades continuam presentes sem re-sincronizar.
+- Cache de rota não é apagado por completo a cada pequena diferença — só atualiza o que mudou, exceto no caso raro de inconsistência.
+
+**Status**: bloqueada por decisão do usuário. A OS pede limpeza automática de um cache local de rota/trajeto no APP MOBILE, mas esse cache não existe: o app só *envia* pontos de rastreio (captura e enfileira pra upload, `rastreio_service.dart`), nunca *lê/exibe* um trajeto de volta - a exibição de percurso (polyline) só existe hoje no painel web (OS-WEB-32, visão do supervisor). Sem base pra implementar sem antes construir uma tela de trajeto no mobile que não foi pedida por nenhuma OS - decisão do usuário foi não inventar essa tela só pra ter o que limpar.
 
 ## Não iniciadas — `OS-ajustes-layout-mobile.md`
 
