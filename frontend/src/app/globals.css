@@ -46,3 +46,21 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Carrossel de "Eventos recentes" do painel (ver carrossel-eventos.tsx) -
+   translateX de 0 a -50%: a lista renderizada é o dobro dos itens reais
+   (duplicada), então -50% pousa exatamente onde a primeira cópia termina,
+   dando um loop contínuo sem salto. Duração pensada pra até 10 itens (ver
+   QUANTIDADE_RECENTES no backend) - ritmo de leitura confortável. */
+@keyframes carrossel-eventos {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-carrossel-eventos {
+  animation: carrossel-eventos 40s linear infinite;
+}

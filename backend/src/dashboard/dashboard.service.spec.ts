@@ -15,6 +15,8 @@ function prismaFake(overrides: {
   clientes?: unknown[];
   produtos?: unknown[];
   saldosEstoque?: unknown[];
+  vinculosClienteVendedor?: unknown[];
+  vendedores?: unknown[];
 }) {
   return {
     cliente: {
@@ -24,6 +26,12 @@ function prismaFake(overrides: {
     produto: {
       count: jest.fn().mockResolvedValue(overrides.produtosAtivos ?? 0),
       findMany: jest.fn().mockResolvedValue(overrides.produtos ?? []),
+    },
+    clienteVendedor: {
+      findMany: jest.fn().mockResolvedValue(overrides.vinculosClienteVendedor ?? []),
+    },
+    vendedor: {
+      findMany: jest.fn().mockResolvedValue(overrides.vendedores ?? []),
     },
     pedido: {
       count: jest.fn().mockResolvedValue(overrides.pedidosEmAberto ?? 0),
@@ -159,6 +167,7 @@ describe('DashboardService.obterRanking', () => {
 
     expect(resultado.topClientes).toEqual([]);
     expect(resultado.topProdutos).toEqual([]);
+    expect(resultado.topVendedores).toEqual([]);
   });
 
   it('resolve nome do cliente/produto pros ids agrupados', async () => {
@@ -174,6 +183,61 @@ describe('DashboardService.obterRanking', () => {
 
     expect(resultado.topClientes).toEqual([{ id: 'c1', nome: 'Cliente Um', valorTotal: '500' }]);
     expect(resultado.topProdutos).toEqual([{ id: 'p1', nome: 'Produto Um', valorTotal: '300' }]);
+  });
+
+  it('soma o valor de todos os clientes vinculados a um vendedor pro ranking de top vendedores', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [
+        { clienteId: 'c1', _sum: { valorTotal: { toString: () => '500' } } },
+        { clienteId: 'c2', _sum: { valorTotal: { toString: () => '300' } } },
+      ],
+      clientes: [
+        { id: 'c1', razaoSocial: 'Cliente Um', nomeFantasia: null },
+        { id: 'c2', razaoSocial: 'Cliente Dois', nomeFantasia: null },
+      ],
+      vinculosClienteVendedor: [
+        { clienteId: 'c1', vendedorId: 'v1' },
+        { clienteId: 'c2', vendedorId: 'v1' },
+      ],
+      vendedores: [{ id: 'v1', nome: 'Vendedor Um' }],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterRanking({ limite: 10 });
+
+    expect(resultado.topVendedores).toEqual([{ id: 'v1', nome: 'Vendedor Um', valorTotal: '800' }]);
+  });
+
+  it('cliente sem vinculo de vendedor nao contribui pro ranking de vendedores (sem inventar atribuicao)', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [{ clienteId: 'c1', _sum: { valorTotal: { toString: () => '500' } } }],
+      clientes: [{ id: 'c1', razaoSocial: 'Cliente Um', nomeFantasia: null }],
+      vinculosClienteVendedor: [],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterRanking({ limite: 10 });
+
+    expect(resultado.topVendedores).toEqual([]);
+  });
+
+  it('usa o primeiro vinculo (mais antigo) quando o schema permite mais de um vendedor por cliente', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [{ clienteId: 'c1', _sum: { valorTotal: { toString: () => '500' } } }],
+      clientes: [{ id: 'c1', razaoSocial: 'Cliente Um', nomeFantasia: null }],
+      // findMany ja ordenado por criadoEm asc (mesmo comportamento do
+      // orderBy passado ao Prisma real) - v1 e' o mais antigo.
+      vinculosClienteVendedor: [
+        { clienteId: 'c1', vendedorId: 'v1' },
+        { clienteId: 'c1', vendedorId: 'v2' },
+      ],
+      vendedores: [{ id: 'v1', nome: 'Vendedor Antigo' }],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterRanking({ limite: 10 });
+
+    expect(resultado.topVendedores).toEqual([{ id: 'v1', nome: 'Vendedor Antigo', valorTotal: '500' }]);
   });
 });
 

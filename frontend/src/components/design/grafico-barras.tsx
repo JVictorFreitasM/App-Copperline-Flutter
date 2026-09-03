@@ -40,8 +40,11 @@ export function GraficoBarras({
 
   if (orientacao === "horizontal") {
     // altura proporcional à quantidade de itens (uma barra por linha) em
-    // vez de um valor fixo - senão barras demais ficam espremidas.
-    const alturaCalculada = Math.max(altura, dados.length * 40);
+    // vez de um valor fixo - senão barras demais ficam espremidas. 55px
+    // por linha (era 40) - mais respiro entre um nome e outro (rótulos
+    // ficavam amontoados) e espaço de sobra pra barra ficar grossa mesmo
+    // com barCategoryGap reduzido.
+    const alturaCalculada = Math.max(altura, dados.length * 55);
     return (
       <div style={{ height: alturaCalculada }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -49,6 +52,7 @@ export function GraficoBarras({
             data={dados}
             layout="vertical"
             margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+            barCategoryGap="30%"
           >
             <XAxis type="number" hide />
             <YAxis
@@ -72,14 +76,10 @@ export function GraficoBarras({
                 boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
               }}
             />
-            <Bar dataKey="valor" radius={[0, 8, 8, 0]} maxBarSize={28}>
-              {dados.map((item, indice) => (
-                <Cell
-                  key={indice}
-                  fill={item.valor === valorMaximo ? "var(--color-primary)" : "var(--color-primary-light)"}
-                />
-              ))}
-            </Bar>
+            {/* Cor única (sem destaque pra maior barra) e maxBarSize maior
+                (era 28) - pedido do usuário, ranking horizontal só compara
+                posição/tamanho relativo, não precisa de ênfase de cor. */}
+            <Bar dataKey="valor" radius={[0, 8, 8, 0]} maxBarSize={44} fill="var(--color-primary)" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -89,7 +89,7 @@ export function GraficoBarras({
   return (
     <div style={{ height: altura }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={dados} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+        <BarChart data={dados} margin={{ top: 8, right: 8, left: 8, bottom: 8 }} barCategoryGap="45%">
           <XAxis
             dataKey="rotulo"
             tick={{ fill: "var(--color-muted)", fontSize: 11 }}

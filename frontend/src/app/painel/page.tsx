@@ -16,6 +16,8 @@ import { Card } from "@/components/design/card";
 import { Badge } from "@/components/badge";
 import { FiltroForm, CampoFiltro } from "@/components/filtro";
 import { GraficoBarras } from "@/components/design/grafico-barras";
+import { CarrosselGraficos, type PainelCarrossel } from "@/components/design/carrossel-graficos";
+import { CarrosselEventos } from "@/components/design/carrossel-eventos";
 import { DonutKpiCard } from "@/components/design/donut-kpi-card";
 import { GaugeCard } from "@/components/design/gauge-card";
 import { PainelResumo } from "@/components/design/painel-resumo";
@@ -97,6 +99,110 @@ export default async function PainelPage({
   const percentualCritico = produtosAtivos > 0 ? (produtosCriticos / produtosAtivos) * 100 : 0;
   const saudeEstoque = 100 - percentualCritico;
 
+  // Os 4 gráficos de barra da tela reunidos num único card, alternando em
+  // carrossel manual (pedido do usuário) - cada painel mantém seu próprio
+  // tratamento de erro/vazio isolado (mesmo critério da OS-WEB-29), só
+  // reagrupados visualmente num card em vez de 4 cards separados.
+  const paineisGraficos: PainelCarrossel[] = [
+    {
+      titulo: "Vendas por situação",
+      legenda: vendas && (
+        <p className="text-sm text-muted">
+          {vendas.totalPedidos} pedido(s) · {formatarMoeda(vendas.valorTotal)} · ticket médio{" "}
+          {formatarMoeda(vendas.ticketMedio)}
+        </p>
+      ),
+      conteudo: !vendas ? (
+        <ErroConexao mensagem={erroVendas!} />
+      ) : vendas.contagemPorSituacao.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum pedido no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={vendas.contagemPorSituacao.map((item) => ({
+            rotulo: configSituacaoPedido(item.situacao).rotulo,
+            valor: item.quantidade,
+          }))}
+        />
+      ),
+    },
+    {
+      titulo: "Notas fiscais por status",
+      legenda: notasFiscais && (
+        <p className="text-sm text-muted">
+          Faturado no período: {formatarMoeda(notasFiscais.valorFaturado)}
+        </p>
+      ),
+      conteudo: !notasFiscais ? (
+        <ErroConexao mensagem={erroNotasFiscais!} />
+      ) : notasFiscais.contagemPorStatus.length === 0 ? (
+        <EstadoVazio mensagem="Nenhuma nota fiscal no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={notasFiscais.contagemPorStatus.map((item) => ({
+            rotulo: configStatusNfe(item.status).rotulo,
+            valor: item.quantidade,
+          }))}
+        />
+      ),
+    },
+    {
+      titulo: "Top clientes",
+      conteudo: !ranking ? (
+        <ErroConexao mensagem={erroRanking!} />
+      ) : ranking.topClientes.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={ranking.topClientes.map((item) => ({
+            rotulo: item.nome,
+            valor: Number(item.valorTotal),
+          }))}
+          formato="moeda"
+          orientacao="horizontal"
+        />
+      ),
+    },
+    {
+      titulo: "Top produtos",
+      conteudo: !ranking ? (
+        <ErroConexao mensagem={erroRanking!} />
+      ) : ranking.topProdutos.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={ranking.topProdutos.map((item) => ({
+            rotulo: item.nome,
+            valor: Number(item.valorTotal),
+          }))}
+          formato="moeda"
+          orientacao="horizontal"
+        />
+      ),
+    },
+    {
+      // Valor atribuído via vínculo Cliente-Vendedor (ClienteVendedor), não
+      // Pedido.vendedorId direto - ver comentário em obterRanking
+      // (dashboard.service.ts) pro porquê (vendedorId só existe pra pedido
+      // criado localmente pelo app, ainda bloqueado pela OS-BACKEND-25;
+      // hoje todo pedido vem de sync do ERP e teria vendedorId nulo).
+      titulo: "Top vendedores",
+      conteudo: !ranking ? (
+        <ErroConexao mensagem={erroRanking!} />
+      ) : ranking.topVendedores.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum vendedor com cliente/pedido vinculado no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={ranking.topVendedores.map((item) => ({
+            rotulo: item.nome,
+            valor: Number(item.valorTotal),
+          }))}
+          formato="moeda"
+          orientacao="horizontal"
+        />
+      ),
+    },
+  ];
+
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-bold text-ink">Painel</h1>
@@ -164,30 +270,15 @@ export default async function PainelPage({
         )}
       </div>
 
+      {/* Os 5 gráficos de barra (vendas, notas fiscais, top clientes, top
+          produtos, top vendedores - ranking horizontal desde a OS-WEB-37)
+          reunidos num só card, alternando em carrossel manual - troca só
+          ao clicar na aba ou no indicador, nunca automaticamente (ver
+          carrossel-graficos.tsx). */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <div className="mb-1 flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold text-ink">Vendas por situação</h2>
-            {vendas && (
-              <p className="text-sm text-muted">
-                {vendas.totalPedidos} pedido(s) · {formatarMoeda(vendas.valorTotal)} · ticket médio{" "}
-                {formatarMoeda(vendas.ticketMedio)}
-              </p>
-            )}
-          </div>
-          {!vendas ? (
-            <ErroConexao mensagem={erroVendas!} />
-          ) : vendas.contagemPorSituacao.length === 0 ? (
-            <EstadoVazio mensagem="Nenhum pedido no período selecionado." />
-          ) : (
-            <GraficoBarras
-              dados={vendas.contagemPorSituacao.map((item) => ({
-                rotulo: configSituacaoPedido(item.situacao).rotulo,
-                valor: item.quantidade,
-              }))}
-            />
-          )}
-        </Card>
+        <div className="lg:col-span-2">
+          <CarrosselGraficos paineis={paineisGraficos} />
+        </div>
 
         {estoqueCritico && resumo ? (
           <GaugeCard
@@ -202,76 +293,6 @@ export default async function PainelPage({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="mb-1 flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold text-ink">Notas fiscais por status</h2>
-            {notasFiscais && (
-              <p className="text-sm text-muted">
-                Faturado no período: {formatarMoeda(notasFiscais.valorFaturado)}
-              </p>
-            )}
-          </div>
-          {!notasFiscais ? (
-            <ErroConexao mensagem={erroNotasFiscais!} />
-          ) : notasFiscais.contagemPorStatus.length === 0 ? (
-            <EstadoVazio mensagem="Nenhuma nota fiscal no período selecionado." />
-          ) : (
-            <GraficoBarras
-              dados={notasFiscais.contagemPorStatus.map((item) => ({
-                rotulo: configStatusNfe(item.status).rotulo,
-                valor: item.quantidade,
-              }))}
-            />
-          )}
-        </Card>
-      </div>
-
-      {/* Ranking horizontal, largura total (OS-WEB-37) - cada um em sua
-          própria seção (não mais lado a lado num grid de 2 colunas), nome
-          completo de cliente/produto legível sem cortar/rotacionar texto.
-          Ranking de vendedores fica pendente - Pedido.vendedorId só cobre
-          pedido criado localmente (ainda bloqueado por decisão de
-          negócio, ver OS-MOBILE-23) e o vínculo Cliente-Vendedor é N:N
-          sem "principal" marcado, então não dá pra atribuir o valor do
-          pedido a um vendedor sem inventar um critério - decisão do
-          usuário foi deixar de fora por agora. */}
-      <Card>
-        <h2 className="mb-1 text-lg font-semibold text-ink">Top clientes</h2>
-        {!ranking ? (
-          <ErroConexao mensagem={erroRanking!} />
-        ) : ranking.topClientes.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum cliente com pedido no período selecionado." />
-        ) : (
-          <GraficoBarras
-            dados={ranking.topClientes.map((item) => ({
-              rotulo: item.nome,
-              valor: Number(item.valorTotal),
-            }))}
-            formato="moeda"
-            orientacao="horizontal"
-          />
-        )}
-      </Card>
-
-      <Card>
-        <h2 className="mb-1 text-lg font-semibold text-ink">Top produtos</h2>
-        {!ranking ? (
-          <ErroConexao mensagem={erroRanking!} />
-        ) : ranking.topProdutos.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum produto com pedido no período selecionado." />
-        ) : (
-          <GraficoBarras
-            dados={ranking.topProdutos.map((item) => ({
-              rotulo: item.nome,
-              valor: Number(item.valorTotal),
-            }))}
-            formato="moeda"
-            orientacao="horizontal"
-          />
-        )}
-      </Card>
-
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-ink">Eventos recentes</h2>
         {!resumo ? (
@@ -279,40 +300,42 @@ export default async function PainelPage({
         ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
           <EstadoVazio mensagem="Nenhum evento recente." />
         ) : (
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {resumo.pedidosRecentes.map((pedido) => {
-              const situacao = configSituacaoPedido(pedido.situacao);
-              const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
-              return (
-                <EventoCard
-                  key={`pedido-${pedido.id}`}
-                  icone={<IconeClipboard />}
-                  corIcone={situacao.enfase ? "primary" : "laranja"}
-                  titulo={`Pedido ${pedido.numero ?? "—"}`}
-                  descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
-                  horario={formatarData(pedido.dataHoraUltimaAlteracao)}
-                  acaoRotulo="Ver pedido"
-                  acaoHref={`/pedidos/${pedido.id}`}
-                />
-              );
-            })}
-            {resumo.notasFiscaisRecentes.map((nota) => {
-              const status = configStatusNfe(nota.statusNfe);
-              const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
-              return (
-                <EventoCard
-                  key={`nota-${nota.id}`}
-                  icone={<IconeRecibo />}
-                  corIcone={status.enfase ? "primary" : "vermelho"}
-                  titulo={titulo}
-                  descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
-                  horario={formatarData(nota.dataEmissao)}
-                  acaoRotulo="Ver notas"
-                  acaoHref="/notas-fiscais"
-                />
-              );
-            })}
-          </div>
+          <CarrosselEventos
+            itens={[
+              ...resumo.pedidosRecentes.map((pedido) => {
+                const situacao = configSituacaoPedido(pedido.situacao);
+                const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
+                return (
+                  <EventoCard
+                    key={`pedido-${pedido.id}`}
+                    icone={<IconeClipboard />}
+                    corIcone={situacao.enfase ? "primary" : "laranja"}
+                    titulo={`Pedido ${pedido.numero ?? "—"}`}
+                    descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
+                    horario={formatarData(pedido.dataHoraUltimaAlteracao)}
+                    acaoRotulo="Ver pedido"
+                    acaoHref={`/pedidos/${pedido.id}`}
+                  />
+                );
+              }),
+              ...resumo.notasFiscaisRecentes.map((nota) => {
+                const status = configStatusNfe(nota.statusNfe);
+                const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
+                return (
+                  <EventoCard
+                    key={`nota-${nota.id}`}
+                    icone={<IconeRecibo />}
+                    corIcone={status.enfase ? "primary" : "vermelho"}
+                    titulo={titulo}
+                    descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
+                    horario={formatarData(nota.dataEmissao)}
+                    acaoRotulo="Ver notas"
+                    acaoHref="/notas-fiscais"
+                  />
+                );
+              }),
+            ]}
+          />
         )}
       </section>
 

@@ -51,6 +51,7 @@ export interface RankingDashboardDto {
   periodo: PeriodoDto;
   topClientes: RankingItemDto[];
   topProdutos: RankingItemDto[];
+  topVendedores: RankingItemDto[];
 }
 
 export interface ContagemPorStatusNfeDto {

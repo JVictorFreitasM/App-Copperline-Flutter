@@ -126,13 +126,16 @@ export class DashboardService {
   async obterRanking(query: RankingQueryDto): Promise<RankingDashboardDto> {
     const periodoPedido = filtroPeriodo(query.dataInicial, query.dataFinal);
 
-    const [topClientesAgrupado, topProdutosAgrupado] = await Promise.all([
+    // clientesAgrupado sem `take` (todos os clientes com pedido no
+    // periodo, nao so o top N) - top vendedores precisa somar TODOS os
+    // clientes de cada vendedor, nao so os que aparecem no top N de
+    // clientes isolado (um vendedor com varios clientes medianos pode
+    // superar um vendedor com um unico cliente grande).
+    const [clientesAgrupado, topProdutosAgrupado] = await Promise.all([
       this.prisma.pedido.groupBy({
         by: ['clienteId'],
         where: { clienteId: { not: null }, dataHoraUltimaAlteracao: periodoPedido },
         _sum: { valorTotal: true },
-        orderBy: { _sum: { valorTotal: 'desc' } },
-        take: query.limite,
       }),
       this.prisma.pedidoItem.groupBy({
         by: ['produtoId'],
@@ -146,7 +149,11 @@ export class DashboardService {
       }),
     ]);
 
-    const [clientes, produtos] = await Promise.all([
+    const topClientesAgrupado = [...clientesAgrupado]
+      .sort((a, b) => Number(b._sum.valorTotal ?? 0) - Number(a._sum.valorTotal ?? 0))
+      .slice(0, query.limite);
+
+    const [clientes, produtos, vinculos] = await Promise.all([
       this.prisma.cliente.findMany({
         where: { id: { in: topClientesAgrupado.map((c) => c.clienteId as string) } },
         select: { id: true, razaoSocial: true, nomeFantasia: true },
@@ -155,9 +162,45 @@ export class DashboardService {
         where: { id: { in: topProdutosAgrupado.map((p) => p.produtoId as string) } },
         select: { id: true, nome: true, codigo: true },
       }),
+      this.prisma.clienteVendedor.findMany({
+        where: { clienteId: { in: clientesAgrupado.map((c) => c.clienteId as string) } },
+        orderBy: { criadoEm: 'asc' },
+        select: { clienteId: true, vendedorId: true },
+      }),
     ]);
     const clientePorId = new Map(clientes.map((c) => [c.id, c]));
     const produtoPorId = new Map(produtos.map((p) => [p.id, p]));
+
+    // ClienteVendedor e' N:N no schema, mas na pratica um cliente so
+    // negocia com um vendedor (confirmado com o usuario) - o primeiro
+    // vinculo (mais antigo) de cada cliente e' o vendedor responsavel, sem
+    // inventar um criterio novo de "principal".
+    const vendedorIdPorCliente = new Map<string, string>();
+    for (const vinculo of vinculos) {
+      if (!vendedorIdPorCliente.has(vinculo.clienteId)) {
+        vendedorIdPorCliente.set(vinculo.clienteId, vinculo.vendedorId);
+      }
+    }
+
+    const valorPorVendedor = new Map<string, number>();
+    for (const linha of clientesAgrupado) {
+      const vendedorId = vendedorIdPorCliente.get(linha.clienteId as string);
+      if (!vendedorId) {
+        continue;
+      }
+      const valorAtual = valorPorVendedor.get(vendedorId) ?? 0;
+      valorPorVendedor.set(vendedorId, valorAtual + Number(linha._sum.valorTotal ?? 0));
+    }
+
+    const topVendedoresAgrupado = [...valorPorVendedor.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, query.limite);
+
+    const vendedores = await this.prisma.vendedor.findMany({
+      where: { id: { in: topVendedoresAgrupado.map(([id]) => id) } },
+      select: { id: true, nome: true },
+    });
+    const vendedorPorId = new Map(vendedores.map((v) => [v.id, v]));
 
     return {
       periodo: { dataInicial: query.dataInicial ?? null, dataFinal: query.dataFinal ?? null },
@@ -177,6 +220,11 @@ export class DashboardService {
           valorTotal: (linha._sum.valorTotal ?? 0).toString(),
         };
       }),
+      topVendedores: topVendedoresAgrupado.map(([id, valor]) => ({
+        id,
+        nome: vendedorPorId.get(id)?.nome ?? '—',
+        valorTotal: valor.toString(),
+      })),
     };
   }
 
