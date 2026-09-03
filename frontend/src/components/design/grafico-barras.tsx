@@ -40,11 +40,10 @@ export function GraficoBarras({
 
   if (orientacao === "horizontal") {
     // altura proporcional à quantidade de itens (uma barra por linha) em
-    // vez de um valor fixo - senão barras demais ficam espremidas. 55px
-    // por linha (era 40) - mais respiro entre um nome e outro (rótulos
-    // ficavam amontoados) e espaço de sobra pra barra ficar grossa mesmo
-    // com barCategoryGap reduzido.
-    const alturaCalculada = Math.max(altura, dados.length * 55);
+    // vez de um valor fixo - senão barras demais ficam espremidas. 60px
+    // por linha (era 55) - +5px de respiro entre um nome e outro, ainda
+    // amontoados no valor anterior.
+    const alturaCalculada = Math.max(altura, dados.length * 60);
     return (
       <div style={{ height: alturaCalculada }}>
         <ResponsiveContainer width="100%" height="100%">
