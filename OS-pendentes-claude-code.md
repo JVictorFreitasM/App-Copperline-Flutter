@@ -769,3 +769,56 @@ completa da empresa vs. só do vendedor — implicação de permissão/escopo).
 Mesma causa raiz do item 3 — sem meta configurável no backend hoje. Decisão
 necessária: backend expõe meta (por vendedor ou global) antes de completar
 o card, ou referência visual é ajustada pra não depender disso.
+
+**Atualização**: meta MENSAL por vendedor passou a existir (OS-BACKEND-44,
+`GET /vendedores/:id/meta-progresso`) e já é consumida no app (gauge de
+meta na home, OS-MOBILE-41). Isso NÃO resolve os itens 3/7 acima como
+estão escritos - ambos pedem "meta DIÁRIA"/"roteiro de visitas planejadas
+vs. realizadas", conceito que ainda não existe no backend (só meta de
+valor vendido no MÊS). Segue bloqueado enquanto essa decisão de produto
+não for tomada.
+
+---
+
+# Adendo — rodada `OS-CONSOLIDADO-FINAL.md`
+
+Concluídas nesta rodada, sem intervenção do usuário: OS-BACKEND-43
+(boleto - `Financeiro.svc`), OS-BACKEND-44 a 50 (metas/gamificação,
+oportunidades com IA, coberturas temporárias, sazonalidade, contexto de
+IA na aprovação de desconto), OS-WEB-41/OS-MOBILE-42 (funil de pedidos e
+stepper de status, web + mobile), OS-WEB-42/OS-MOBILE-40 (timeline
+unificada do relacionamento, web + mobile), OS-MOBILE-41 (indicadores
+visuais na home - gauge de meta, sparkline de vendas semanais via
+endpoint novo `GET /vendedores/me/vendas-semanais`, barra de saldo de
+estoque do produto favoritado), OS-WEB-40 (comparativo radar de
+vendedores via `GET /dashboard/comparativo-vendedores`), OS-WEB-39 (mapa
+de calor de vendas via `GET /dashboard/mapa-calor-vendas`).
+
+## Bloqueadas — precisam do WSDL de `Comercial.svc`
+
+Usuário forneceu o WSDL de `Financeiro.svc` nesta rodada (usado pra
+concluir o boleto da OS-BACKEND-43), mas não o de `Comercial.svc`. Sem
+ele, seguem bloqueadas (regra do topo do `OS-CONSOLIDADO-FINAL.md`:
+"SEMPRE QUE PRECISAR DE SCHEMA DO MOTOR ANTIGO, PEDIR PARA COLAR" - não
+adivinhar shape de SOAP):
+
+- **OS-BACKEND-43 (resto)**: PDF/XML de nota fiscal
+  (`BuscarTokenPDFNFe`/`DownloadPDFNFe`, `BuscarTokenXMLNotas`/
+  `DownloadXMLNFeNFSe`) - só o boleto (via `Financeiro.svc`) foi
+  concluído.
+- **OS-BACKEND-25 (adição desta revisão)**: simulação via
+  `EfetuarPreCalculoPedido` - não desbloqueia o envio real de pedido (que
+  segue dependendo dos 6 IDs, ver bloqueio original acima), só a etapa
+  de simulação/validação de cálculo.
+
+## Bloqueadas — dependem de OS-BACKEND-25 (envio de pedido ao ERP)
+
+Mesmo bloqueio já documentado no topo deste arquivo (6 IDs de referência
+do Radar). Novas OS que dependem disso, adicionadas nesta rodada:
+
+- **OS-BACKEND-46** (repetir pedido anterior + sugestão de produto
+  complementar via IA): "repetir pedido" pressupõe conseguir CRIAR um
+  pedido de verdade a partir de um anterior - sem `POST /pedidos`
+  funcional, não há o que repetir.
+- **OS-BACKEND-47** (assinatura digital de pedido): não há pedido real
+  criado pelo app pra assinar (fluxo de criação ainda 100% bloqueado).
