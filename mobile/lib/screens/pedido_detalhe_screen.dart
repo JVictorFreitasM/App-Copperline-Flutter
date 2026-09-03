@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_card.dart';
 import '../widgets/listagem_feedback.dart';
+import '../widgets/pedido_stepper.dart';
 
 /// Detalhe do pedido (mobile, equivalente à OS-WEB-15) - mostra o que a
 /// listagem não mostra: os itens do pedido.
@@ -52,6 +53,8 @@ class PedidoDetalheScreen extends ConsumerWidget {
                   '${formatarData(pedido.dataHoraUltimaAlteracao)}',
                   style: const TextStyle(color: AppColors.muted),
                 ),
+                const SizedBox(height: 16),
+                AppCard(child: PedidoStepper(situacao: pedido.situacao)),
                 const SizedBox(height: 16),
                 AppCard(
                   child: Column(
