@@ -5,11 +5,13 @@ import type {
   ComparativoVendedorDto,
   EstoqueCriticoDashboardDto,
   FunilPedidosDashboardDto,
+  MapaCalorVendasDto,
   NotasFiscaisDashboardDto,
   RankingDashboardDto,
   ResumoDashboardDto,
   VendasDashboardDto,
 } from "@/lib/dashboard";
+import { MapaCalorVendasWrapper } from "@/components/design/mapa-calor-vendas-wrapper";
 import type { VendedorEquipeDto } from "@/lib/vendedores";
 import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { configSituacaoPedido } from "@/lib/pedidos";
@@ -76,6 +78,7 @@ export default async function PainelPage({
     estoqueCriticoResultado,
     funilPedidosResultado,
     equipeResultado,
+    mapaCalorResultado,
   ] = await Promise.allSettled([
     apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
     apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
@@ -88,6 +91,9 @@ export default async function PainelPage({
       cache: "no-store",
     }),
     apiFetch<VendedorEquipeDto[]>("/vendedores/equipe", { cache: "no-store" }),
+    apiFetch<MapaCalorVendasDto>(`/dashboard/mapa-calor-vendas?${queryPeriodo}`, {
+      cache: "no-store",
+    }),
   ]);
 
   function extrair<T>(resultado: PromiseSettledResult<T>): [T | null, string | null] {
@@ -105,6 +111,7 @@ export default async function PainelPage({
   const [estoqueCritico, erroEstoqueCritico] = extrair(estoqueCriticoResultado);
   const [funilPedidos, erroFunilPedidos] = extrair(funilPedidosResultado);
   const [equipe, erroEquipe] = extrair(equipeResultado);
+  const [mapaCalor, erroMapaCalor] = extrair(mapaCalorResultado);
 
   // OS-WEB-40 - comparativo só busca quando há seleção válida (2-4
   // vendedores); sem seleção, o card mostra o seletor sem gráfico, nada de
@@ -504,6 +511,28 @@ export default async function PainelPage({
               </p>
             )}
           </Card>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-ink">Mapa de calor de vendas por região</h2>
+        {!mapaCalor ? (
+          <ErroConexao mensagem={erroMapaCalor!} />
+        ) : mapaCalor.pontos.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum cliente com localização definida e pedido no período selecionado." />
+        ) : (
+          <>
+            <Card className="h-[480px] overflow-hidden p-0">
+              <MapaCalorVendasWrapper pontos={mapaCalor.pontos} />
+            </Card>
+            {mapaCalor.pontos.length < mapaCalor.totalClientesNoPeriodo && (
+              <p className="text-xs text-muted">
+                Mostrando {mapaCalor.pontos.length} de {mapaCalor.totalClientesNoPeriodo} cliente(s)
+                com pedido no período - os demais não têm localização definida (pin manual via
+                check-in de visita, OS-MOBILE-21).
+              </p>
+            )}
+          </>
         )}
       </section>
     </main>

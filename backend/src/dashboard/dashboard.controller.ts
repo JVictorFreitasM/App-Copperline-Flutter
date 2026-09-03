@@ -6,6 +6,7 @@ import type { ComparativoVendedorDto } from './dto/comparativo-vendedores.dto';
 import { EstoqueCriticoQueryDto } from './dto/estoque-critico-dashboard.dto';
 import type { EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
 import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
+import type { MapaCalorVendasDto } from './dto/mapa-calor-vendas.dto';
 import { filtroPeriodo } from './filtro-periodo';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
 import { PeriodoQueryDto } from './dto/periodo-query.dto';
@@ -62,6 +63,13 @@ export class DashboardController {
   @Get('funil-pedidos')
   obterFunilPedidos(@Query() query: PeriodoQueryDto): Promise<FunilPedidosDashboardDto> {
     return this.dashboardService.obterFunilPedidos(query);
+  }
+
+  // OS-WEB-39 - so' clientes com pin de localizacao definido (ver
+  // dto/mapa-calor-vendas.dto.ts pro porque de nao cobrir todos).
+  @Get('mapa-calor-vendas')
+  obterMapaCalorVendas(@Query() query: PeriodoQueryDto): Promise<MapaCalorVendasDto> {
+    return this.dashboardService.obterMapaCalorVendas(query);
   }
 
   // OS-BACKEND-49 - serie mensal (13 meses) + variacao vs mesmo mes do ano

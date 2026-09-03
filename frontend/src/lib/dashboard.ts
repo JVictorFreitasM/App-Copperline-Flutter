@@ -115,3 +115,20 @@ export interface ComparativoVendedorDto {
   taxaAprovacaoDesconto: number | null;
   quantidadeVisitas: number;
 }
+
+// Mesmo shape de backend/src/dashboard/dto/mapa-calor-vendas.dto.ts
+// (OS-WEB-39) - so' clientes com Cliente.localizacaoLat/Lng definido (pin
+// manual, OS-MOBILE-21) entram em `pontos`; totalClientesNoPeriodo deixa
+// explícito que o mapa cobre só uma fatia dos clientes com pedido.
+export interface PontoMapaCalorVendasDto {
+  clienteId: string;
+  nome: string | null;
+  latitude: number;
+  longitude: number;
+  valorTotal: number;
+}
+
+export interface MapaCalorVendasDto {
+  pontos: PontoMapaCalorVendasDto[];
+  totalClientesNoPeriodo: number;
+}

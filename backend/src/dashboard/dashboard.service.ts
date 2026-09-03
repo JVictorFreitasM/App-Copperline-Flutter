@@ -9,6 +9,7 @@ import type { EstoqueCriticoQueryDto, EstoqueCriticoDashboardDto } from './dto/e
 import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
 import type { RankingDashboardDto, RankingQueryDto } from './dto/ranking-dashboard.dto';
+import type { MapaCalorVendasDto } from './dto/mapa-calor-vendas.dto';
 import type { PeriodoQueryDto } from './dto/periodo-query.dto';
 import type { ResumoDashboardDto } from './dto/resumo-dashboard.dto';
 import type { VendasDashboardDto } from './dto/vendas-dashboard.dto';
@@ -334,5 +335,48 @@ export class DashboardService {
       });
 
     return { limiar: query.limiar, produtos: produtosCriticos };
+  }
+
+  // OS-WEB-39 - so' clientes com pin de localizacao definido
+  // (Cliente.localizacaoLat/Lng, OS-MOBILE-21) tem coordenada real; o
+  // endereco cadastral do WK Radar (`enderecos`) e' so texto, sem
+  // geocodificacao (ver dto/mapa-calor-vendas.dto.ts). totalClientesNoPeriodo
+  // deixa explicito no proprio retorno que o mapa cobre so uma fatia.
+  async obterMapaCalorVendas(query: PeriodoQueryDto): Promise<MapaCalorVendasDto> {
+    const periodoPedido = filtroPeriodo(query.dataInicial, query.dataFinal);
+
+    const clientesAgrupado = await this.prisma.pedido.groupBy({
+      by: ['clienteId'],
+      where: { clienteId: { not: null }, dataHoraUltimaAlteracao: periodoPedido },
+      _sum: { valorTotal: true },
+    });
+    if (clientesAgrupado.length === 0) {
+      return { pontos: [], totalClientesNoPeriodo: 0 };
+    }
+
+    const clientesComPin = await this.prisma.cliente.findMany({
+      where: {
+        id: { in: clientesAgrupado.map((c) => c.clienteId as string) },
+        localizacaoLat: { not: null },
+        localizacaoLng: { not: null },
+      },
+      select: { id: true, razaoSocial: true, nomeFantasia: true, localizacaoLat: true, localizacaoLng: true },
+    });
+    const clientePorId = new Map(clientesComPin.map((c) => [c.id, c]));
+
+    const pontos: MapaCalorVendasDto['pontos'] = [];
+    for (const linha of clientesAgrupado) {
+      const cliente = clientePorId.get(linha.clienteId as string);
+      if (!cliente) continue;
+      pontos.push({
+        clienteId: cliente.id,
+        nome: cliente.nomeFantasia ?? cliente.razaoSocial,
+        latitude: cliente.localizacaoLat!.toNumber(),
+        longitude: cliente.localizacaoLng!.toNumber(),
+        valorTotal: Number(linha._sum.valorTotal ?? 0),
+      });
+    }
+
+    return { pontos, totalClientesNoPeriodo: clientesAgrupado.length };
   }
 }

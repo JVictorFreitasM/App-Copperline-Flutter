@@ -374,3 +374,46 @@ describe('DashboardService.obterEstoqueCritico', () => {
     expect(resultado.produtos).toEqual([]);
   });
 });
+
+function decimalFake(valor: number) {
+  return { toNumber: () => valor };
+}
+
+describe('DashboardService.obterMapaCalorVendas', () => {
+  it('so inclui cliente com pin de localizacao definido, mesmo com pedido no periodo', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [
+        { clienteId: 'com-pin', _sum: { valorTotal: { toString: () => '500' } } },
+        { clienteId: 'sem-pin', _sum: { valorTotal: { toString: () => '300' } } },
+      ],
+      clientes: [
+        {
+          id: 'com-pin',
+          razaoSocial: 'Cliente Com Pin',
+          nomeFantasia: null,
+          localizacaoLat: decimalFake(-23.55),
+          localizacaoLng: decimalFake(-46.63),
+        },
+      ],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterMapaCalorVendas({});
+
+    expect(resultado.pontos).toHaveLength(1);
+    expect(resultado.pontos[0].clienteId).toBe('com-pin');
+    expect(resultado.pontos[0].valorTotal).toBe(500);
+    expect(resultado.totalClientesNoPeriodo).toBe(2);
+  });
+
+  it('sem nenhum pedido no periodo, nao consulta cliente', async () => {
+    const prisma = prismaFake({ pedidoGroupBy: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterMapaCalorVendas({});
+
+    expect(resultado.pontos).toEqual([]);
+    expect(resultado.totalClientesNoPeriodo).toBe(0);
+    expect(prisma.cliente.findMany).not.toHaveBeenCalled();
+  });
+});
