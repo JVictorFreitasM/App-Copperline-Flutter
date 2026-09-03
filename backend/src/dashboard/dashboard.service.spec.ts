@@ -152,6 +152,41 @@ describe('DashboardService.obterVendas', () => {
   });
 });
 
+describe('DashboardService.obterFunilPedidos', () => {
+  it('monta as etapas do funil a partir da contagem real por situacao', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [
+        { situacao: 'EM_ANALISE', _count: 3 },
+        { situacao: 'ATENDIDO', _count: 5 },
+        { situacao: 'CANCELADO', _count: 1 },
+      ],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterFunilPedidos({});
+
+    expect(resultado.etapas).toEqual([
+      { etapa: 'Criado', quantidade: 9 },
+      { etapa: 'Em processamento', quantidade: 3 },
+      { etapa: 'Atendimento parcial', quantidade: 0 },
+      { etapa: 'Concluído', quantidade: 5 },
+    ]);
+    expect(resultado.cancelados).toBe(1);
+  });
+
+  it('retorna tudo zerado sem lancar excecao quando nao ha pedido no periodo', async () => {
+    const prisma = prismaFake({ pedidoGroupBy: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterFunilPedidos({
+      dataInicial: '1900-01-01',
+      dataFinal: '1900-01-02',
+    });
+
+    expect(resultado.etapas.every((e) => e.quantidade === 0)).toBe(true);
+  });
+});
+
 describe('DashboardService.obterRanking', () => {
   // OS-WEB-29 - criterio de aceite: periodo sem nenhum pedido/pedidoItem
   // (groupBy vazio) nao lanca excecao, so retorna listas vazias.

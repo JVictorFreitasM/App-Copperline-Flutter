@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { EstoqueCriticoQueryDto } from './dto/estoque-critico-dashboard.dto';
 import type { EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
+import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
 import { PeriodoQueryDto } from './dto/periodo-query.dto';
 import { RankingQueryDto } from './dto/ranking-dashboard.dto';
@@ -47,6 +48,15 @@ export class DashboardController {
     @Query() query: EstoqueCriticoQueryDto,
   ): Promise<EstoqueCriticoDashboardDto> {
     return this.dashboardService.obterEstoqueCritico(query);
+  }
+
+  // OS-WEB-41 - etapas do funil de pedidos, ver domain/montar-funil-pedidos.ts
+  // pro porque das etapas usadas (nao "aguardando aprovacao"/"aprovado" do
+  // texto original da OS - StatusPedidoLocal ainda nao tem dado real,
+  // OS-BACKEND-25 bloqueada).
+  @Get('funil-pedidos')
+  obterFunilPedidos(@Query() query: PeriodoQueryDto): Promise<FunilPedidosDashboardDto> {
+    return this.dashboardService.obterFunilPedidos(query);
   }
 
   // OS-BACKEND-49 - serie mensal (13 meses) + variacao vs mesmo mes do ano

@@ -2,6 +2,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import type {
   EstoqueCriticoDashboardDto,
+  FunilPedidosDashboardDto,
   NotasFiscaisDashboardDto,
   RankingDashboardDto,
   ResumoDashboardDto,
@@ -57,16 +58,25 @@ export default async function PainelPage({
   // (Promise.allSettled, nao Promise.all) - uma falha isolada num unico
   // endpoint nao derruba o painel inteiro, so a secao afetada mostra sua
   // propria mensagem de erro.
-  const [resumoResultado, vendasResultado, rankingResultado, notasFiscaisResultado, estoqueCriticoResultado] =
-    await Promise.allSettled([
-      apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
-      apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
-      apiFetch<RankingDashboardDto>(`/dashboard/ranking?${queryPeriodo}`, { cache: "no-store" }),
-      apiFetch<NotasFiscaisDashboardDto>(`/dashboard/notas-fiscais?${queryPeriodo}`, {
-        cache: "no-store",
-      }),
-      apiFetch<EstoqueCriticoDashboardDto>("/dashboard/estoque-critico", { cache: "no-store" }),
-    ]);
+  const [
+    resumoResultado,
+    vendasResultado,
+    rankingResultado,
+    notasFiscaisResultado,
+    estoqueCriticoResultado,
+    funilPedidosResultado,
+  ] = await Promise.allSettled([
+    apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
+    apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
+    apiFetch<RankingDashboardDto>(`/dashboard/ranking?${queryPeriodo}`, { cache: "no-store" }),
+    apiFetch<NotasFiscaisDashboardDto>(`/dashboard/notas-fiscais?${queryPeriodo}`, {
+      cache: "no-store",
+    }),
+    apiFetch<EstoqueCriticoDashboardDto>("/dashboard/estoque-critico", { cache: "no-store" }),
+    apiFetch<FunilPedidosDashboardDto>(`/dashboard/funil-pedidos?${queryPeriodo}`, {
+      cache: "no-store",
+    }),
+  ]);
 
   function extrair<T>(resultado: PromiseSettledResult<T>): [T | null, string | null] {
     if (resultado.status === "fulfilled") {
@@ -81,6 +91,7 @@ export default async function PainelPage({
   const [ranking, erroRanking] = extrair(rankingResultado);
   const [notasFiscais, erroNotasFiscais] = extrair(notasFiscaisResultado);
   const [estoqueCritico, erroEstoqueCritico] = extrair(estoqueCriticoResultado);
+  const [funilPedidos, erroFunilPedidos] = extrair(funilPedidosResultado);
 
   // Percentuais derivados pros anéis de KPI/medidor - sempre a partir do
   // MESMO dado já buscado acima, nunca um número novo/estimado.
@@ -198,6 +209,31 @@ export default async function PainelPage({
           }))}
           formato="moeda"
           orientacao="horizontal"
+        />
+      ),
+    },
+    {
+      // OS-WEB-41 - etapas usam so' Pedido.situacao (real, sempre presente).
+      // "Aguardando aprovação"/"Aprovado" do pedido original da OS ficaram
+      // de fora - dependem de StatusPedidoLocal, que so existe pra pedido
+      // criado localmente pelo app (ainda bloqueado, OS-BACKEND-25); hoje
+      // sairiam sempre zeradas, o que seria dado falso, nao "sem dado".
+      titulo: "Funil de pedidos",
+      legenda: funilPedidos && (funilPedidos.cancelados > 0 || funilPedidos.bloqueados > 0) && (
+        <p className="text-sm text-muted">
+          {funilPedidos.cancelados} cancelado(s) · {funilPedidos.bloqueados} bloqueado(s)
+        </p>
+      ),
+      conteudo: !funilPedidos ? (
+        <ErroConexao mensagem={erroFunilPedidos!} />
+      ) : funilPedidos.etapas[0].quantidade === 0 ? (
+        <EstadoVazio mensagem="Nenhum pedido no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={funilPedidos.etapas.map((item) => ({
+            rotulo: item.etapa,
+            valor: item.quantidade,
+          }))}
         />
       ),
     },

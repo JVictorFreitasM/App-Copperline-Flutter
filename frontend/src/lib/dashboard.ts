@@ -86,3 +86,19 @@ export interface EstoqueCriticoDashboardDto {
   limiar: number;
   produtos: ProdutoEstoqueCriticoDto[];
 }
+
+export interface EtapaFunilDto {
+  etapa: string;
+  quantidade: number;
+}
+
+// Mesmo shape de backend/src/dashboard/dto/funil-pedidos-dashboard.dto.ts
+// (FunilPedidosDashboardDto, OS-WEB-41) - etapas usam so' Pedido.situacao
+// (real, sempre presente); cancelados/bloqueados sao estados de excecao,
+// reportados a parte da progressao "Criado -> ... -> Concluído".
+export interface FunilPedidosDashboardDto {
+  periodo: PeriodoDto;
+  etapas: EtapaFunilDto[];
+  cancelados: number;
+  bloqueados: number;
+}

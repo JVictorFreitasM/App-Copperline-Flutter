@@ -3,8 +3,10 @@ import { TipoSituacaoPedido } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { paraPedidoResumoDto } from '../pedidos/dto/pedido-response.dto';
 import { paraNotaFiscalDto } from '../notas-fiscais/dto/nota-fiscal-response.dto';
+import { montarFunilPedidos } from './domain/montar-funil-pedidos';
 import { filtroPeriodo } from './filtro-periodo';
 import type { EstoqueCriticoQueryDto, EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
+import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
 import type { RankingDashboardDto, RankingQueryDto } from './dto/ranking-dashboard.dto';
 import type { PeriodoQueryDto } from './dto/periodo-query.dto';
@@ -120,6 +122,33 @@ export class DashboardService {
         situacao: linha.situacao,
         quantidade: linha._count as unknown as number,
       })),
+    };
+  }
+
+  // OS-WEB-41 - reaproveita a mesma contagem por situacao de obterVendas
+  // acima, so' reorganizada em etapas (ver montarFunilPedidos - regra
+  // deterministica, testada isoladamente).
+  async obterFunilPedidos(query: PeriodoQueryDto): Promise<FunilPedidosDashboardDto> {
+    const where = {
+      dataHoraUltimaAlteracao: filtroPeriodo(query.dataInicial, query.dataFinal),
+    };
+
+    const porSituacao = await this.prisma.pedido.groupBy({
+      by: ['situacao'],
+      where,
+      _count: true,
+    });
+
+    const funil = montarFunilPedidos(
+      porSituacao.map((linha) => ({
+        situacao: linha.situacao,
+        quantidade: linha._count as unknown as number,
+      })),
+    );
+
+    return {
+      periodo: { dataInicial: query.dataInicial ?? null, dataFinal: query.dataFinal ?? null },
+      ...funil,
     };
   }
 
