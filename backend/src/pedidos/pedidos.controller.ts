@@ -1,12 +1,24 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { PaginatedResult } from '../common/pagination';
+import { PrismaService } from '../prisma/prisma.service';
+import type { SimularDescontoResultado } from '../solicitacoes-desconto/solicitacoes-desconto.service';
+import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoResultadoDto } from './criar-pedido.service';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
+import { SimularDescontoDto } from './dto/simular-desconto.dto';
 import { PedidosService } from './pedidos.service';
 import type {
   PedidoDetalheDto,
@@ -27,6 +39,8 @@ export class PedidosController {
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly relatorioPedidosService: RelatorioPedidosService,
+    private readonly solicitacoesDescontoService: SolicitacoesDescontoService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get()
@@ -60,6 +74,30 @@ export class PedidosController {
   @Get(':id/historico')
   obterHistorico(@Param('id') id: string): Promise<PedidoHistoricoStatusDto[]> {
     return this.pedidosService.obterHistorico(id);
+  }
+
+  // OS-BACKEND-22-A - simulacao pura (nunca cria SolicitacaoDesconto nem
+  // dispara notificacao, ver SolicitacoesDescontoService.simular()) - usada
+  // em tempo real enquanto o vendedor monta o pedido, pra avisar antes de
+  // confirmar se aquele desconto vai exigir aprovacao e de quem.
+  @Post('simular-desconto')
+  async simularDesconto(
+    @Body() dto: SimularDescontoDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<SimularDescontoResultado> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const vendedor = await this.prisma.vendedor.findFirst({
+      where: { usuarioId: usuario.id },
+    });
+    if (!vendedor) {
+      throw new ForbiddenException(
+        'Usuário autenticado não é um vendedor cadastrado',
+      );
+    }
+    return this.solicitacoesDescontoService.simular({
+      vendedorSolicitanteId: vendedor.id,
+      percentualSolicitado: dto.percentualDesconto,
+    });
   }
 
   // OS-BACKEND-25 - reaproveita o mesmo escopo cliente<->vendedor de

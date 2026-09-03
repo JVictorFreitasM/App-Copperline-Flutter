@@ -193,6 +193,86 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
   });
 });
 
+describe('SolicitacoesDescontoService.simular', () => {
+  // OS-BACKEND-22-A - mesma decisao de avaliarDesconto(), mas PURA: nunca
+  // cria SolicitacaoDesconto nem dispara notificacao (usada em tempo real
+  // enquanto o vendedor ainda monta o pedido, sem pedidoId nenhum ainda).
+  it('nao cria nada quando o percentual esta dentro do limite', async () => {
+    const prisma = prismaFake();
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake(20) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.simular({
+      vendedorSolicitanteId: 'v1',
+      percentualSolicitado: 20,
+    });
+
+    expect(resultado).toEqual({ necessitaAprovacao: false });
+    expect(prisma.solicitacaoDesconto.create).not.toHaveBeenCalled();
+  });
+
+  it('retorna o aprovador esperado sem criar SolicitacaoDesconto quando excede o limite', async () => {
+    const prisma = prismaFake({
+      vendedores: [
+        {
+          id: 'v1',
+          papel: 'VENDEDOR',
+          supervisorId: 'sup1',
+          supervisor: { id: 'sup1', nome: 'Supervisor Um' },
+        },
+      ],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake(20) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.simular({
+      vendedorSolicitanteId: 'v1',
+      percentualSolicitado: 25,
+    });
+
+    expect(resultado).toEqual({
+      necessitaAprovacao: true,
+      aprovadorEsperado: { id: 'sup1', nome: 'Supervisor Um' },
+    });
+    expect(prisma.solicitacaoDesconto.create).not.toHaveBeenCalled();
+    expect(prisma.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+
+  it('lanca erro claro quando o vendedor solicitante nao tem hierarquia configurada', async () => {
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: null }],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake(20) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await expect(
+      service.simular({ vendedorSolicitanteId: 'v1', percentualSolicitado: 30 }),
+    ).rejects.toThrow(UnprocessableEntityException);
+  });
+
+  it('lanca NotFoundException quando o vendedor solicitante nao existe', async () => {
+    const prisma = prismaFake();
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake(20) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await expect(
+      service.simular({ vendedorSolicitanteId: 'inexistente', percentualSolicitado: 30 }),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
+
 describe('SolicitacoesDescontoService.aprovar/rejeitar', () => {
   function prismaComSolicitacaoPendente() {
     return prismaFake({

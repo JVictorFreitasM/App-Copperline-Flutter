@@ -54,6 +54,18 @@ export interface AvaliarDescontoInput {
   percentualSolicitado: number;
 }
 
+// OS-BACKEND-22-A - resultado da SIMULACAO (POST /pedidos/simular-desconto):
+// mesma decisao de avaliarDesconto(), mas sem pedidoId (simulacao nao tem
+// pedido ainda) e sem SolicitacaoDescontoDto (nada foi persistido) - so o
+// aprovador esperado, pra a tela mostrar "vai para fulano" antes de
+// confirmar.
+export type SimularDescontoResultado =
+  | { necessitaAprovacao: false }
+  | {
+      necessitaAprovacao: true;
+      aprovadorEsperado: { id: string; nome: string | null };
+    };
+
 // Orquestra a entidade de dominio (SolicitacaoDesconto, ver
 // domain/solicitacao-desconto.entity.ts) com Prisma - a entidade decide,
 // este service busca/persiste. Sem endpoint HTTP proprio pra
@@ -184,6 +196,51 @@ export class SolicitacoesDescontoService {
     });
 
     return { necessitaAprovacao: true, solicitacao: paraDto(criada) };
+  }
+
+  // OS-BACKEND-22-A - mesma decisao de avaliarDesconto() (limite, hierarquia
+  // do solicitante), mas PURA: nunca cria SolicitacaoDesconto nem dispara
+  // notificacao. Usada por POST /pedidos/simular-desconto, chamada em tempo
+  // real enquanto o vendedor ainda esta montando o pedido (antes de existir
+  // um pedidoId de verdade pra vincular).
+  async simular(input: {
+    vendedorSolicitanteId: string;
+    percentualSolicitado: number;
+  }): Promise<SimularDescontoResultado> {
+    const limitePercentual =
+      await this.configuracaoDescontoService.obterLimitePercentual();
+
+    if (
+      !SolicitacaoDesconto.necessitaAprovacao(
+        input.percentualSolicitado,
+        limitePercentual,
+      )
+    ) {
+      return { necessitaAprovacao: false };
+    }
+
+    const solicitante = await this.prisma.vendedor.findUnique({
+      where: { id: input.vendedorSolicitanteId },
+      include: { supervisor: { select: { id: true, nome: true } } },
+    });
+    if (!solicitante) {
+      throw new NotFoundException(
+        `Vendedor ${input.vendedorSolicitanteId} nao encontrado`,
+      );
+    }
+    if (!solicitante.supervisorId || !solicitante.supervisor) {
+      throw new UnprocessableEntityException(
+        `Vendedor ${solicitante.id} sem hierarquia configurada - configure via PATCH /admin/vendedores/${solicitante.id}/hierarquia antes de solicitar desconto acima do limite`,
+      );
+    }
+
+    return {
+      necessitaAprovacao: true,
+      aprovadorEsperado: {
+        id: solicitante.supervisor.id,
+        nome: solicitante.supervisor.nome,
+      },
+    };
   }
 
   async aprovar(
