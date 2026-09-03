@@ -703,6 +703,7 @@ model Vendedor {
   pedidosCriados              Pedido[]
   visitas                     Visita[]
   clientesLocalizacaoDefinida Cliente[]             @relation("ClienteLocalizacaoDefinidaPor")
+  metas                       MetaVendedor[]
 
   @@map("vendedores")
 }
@@ -713,6 +714,40 @@ enum PapelVendedor {
   GERENTE
 
   @@map("papel_vendedor")
+}
+
+// Meta mensal por vendedor (OS-BACKEND-44) - configurada manualmente pelo
+// admin/supervisor (nao vem do Radar, mesmo motivo estrutural de
+// Vendedor.papel/supervisorId acima: e' decisao de gestao interna, sem
+// endpoint equivalente no ERP). mesAno como string "YYYY-MM" (nao DateTime)
+// - representa um MES inteiro, nao um instante; evita ambiguidade de fuso
+// horario na comparacao "qual mes e' esse timestamp" que um DateTime
+// exigiria a cada leitura.
+model MetaVendedor {
+  id           String   @id @default(uuid())
+  vendedorId   String   @map("vendedor_id")
+  mesAno       String   @map("mes_ano")
+  valorMeta    Decimal  @map("valor_meta") @db.Decimal(18, 6)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  vendedor Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendedorId, mesAno])
+  @@map("metas_vendedor")
+}
+
+// Singleton (1 linha, mesmo padrao de ConfiguracaoDesconto/ConfiguracaoLlm)
+// - flag de visibilidade do ranking de equipe (OS-BACKEND-44): decisao do
+// supervisor/gerente se o VENDEDOR comum enxerga o ranking da propria
+// equipe ou so a supervisao. false por padrao (fail-closed - nao expor
+// comparativo entre colegas ate' alguem decidir habilitar).
+model ConfiguracaoGamificacao {
+  id                         String   @id @default(uuid())
+  rankingVisivelParaVendedor Boolean  @default(false) @map("ranking_visivel_para_vendedor")
+  atualizadoEm               DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_gamificacao")
 }
 
 // Tabela singleton (1 linha, service garante) - limite de desconto que

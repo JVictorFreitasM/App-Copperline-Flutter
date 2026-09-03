@@ -7,6 +7,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminVendedoresController } from './admin-vendedores.controller';
 import { VendedoresController } from './vendedores.controller';
 import { VendedorEscopoService } from './vendedor-escopo.service';
+import { VendedorVendasService } from './vendedor-vendas.service';
 import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
 
 @Module({
@@ -15,11 +16,13 @@ import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
   // proprio @UseGuards) - so VendedoresController (GET /vendedores/me,
   // OS-WEB-21) entra no requireAuth abaixo.
   controllers: [AdminVendedoresController, VendedoresController],
-  providers: [VendedoresHierarquiaService, VendedorEscopoService],
+  providers: [VendedoresHierarquiaService, VendedorEscopoService, VendedorVendasService],
   // VendedorEscopoService exportado pra ClientesModule (OS-BACKEND-23) e
   // SolicitacoesDescontoModule (OS-WEB-21) resolverem escopo sem duplicar a
-  // logica de hierarquia/papel aqui.
-  exports: [VendedorEscopoService],
+  // logica de hierarquia/papel aqui. VendedorVendasService exportado pro
+  // DashboardModule (ranking do painel) e MetasModule (OS-BACKEND-44)
+  // reaproveitarem a mesma atribuicao de venda por vendedor.
+  exports: [VendedorEscopoService, VendedorVendasService],
 })
 export class VendedoresModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}
