@@ -7,14 +7,20 @@ import { PeriodoQueryDto } from './dto/periodo-query.dto';
 import { RankingQueryDto } from './dto/ranking-dashboard.dto';
 import type { RankingDashboardDto } from './dto/ranking-dashboard.dto';
 import type { ResumoDashboardDto } from './dto/resumo-dashboard.dto';
+import { SazonalidadeQueryDto } from './dto/sazonalidade-query.dto';
 import type { VendasDashboardDto } from './dto/vendas-dashboard.dto';
+import type { SazonalidadeDto } from './sazonalidade.service';
+import { SazonalidadeService } from './sazonalidade.service';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver dashboard.module.ts,
 // mesmo padrao das demais). Endpoints de KPI (OS-BACKEND-17) - suporte pro
 // painel de gestao (OS-WEB-19, sem UI aqui).
 @Controller('dashboard')
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    private readonly dashboardService: DashboardService,
+    private readonly sazonalidadeService: SazonalidadeService,
+  ) {}
 
   @Get('resumo')
   obterResumo(): Promise<ResumoDashboardDto> {
@@ -41,5 +47,13 @@ export class DashboardController {
     @Query() query: EstoqueCriticoQueryDto,
   ): Promise<EstoqueCriticoDashboardDto> {
     return this.dashboardService.obterEstoqueCritico(query);
+  }
+
+  // OS-BACKEND-49 - serie mensal (13 meses) + variacao vs mesmo mes do ano
+  // anterior, calculadas deterministicamente (ver sazonalidade.service.ts);
+  // insight textual via IA e' so' interpretacao desses numeros ja prontos.
+  @Get('sazonalidade')
+  obterSazonalidade(@Query() query: SazonalidadeQueryDto): Promise<SazonalidadeDto> {
+    return this.sazonalidadeService.obter(query.produtoId);
   }
 }
