@@ -102,3 +102,16 @@ export interface FunilPedidosDashboardDto {
   cancelados: number;
   bloqueados: number;
 }
+
+// Mesmo shape de backend/src/dashboard/dto/comparativo-vendedores.dto.ts
+// (ComparativoVendedorDto, OS-WEB-40) - radar de 2 a 4 vendedores.
+// taxaAprovacaoDesconto null = sem solicitação de desconto decidida no
+// período (não "0% de aprovação").
+export interface ComparativoVendedorDto {
+  vendedorId: string;
+  nome: string | null;
+  valorVendido: number;
+  ticketMedio: number;
+  taxaAprovacaoDesconto: number | null;
+  quantidadeVisitas: number;
+}

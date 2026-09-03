@@ -1,6 +1,8 @@
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
+import Form from "next/form";
 import type {
+  ComparativoVendedorDto,
   EstoqueCriticoDashboardDto,
   FunilPedidosDashboardDto,
   NotasFiscaisDashboardDto,
@@ -8,6 +10,7 @@ import type {
   ResumoDashboardDto,
   VendasDashboardDto,
 } from "@/lib/dashboard";
+import type { VendedorEquipeDto } from "@/lib/vendedores";
 import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { configSituacaoPedido } from "@/lib/pedidos";
 import { clienteDaNotaFiscal, configStatusNfe, rotuloTipoNotaFiscal } from "@/lib/notas-fiscais";
@@ -15,8 +18,10 @@ import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
 import { ListItem } from "@/components/design/list-item";
 import { Card } from "@/components/design/card";
 import { Badge } from "@/components/badge";
+import { PrimaryButton } from "@/components/design/button";
 import { FiltroForm, CampoFiltro } from "@/components/filtro";
 import { GraficoBarras } from "@/components/design/grafico-barras";
+import { GraficoRadar } from "@/components/design/grafico-radar";
 import { CarrosselGraficos, type PainelCarrossel } from "@/components/design/carrossel-graficos";
 import { CarrosselEventos } from "@/components/design/carrossel-eventos";
 import { DonutKpiCard } from "@/components/design/donut-kpi-card";
@@ -24,6 +29,9 @@ import { GaugeCard } from "@/components/design/gauge-card";
 import { PainelResumo } from "@/components/design/painel-resumo";
 import { EventoCard } from "@/components/design/evento-card";
 import { IconeClipboard, IconeRecibo } from "@/components/design/icons";
+
+const MIN_VENDEDORES_COMPARATIVO = 2;
+const MAX_VENDEDORES_COMPARATIVO = 4;
 
 // Tela de resumo (dashboard) - substitui a antiga /painel (que so mostrava
 // dados do usuario logado, sem funcao real - ver historico da OS 10).
@@ -44,15 +52,17 @@ import { IconeClipboard, IconeRecibo } from "@/components/design/icons";
 export default async function PainelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dataInicial?: string; dataFinal?: string }>;
+  searchParams: Promise<{ dataInicial?: string; dataFinal?: string; vendedorIds?: string }>;
 }) {
   await exigirUsuarioAutenticado("/painel");
-  const { dataInicial, dataFinal } = await searchParams;
+  const { dataInicial, dataFinal, vendedorIds } = await searchParams;
 
   const queryPeriodo = new URLSearchParams({
     ...(dataInicial && { dataInicial }),
     ...(dataFinal && { dataFinal }),
   }).toString();
+
+  const vendedorIdsSelecionados = (vendedorIds ?? "").split(",").filter(Boolean);
 
   // OS-WEB-29: cada secao busca seu proprio dado de forma independente
   // (Promise.allSettled, nao Promise.all) - uma falha isolada num unico
@@ -65,6 +75,7 @@ export default async function PainelPage({
     notasFiscaisResultado,
     estoqueCriticoResultado,
     funilPedidosResultado,
+    equipeResultado,
   ] = await Promise.allSettled([
     apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
     apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
@@ -76,6 +87,7 @@ export default async function PainelPage({
     apiFetch<FunilPedidosDashboardDto>(`/dashboard/funil-pedidos?${queryPeriodo}`, {
       cache: "no-store",
     }),
+    apiFetch<VendedorEquipeDto[]>("/vendedores/equipe", { cache: "no-store" }),
   ]);
 
   function extrair<T>(resultado: PromiseSettledResult<T>): [T | null, string | null] {
@@ -92,6 +104,31 @@ export default async function PainelPage({
   const [notasFiscais, erroNotasFiscais] = extrair(notasFiscaisResultado);
   const [estoqueCritico, erroEstoqueCritico] = extrair(estoqueCriticoResultado);
   const [funilPedidos, erroFunilPedidos] = extrair(funilPedidosResultado);
+  const [equipe, erroEquipe] = extrair(equipeResultado);
+
+  // OS-WEB-40 - comparativo só busca quando há seleção válida (2-4
+  // vendedores); sem seleção, o card mostra o seletor sem gráfico, nada de
+  // "vendedores aleatórios" pra preencher o card.
+  let comparativo: ComparativoVendedorDto[] | null = null;
+  let erroComparativo: string | null = null;
+  if (
+    vendedorIdsSelecionados.length >= MIN_VENDEDORES_COMPARATIVO &&
+    vendedorIdsSelecionados.length <= MAX_VENDEDORES_COMPARATIVO
+  ) {
+    try {
+      const queryComparativo = new URLSearchParams({
+        vendedorIds: vendedorIdsSelecionados.join(","),
+        ...(dataInicial && { dataInicial }),
+        ...(dataFinal && { dataFinal }),
+      });
+      comparativo = await apiFetch<ComparativoVendedorDto[]>(
+        `/dashboard/comparativo-vendedores?${queryComparativo}`,
+        { cache: "no-store" },
+      );
+    } catch (error) {
+      erroComparativo = error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
+    }
+  }
 
   // Percentuais derivados pros anéis de KPI/medidor - sempre a partir do
   // MESMO dado já buscado acima, nunca um número novo/estimado.
@@ -396,6 +433,77 @@ export default async function PainelPage({
               />
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-ink">Comparativo de vendedores</h2>
+        {!equipe ? (
+          <ErroConexao mensagem={erroEquipe!} />
+        ) : equipe.length < MIN_VENDEDORES_COMPARATIVO ? (
+          <EstadoVazio mensagem="Sua equipe tem menos de 2 vendedores - nada pra comparar." />
+        ) : (
+          <Card>
+            <Form action="/painel" scroll={false} className="flex flex-col gap-3">
+              <input type="hidden" name="dataInicial" value={dataInicial ?? ""} />
+              <input type="hidden" name="dataFinal" value={dataFinal ?? ""} />
+              <p className="text-sm text-muted">
+                Escolha de {MIN_VENDEDORES_COMPARATIVO} a {MAX_VENDEDORES_COMPARATIVO} vendedores:
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {equipe.map((vendedor) => (
+                  <label key={vendedor.id} className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      name="vendedorIds"
+                      value={vendedor.id}
+                      defaultChecked={vendedorIdsSelecionados.includes(vendedor.id)}
+                    />
+                    {vendedor.nome ?? "—"}
+                  </label>
+                ))}
+              </div>
+              <div>
+                <PrimaryButton type="submit">Comparar</PrimaryButton>
+              </div>
+            </Form>
+          </Card>
+        )}
+
+        {vendedorIdsSelecionados.length > 0 &&
+          vendedorIdsSelecionados.length < MIN_VENDEDORES_COMPARATIVO && (
+            <EstadoVazio mensagem="Selecione pelo menos 2 vendedores pra comparar." />
+          )}
+        {vendedorIdsSelecionados.length > MAX_VENDEDORES_COMPARATIVO && (
+          <EstadoVazio mensagem={`Selecione no máximo ${MAX_VENDEDORES_COMPARATIVO} vendedores.`} />
+        )}
+        {erroComparativo && <ErroConexao mensagem={erroComparativo} />}
+        {comparativo && (
+          <Card>
+            <GraficoRadar
+              eixos={[
+                { chave: "valorVendido", rotulo: "Valor vendido" },
+                { chave: "ticketMedio", rotulo: "Ticket médio" },
+                { chave: "taxaAprovacaoDesconto", rotulo: "Aprovação de desconto" },
+                { chave: "quantidadeVisitas", rotulo: "Visitas realizadas" },
+              ]}
+              series={comparativo.map((item) => ({
+                nome: item.nome ?? "—",
+                valores: {
+                  valorVendido: item.valorVendido,
+                  ticketMedio: item.ticketMedio,
+                  taxaAprovacaoDesconto: item.taxaAprovacaoDesconto ?? 0,
+                  quantidadeVisitas: item.quantidadeVisitas,
+                },
+              }))}
+            />
+            {comparativo.some((item) => item.taxaAprovacaoDesconto === null) && (
+              <p className="mt-2 text-xs text-muted">
+                * Vendedor sem solicitação de desconto decidida no período aparece com 0% no eixo
+                de aprovação (não significa reprovação).
+              </p>
+            )}
+          </Card>
         )}
       </section>
     </main>

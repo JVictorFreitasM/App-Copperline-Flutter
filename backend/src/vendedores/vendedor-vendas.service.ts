@@ -19,10 +19,27 @@ export class VendedorVendasService {
     gte?: Date;
     lte?: Date;
   }): Promise<Map<string, number>> {
+    const detalhado = await this.valorEQuantidadePorVendedor(periodo);
+    const valorPorVendedor = new Map<string, number>();
+    for (const [vendedorId, dados] of detalhado) {
+      valorPorVendedor.set(vendedorId, dados.valor);
+    }
+    return valorPorVendedor;
+  }
+
+  // OS-WEB-40 - alem do valor (ja usado por metas/ranking), o comparativo
+  // de vendedores tambem precisa da CONTAGEM de pedidos no periodo pra
+  // calcular ticket medio (valor / quantidade) - por isso agrupado junto
+  // aqui, em vez de duas queries separadas.
+  async valorEQuantidadePorVendedor(periodo: {
+    gte?: Date;
+    lte?: Date;
+  }): Promise<Map<string, { valor: number; quantidade: number }>> {
     const clientesAgrupado = await this.prisma.pedido.groupBy({
       by: ['clienteId'],
       where: { clienteId: { not: null }, dataHoraUltimaAlteracao: periodo },
       _sum: { valorTotal: true },
+      _count: true,
     });
     if (clientesAgrupado.length === 0) {
       return new Map();
@@ -42,18 +59,18 @@ export class VendedorVendasService {
       }
     }
 
-    const valorPorVendedor = new Map<string, number>();
+    const resultado = new Map<string, { valor: number; quantidade: number }>();
     for (const linha of clientesAgrupado) {
       const vendedorId = vendedorIdPorCliente.get(linha.clienteId as string);
       if (!vendedorId) {
         continue;
       }
-      const atual = valorPorVendedor.get(vendedorId) ?? 0;
-      valorPorVendedor.set(
-        vendedorId,
-        atual + Number(linha._sum.valorTotal ?? 0),
-      );
+      const atual = resultado.get(vendedorId) ?? { valor: 0, quantidade: 0 };
+      resultado.set(vendedorId, {
+        valor: atual.valor + Number(linha._sum.valorTotal ?? 0),
+        quantidade: atual.quantidade + linha._count,
+      });
     }
-    return valorPorVendedor;
+    return resultado;
   }
 }

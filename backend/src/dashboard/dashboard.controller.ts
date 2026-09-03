@@ -1,8 +1,12 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { ComparativoVendedoresService } from './comparativo-vendedores.service';
 import { DashboardService } from './dashboard.service';
+import { ComparativoVendedoresQueryDto } from './dto/comparativo-vendedores.dto';
+import type { ComparativoVendedorDto } from './dto/comparativo-vendedores.dto';
 import { EstoqueCriticoQueryDto } from './dto/estoque-critico-dashboard.dto';
 import type { EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
 import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
+import { filtroPeriodo } from './filtro-periodo';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
 import { PeriodoQueryDto } from './dto/periodo-query.dto';
 import { RankingQueryDto } from './dto/ranking-dashboard.dto';
@@ -21,6 +25,7 @@ export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService,
     private readonly sazonalidadeService: SazonalidadeService,
+    private readonly comparativoVendedoresService: ComparativoVendedoresService,
   ) {}
 
   @Get('resumo')
@@ -65,5 +70,17 @@ export class DashboardController {
   @Get('sazonalidade')
   obterSazonalidade(@Query() query: SazonalidadeQueryDto): Promise<SazonalidadeDto> {
     return this.sazonalidadeService.obter(query.produtoId);
+  }
+
+  // OS-WEB-40 - radar comparando 2-4 vendedores (validacao de tamanho da
+  // lista via @ArrayMinSize/@ArrayMaxSize no proprio DTO).
+  @Get('comparativo-vendedores')
+  obterComparativoVendedores(
+    @Query() query: ComparativoVendedoresQueryDto,
+  ): Promise<ComparativoVendedorDto[]> {
+    return this.comparativoVendedoresService.obter(
+      query.vendedorIds,
+      filtroPeriodo(query.dataInicial, query.dataFinal) ?? {},
+    );
   }
 }
