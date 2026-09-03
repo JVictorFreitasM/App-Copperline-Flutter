@@ -1,10 +1,14 @@
+import Form from "next/form";
 import { IconeBusca, IconeSino } from "./icons";
 
 // Barra superior (ver skill design-system, "Aplicação no Web - casca do
-// app") - busca (visual por enquanto, GET /busca do backend ainda não tem
-// tela de resultado no web) + notificações (visual, sem sistema de
-// notificação in-app no web ainda) + usuário/sair. Server Component (só
-// Link/texto) - a interatividade da casca inteira mora só na Sidebar.
+// app") - busca global (GET /busca, OS-BACKEND-18 - ficou só visual/
+// `disabled` por um bom tempo até a tela de resultado, /busca, existir) +
+// notificações (visual, sem sistema de notificação in-app no web ainda) +
+// usuário/sair. Server Component (só Link/texto) - next/form (mesmo
+// padrão de FiltroForm) reflete a busca na URL sem precisar de nenhum JS
+// no cliente, então a Topbar continua sem virar Client Component só por
+// causa disso.
 export function Topbar({
   nomeUsuario,
   papel,
@@ -16,15 +20,17 @@ export function Topbar({
 }) {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-black/5 bg-surface px-8 py-4">
-      <label className="flex w-full max-w-sm items-center gap-2 rounded-full bg-background px-4 py-2.5 text-sm text-muted">
-        <IconeBusca />
-        <input
-          type="search"
-          placeholder="Buscar..."
-          disabled
-          className="w-full bg-transparent text-ink outline-none placeholder:text-muted"
-        />
-      </label>
+      <Form action="/busca" className="w-full max-w-sm">
+        <label className="flex items-center gap-2 rounded-full bg-background px-4 py-2.5 text-sm text-muted">
+          <IconeBusca />
+          <input
+            type="search"
+            name="q"
+            placeholder="Buscar cliente, produto ou pedido..."
+            className="w-full bg-transparent text-ink outline-none placeholder:text-muted"
+          />
+        </label>
+      </Form>
 
       <div className="flex items-center gap-4">
         <button
