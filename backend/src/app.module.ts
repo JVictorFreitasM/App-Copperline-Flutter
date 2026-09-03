@@ -27,6 +27,7 @@ import { MobileModule } from './mobile/mobile.module';
 import { AdminEndpointsModule } from './admin-endpoints/admin-endpoints.module';
 import { DocumentosModule } from './documentos/documentos.module';
 import { MetasModule } from './metas/metas.module';
+import { OportunidadesModule } from './oportunidades/oportunidades.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { MetasModule } from './metas/metas.module';
     AdminEndpointsModule,
     DocumentosModule,
     MetasModule,
+    OportunidadesModule,
   ],
 })
 export class AppModule {}
