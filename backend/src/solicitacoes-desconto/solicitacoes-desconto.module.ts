@@ -2,24 +2,32 @@ import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { RedisModule } from '../redis/redis.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminConfiguracaoDescontoController } from './admin-configuracao-desconto.controller';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
+import { ContextoAprovacaoDescontoService } from './contexto-aprovacao-desconto.service';
 import { SolicitacoesDescontoController } from './solicitacoes-desconto.controller';
 import { SolicitacoesDescontoService } from './solicitacoes-desconto.service';
 
 @Module({
   // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-21,
   // GET /solicitacoes-desconto escopado por equipe) - mesmo raciocinio de
-  // ClientesModule.
-  imports: [PrismaModule, UsuariosModule, VendedoresModule],
+  // ClientesModule. LlmClientModule/RedisModule so pro GET /:id/contexto
+  // (OS-BACKEND-50) - mesmo padrao de cache/IA ja usado em ClienteResumoLlmService.
+  imports: [PrismaModule, UsuariosModule, VendedoresModule, LlmClientModule, RedisModule],
   // AdminConfiguracaoDescontoController fica protegido so por ApiKeyGuard
   // (ver seu proprio @UseGuards) - so SolicitacoesDescontoController entra
   // no requireAuth abaixo.
   controllers: [SolicitacoesDescontoController, AdminConfiguracaoDescontoController],
-  providers: [SolicitacoesDescontoService, ConfiguracaoDescontoService],
+  providers: [
+    SolicitacoesDescontoService,
+    ConfiguracaoDescontoService,
+    ContextoAprovacaoDescontoService,
+  ],
   exports: [SolicitacoesDescontoService, ConfiguracaoDescontoService],
 })
 export class SolicitacoesDescontoModule implements NestModule {
