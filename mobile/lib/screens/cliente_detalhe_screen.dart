@@ -21,6 +21,7 @@ import '../widgets/app_card.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
+import '../widgets/timeline.dart';
 
 String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
 
@@ -120,9 +121,9 @@ class ClienteDetalheScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _CardEstatisticas(clienteId: id),
               const SizedBox(height: 24),
-              Text('Histórico de visitas', style: Theme.of(context).textTheme.titleMedium),
+              Text('Linha do tempo', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
-              _CardHistoricoVisitas(clienteId: id),
+              _CardTimeline(clienteId: id),
               const SizedBox(height: 24),
               Text('Contatos', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
@@ -297,66 +298,29 @@ class _CardEstatisticas extends ConsumerWidget {
   }
 }
 
-/// Histórico de visitas DESTE cliente (OS-MOBILE-25, GET
-/// /clientes/:id/visitas) - diferente da agenda do dia usada em
-/// roteiro_screen.dart/_CardVisita (minhasVisitasProvider): aqui é o
-/// histórico completo, sem filtro de data, mesmo critério de status
-/// (cancelada/em andamento/concluída) já usado em roteiro_screen.dart.
-class _CardHistoricoVisitas extends ConsumerWidget {
-  const _CardHistoricoVisitas({required this.clienteId});
+/// Linha do tempo unificada DESTE cliente (OS-MOBILE-40, GET
+/// /clientes/:id/timeline) - substitui o antigo histórico de visitas
+/// isolado (evita duplicar o mesmo dado de visita em duas seções da tela,
+/// mesmo critério já aplicado no web) - combina pedido/status/visita/nota
+/// fiscal numa única lista cronológica (ver widgets/timeline.dart).
+class _CardTimeline extends ConsumerWidget {
+  const _CardTimeline({required this.clienteId});
 
   final String clienteId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visitas = ref.watch(clienteVisitasProvider(clienteId));
+    final timeline = ref.watch(clienteTimelineProvider(clienteId));
 
-    return visitas.when(
+    return timeline.when(
       loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       error: (erro, _) => ErroConexao(
         mensagem: '$erro',
-        aoTentarNovamente: () => ref.invalidate(clienteVisitasProvider(clienteId)),
+        aoTentarNovamente: () => ref.invalidate(clienteTimelineProvider(clienteId)),
       ),
-      data: (dados) => dados.isEmpty
-          ? const EstadoVazio(mensagem: 'Nenhuma visita registrada para este cliente.')
-          : Column(
-              children: [
-                for (final visita in dados) ...[
-                  _ItemHistoricoVisita(visita: visita),
-                  const SizedBox(height: 8),
-                ],
-              ],
-            ),
-    );
-  }
-}
-
-class _ItemHistoricoVisita extends StatelessWidget {
-  const _ItemHistoricoVisita({required this.visita});
-
-  final Visita visita;
-
-  @override
-  Widget build(BuildContext context) {
-    final String rotuloStatus;
-    final bool enfaseStatus;
-    if (visita.cancelada) {
-      rotuloStatus = 'Cancelada';
-      enfaseStatus = false;
-    } else if (visita.emAndamento) {
-      rotuloStatus = 'Em andamento';
-      enfaseStatus = false;
-    } else {
-      rotuloStatus = 'Concluída';
-      enfaseStatus = true;
-    }
-
-    return ListItemTile(
-      titulo: 'Check-in ${formatarDataHora(visita.checkinEm)}',
-      subtitulo: visita.checkoutEm != null
-          ? 'Checkout ${formatarDataHora(visita.checkoutEm)}'
-          : visita.nota ?? 'Sem nota',
-      tag: AppBadge(texto: rotuloStatus, enfase: enfaseStatus),
+      data: (eventos) => eventos.isEmpty
+          ? const EstadoVazio(mensagem: 'Nenhum evento registrado para este cliente.')
+          : AppCard(child: Timeline(eventos: eventos)),
     );
   }
 }

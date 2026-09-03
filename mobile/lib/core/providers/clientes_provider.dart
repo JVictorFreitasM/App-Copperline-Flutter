@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
 import '../local_db/offline_fallback.dart';
 import '../models/cliente.dart';
+import '../models/timeline_evento.dart';
 import '../models/visita.dart';
 import '../pagination.dart';
 import 'offline_provider.dart';
@@ -95,6 +96,18 @@ final clienteVisitasProvider = FutureProvider.family<List<Visita>, String>((ref,
   final apiClient = ref.watch(apiClientProvider);
   final json = await apiClient.getJsonList('/clientes/${Uri.encodeComponent(id)}/visitas');
   return json.map(Visita.fromJson).toList();
+});
+
+// Timeline unificada (OS-MOBILE-40, GET /clientes/:id/timeline) - combina
+// pedido/status/visita/nota fiscal, ja ordenada do mais recente pro mais
+// antigo pelo backend (ver cliente-timeline.service.ts).
+final clienteTimelineProvider = FutureProvider.family<List<TimelineEvento>, String>((
+  ref,
+  id,
+) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJsonList('/clientes/${Uri.encodeComponent(id)}/timeline');
+  return json.map(TimelineEvento.fromJson).toList();
 });
 
 // Define/redefine o "pin" de localização do cliente (PATCH
