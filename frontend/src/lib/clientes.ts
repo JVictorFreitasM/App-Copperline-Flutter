@@ -46,20 +46,23 @@ export interface ClienteEstatisticasDto {
 }
 
 // Mesmo shape de backend/src/clientes/cliente-financeiro.service.ts
-// (ClienteFinanceiroDto, GET /clientes/:id/financeiro, OS-BACKEND-36).
-// limiteCredito/dataLimiteCredito vêm do cadastro já sincronizado;
-// notasEmAberto/notasVencidas são consultadas ao vivo no ERP a cada
-// chamada (dado transacional, nunca cacheado localmente).
-export interface ClienteFinanceiroGrupoDto {
-  quantidade: number;
-  valorTotal: number;
-}
-
+// (ClienteFinanceiroDto, GET /clientes/:id/financeiro, OS-BACKEND-36
+// revisão) - fonte é BuscarPosicaoFinanceira (SOAP Financeiro.svc), não
+// mais somatório manual de título REST. Consultado ao vivo a cada chamada
+// (dado transacional, nunca cacheado localmente).
 export interface ClienteFinanceiroDto {
   clienteId: string;
-  limiteCredito: number | null;
-  dataLimiteCredito: string | null;
-  notasEmAberto: ClienteFinanceiroGrupoDto;
-  notasVencidas: ClienteFinanceiroGrupoDto;
+  limiteCredito: number;
+  limiteCreditoSerasa: number;
+  creditoDisponivel: number;
+  creditoUtilizado: number;
+  saldoAVencer: number;
+  saldoVencido: number;
+  maiorAtraso: number;
+  mediaAtraso: number;
+  qtdeBaixasPorInadimplencia: number;
+  totalDeCompras: number;
+  dataUltimaFatura: string | null;
+  vendaBloqueada: boolean;
   inadimplente: boolean;
 }

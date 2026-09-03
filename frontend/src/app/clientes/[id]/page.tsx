@@ -174,33 +174,52 @@ export default async function ClienteDetalhePage({
                   <StatCard
                     icon={<IconeMoeda />}
                     label="Limite de crédito"
-                    value={
-                      financeiro.limiteCredito !== null
-                        ? formatarMoeda(String(financeiro.limiteCredito))
-                        : "—"
-                    }
+                    value={formatarMoeda(String(financeiro.limiteCredito))}
+                  />
+                  <StatCard
+                    icon={<IconeMoeda />}
+                    label="Crédito disponível"
+                    value={formatarMoeda(String(financeiro.creditoDisponivel))}
                   />
                   <StatCard
                     icon={<IconeClipboard />}
-                    label={`Em aberto (${financeiro.notasEmAberto.quantidade})`}
-                    value={formatarMoeda(String(financeiro.notasEmAberto.valorTotal))}
+                    label="Saldo a vencer"
+                    value={formatarMoeda(String(financeiro.saldoAVencer))}
                   />
                   <StatCard
                     icon={<IconeClipboard />}
-                    label={`Vencidas (${financeiro.notasVencidas.quantidade})`}
-                    value={formatarMoeda(String(financeiro.notasVencidas.valorTotal))}
+                    label="Saldo vencido"
+                    value={formatarMoeda(String(financeiro.saldoVencido))}
+                  />
+                  <StatCard
+                    icon={<IconeClipboard />}
+                    label="Maior atraso"
+                    value={formatarMoeda(String(financeiro.maiorAtraso))}
+                  />
+                  <StatCard
+                    icon={<IconeClipboard />}
+                    label="Média de atraso"
+                    value={`${financeiro.mediaAtraso} dia(s)`}
+                  />
+                  <StatCard
+                    icon={<IconeMoeda />}
+                    label="Total de compras"
+                    value={formatarMoeda(String(financeiro.totalDeCompras))}
                   />
                   <div className="flex flex-col justify-center gap-1 rounded-card bg-surface p-4 shadow-sm">
                     <span className="text-xs font-medium text-muted">Situação</span>
-                    <Badge enfase={financeiro.inadimplente}>
-                      {financeiro.inadimplente ? "Inadimplente" : "Em dia"}
-                    </Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge enfase={financeiro.inadimplente}>
+                        {financeiro.inadimplente ? "Inadimplente" : "Em dia"}
+                      </Badge>
+                      {financeiro.vendaBloqueada && <Badge enfase>Venda bloqueada</Badge>}
+                    </div>
                   </div>
                 </div>
               )}
-              {financeiro?.dataLimiteCredito && (
+              {financeiro?.dataUltimaFatura && (
                 <p className="text-xs text-muted">
-                  Limite de crédito válido até {formatarData(financeiro.dataLimiteCredito)}.
+                  Última fatura em {formatarData(financeiro.dataUltimaFatura)}.
                 </p>
               )}
             </section>

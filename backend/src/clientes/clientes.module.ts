@@ -1,7 +1,7 @@
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
-import { ErpClientModule } from '../erp-client/erp-client.module';
+import { FinanceiroSvcClientModule } from '../financeiro-svc-client/financeiro-svc-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -20,8 +20,9 @@ import { ClientesService } from './clientes.service';
   // LlmClientModule/RedisModule importados so pelo GET /clientes/:id/resumo
   // (OS-BACKEND-20). UsuariosModule/VendedoresModule (OS-BACKEND-23) pro
   // escopo por vendedor (VendedorEscopoService). VisitasModule (OS-BACKEND-28)
-  // pro GET /clientes/:id/visitas. ErpClientModule (OS-BACKEND-36) pro GET
-  // /clientes/:id/financeiro (consulta sob demanda de titulos em aberto).
+  // pro GET /clientes/:id/visitas. FinanceiroSvcClientModule (OS-BACKEND-36,
+  // revisao) pro GET /clientes/:id/financeiro - SOAP Financeiro.svc
+  // (BuscarPosicaoFinanceira), nao mais REST/ErpClientModule.
   imports: [
     PrismaModule,
     LlmClientModule,
@@ -29,7 +30,7 @@ import { ClientesService } from './clientes.service';
     UsuariosModule,
     VendedoresModule,
     VisitasModule,
-    ErpClientModule,
+    FinanceiroSvcClientModule,
   ],
   controllers: [ClientesController],
   providers: [
