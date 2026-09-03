@@ -4,10 +4,15 @@ import '../core/auth/auth_notifier.dart';
 import '../core/formatacao.dart';
 import '../core/providers/aprovacoes_provider.dart';
 import '../core/providers/dashboard_provider.dart';
+import '../core/providers/indicadores_home_provider.dart';
 import '../core/providers/offline_provider.dart';
 import '../core/providers/visitas_provider.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_card.dart';
+import '../widgets/estoque_favorito_barra.dart';
 import '../widgets/listagem_feedback.dart';
+import '../widgets/meta_gauge.dart';
+import '../widgets/sparkline_vendas.dart';
 import 'aprovacoes_screen.dart';
 import 'busca_screen.dart';
 import 'clientes_screen.dart';
@@ -122,6 +127,7 @@ class HomeScreen extends ConsumerWidget {
               context,
             ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
           ),
+          const _IndicadoresVisuais(),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -247,6 +253,66 @@ class HomeScreen extends ConsumerWidget {
     if (partes.isEmpty) return '?';
     if (partes.length == 1) return partes.first.substring(0, 1).toUpperCase();
     return (partes.first.substring(0, 1) + partes.last.substring(0, 1)).toUpperCase();
+  }
+}
+
+/// Indicadores visuais da home (OS-MOBILE-41): meta do mês (gauge),
+/// evolução de vendas (sparkline) e saldo de estoque do produto
+/// favoritado (barra), cada um num card próprio. Cada indicador some
+/// silenciosamente quando não há dado real (sem meta configurada, sem
+/// vendedor vinculado, sem produto favoritado) - mesmo critério do resto
+/// da home (ver `_CardPrioridade`) -, então o card todo pode desaparecer
+/// por completo sem quebrar o layout.
+class _IndicadoresVisuais extends ConsumerWidget {
+  const _IndicadoresVisuais();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final metaAsync = ref.watch(metaProgressoProvider);
+    final vendasAsync = ref.watch(vendasSemanaisProvider);
+    final produtoEstoqueAsync = ref.watch(produtoFavoritoComEstoqueProvider);
+
+    final cards = <Widget?>[
+      metaAsync.maybeWhen<Widget?>(
+        data: (meta) => meta == null
+            ? null
+            : AppCard(
+                child: MetaGauge(
+                  valorVendido: meta.valorVendido,
+                  valorMeta: meta.valorMeta,
+                  percentualAtingido: meta.percentualAtingido,
+                ),
+              ),
+        orElse: () => null,
+      ),
+      vendasAsync.maybeWhen<Widget?>(
+        data: (semanas) =>
+            semanas.length < 2 ? null : AppCard(child: SparklineVendas(semanas: semanas)),
+        orElse: () => null,
+      ),
+      produtoEstoqueAsync.maybeWhen<Widget?>(
+        data: (produtoComEstoque) => produtoComEstoque == null
+            ? null
+            : AppCard(
+                child: EstoqueFavoritoBarra(
+                  nomeProduto: produtoComEstoque.produto.titulo,
+                  resultado: produtoComEstoque.estoque,
+                ),
+              ),
+        orElse: () => null,
+      ),
+    ].whereType<Widget>().toList();
+
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Column(
+        children: [
+          for (final card in cards) ...[card, const SizedBox(height: 10)],
+        ],
+      ),
+    );
   }
 }
 
