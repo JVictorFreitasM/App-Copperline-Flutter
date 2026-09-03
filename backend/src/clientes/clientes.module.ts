@@ -11,6 +11,7 @@ import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
+import { ClienteTimelineService } from './cliente-timeline.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
@@ -42,6 +43,7 @@ import { ClientesService } from './clientes.service';
     ClienteLocalizacaoService,
     ClienteFinanceiroService,
     ClienteBoletoService,
+    ClienteTimelineService,
   ],
 })
 export class ClientesModule implements NestModule {

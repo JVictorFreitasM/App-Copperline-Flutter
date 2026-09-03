@@ -7,8 +7,8 @@ import type {
   ClienteEstatisticasDto,
   ClienteFinanceiroDto,
 } from "@/lib/clientes";
-import { statusVisita, type VisitaDto } from "@/lib/visitas";
-import { formatarData, formatarDataHora, formatarMoeda } from "@/lib/formatacao";
+import type { TimelineEvento } from "@/lib/timeline";
+import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
@@ -16,6 +16,7 @@ import { Card } from "@/components/design/card";
 import { PrimaryButton } from "@/components/design/button";
 import { ListItem } from "@/components/design/list-item";
 import { StatCard } from "@/components/design/stat-card";
+import { Timeline } from "@/components/design/timeline";
 import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
 
 // Opções fixas de período (OS-WEB-31, critério de aceite explícito: "1 e 6
@@ -46,7 +47,7 @@ export default async function ClienteDetalhePage({
 
   let cliente: ClienteDetalheDto | null = null;
   let estatisticas: ClienteEstatisticasDto | null = null;
-  let visitas: VisitaDto[] = [];
+  let timeline: TimelineEvento[] = [];
   let naoEncontrado = false;
   let erro: string | null = null;
 
@@ -54,12 +55,12 @@ export default async function ClienteDetalhePage({
     cliente = await apiFetch<ClienteDetalheDto>(`/clientes/${encodeURIComponent(id)}`, {
       cache: "no-store",
     });
-    [estatisticas, visitas] = await Promise.all([
+    [estatisticas, timeline] = await Promise.all([
       apiFetch<ClienteEstatisticasDto>(
         `/clientes/${encodeURIComponent(id)}/estatisticas?meses=${meses}`,
         { cache: "no-store" },
       ),
-      apiFetch<VisitaDto[]>(`/clientes/${encodeURIComponent(id)}/visitas`, {
+      apiFetch<TimelineEvento[]>(`/clientes/${encodeURIComponent(id)}/timeline`, {
         cache: "no-store",
       }),
     ]);
@@ -225,30 +226,13 @@ export default async function ClienteDetalhePage({
             </section>
 
             <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-ink">Visitas recentes</h2>
-              {visitas.length === 0 ? (
-                <EstadoVazio mensagem="Nenhuma visita registrada." />
+              <h2 className="text-lg font-semibold text-ink">Linha do tempo</h2>
+              {timeline.length === 0 ? (
+                <EstadoVazio mensagem="Nenhum evento registrado." />
               ) : (
-                <div className="flex flex-col gap-3">
-                  {visitas.map((visita) => {
-                    const status = statusVisita(visita);
-                    return (
-                      <ListItem
-                        key={visita.id}
-                        titulo={formatarDataHora(visita.checkinEm)}
-                        subtitulo={
-                          visita.canceladaEm
-                            ? (visita.motivoCancelamento ?? "Cancelada sem motivo registrado")
-                            : (visita.nota ?? "Sem observações")
-                        }
-                        valor={
-                          visita.checkoutEm ? `Checkout ${formatarDataHora(visita.checkoutEm)}` : undefined
-                        }
-                        tag={<Badge enfase={status.enfase}>{status.rotulo}</Badge>}
-                      />
-                    );
-                  })}
-                </div>
+                <Card>
+                  <Timeline eventos={timeline} />
+                </Card>
               )}
             </section>
 

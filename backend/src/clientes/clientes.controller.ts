@@ -6,6 +6,8 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
+import { ClienteTimelineService } from './cliente-timeline.service';
+import type { TimelineEvento } from './cliente-timeline.service';
 import type { ClienteEstatisticasDto } from './cliente-estatisticas.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import type { ClienteFinanceiroDto } from './cliente-financeiro.service';
@@ -39,6 +41,7 @@ export class ClientesController {
     private readonly clienteEstatisticasService: ClienteEstatisticasService,
     private readonly clienteFinanceiroService: ClienteFinanceiroService,
     private readonly clienteBoletoService: ClienteBoletoService,
+    private readonly clienteTimelineService: ClienteTimelineService,
     private readonly usuariosService: UsuariosService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly visitasService: VisitasService,
@@ -132,6 +135,17 @@ export class ClientesController {
       type: 'application/pdf',
       disposition: `attachment; filename="${encodeURIComponent(nomeArquivo)}"`,
     });
+  }
+
+  // OS-WEB-42/OS-MOBILE-40 - timeline combinada (pedido/status/visita/
+  // nota fiscal), mesma especificidade de rota que /:id/financeiro etc.
+  @Get(':id/timeline')
+  async obterTimeline(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<TimelineEvento[]> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clienteTimelineService.obterTimeline(id, escopo);
   }
 
   // OS-BACKEND-28 - historico de visitas, pra exibir junto das
