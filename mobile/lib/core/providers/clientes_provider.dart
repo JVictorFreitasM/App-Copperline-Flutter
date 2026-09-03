@@ -8,10 +8,28 @@ import 'offline_provider.dart';
 
 const limitePorPagina = 20;
 
+/// 'comPedido'/'semVisita' (ajustes-layout-mobile, item 6 - chips "Todos"/
+/// "Com pedido"/"Sem visita") - mesmos dois valores de
+/// `ListarClientesQueryDto.filtro` no backend (`filtro=com_pedido`/
+/// `filtro=sem_visita`); null é "Todos", sem filtro extra.
+enum FiltroClientes { comPedido, semVisita }
+
+extension on FiltroClientes {
+  String get valorQuery => switch (this) {
+    FiltroClientes.comPedido => 'com_pedido',
+    FiltroClientes.semVisita => 'sem_visita',
+  };
+}
+
 /// Record (equalidade estrutural nativa do Dart 3) em vez de classe própria
 /// - chave do `family` só precisa comparar por valor, sem boilerplate de
 /// `==`/`hashCode`.
-typedef ClientesParametros = ({int pagina, String? nome, String? cpfCnpj});
+typedef ClientesParametros = ({
+  int pagina,
+  String? nome,
+  String? cpfCnpj,
+  FiltroClientes? filtro,
+});
 
 final clientesProvider = FutureProvider.family<
   PaginatedResult<ClienteResumo>,
@@ -23,6 +41,7 @@ final clientesProvider = FutureProvider.family<
     'limit': '$limitePorPagina',
     if (params.nome != null && params.nome!.isNotEmpty) 'nome': params.nome!,
     if (params.cpfCnpj != null && params.cpfCnpj!.isNotEmpty) 'cpfCnpj': params.cpfCnpj!,
+    if (params.filtro != null) 'filtro': params.filtro!.valorQuery,
   };
   try {
     final json = await apiClient.getJson('/clientes?${Uri(queryParameters: query).query}');
@@ -31,7 +50,11 @@ final clientesProvider = FutureProvider.family<
     // Sem rede - lê do espelho local (OS-MOBILE-22, "app funciona para
     // leitura totalmente offline após o primeiro snapshot"). Se nem o
     // snapshot existir ainda, deixa a exceção original propagar (nada
-    // pra mostrar de qualquer forma).
+    // pra mostrar de qualquer forma). O filtro de chip (com pedido/sem
+    // visita) NÃO é aplicado aqui - o snapshot local não carrega esse dado
+    // agregado (evita inflar o snapshot só pra um caso raro: filtro de
+    // chip + offline ao mesmo tempo); nome/cpfCnpj continuam funcionando
+    // offline normalmente.
     final snapshotService = await ref.read(snapshotServiceProvider.future);
     final todos = await snapshotService.clientes();
     if (todos.isEmpty) rethrow;

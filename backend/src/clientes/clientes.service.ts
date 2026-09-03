@@ -49,6 +49,11 @@ export class ClientesService {
         ],
       }),
       ...(query.cpfCnpj && { cpfCnpj: { contains: query.cpfCnpj } }),
+      // 'com_pedido'/'sem_visita' (ajustes-layout-mobile, item 6) - "sem
+      // visita" e' "nunca teve nenhuma Visita registrada", nao um recorte
+      // por periodo (o app nao tem esse conceito de janela pra visita).
+      ...(query.filtro === 'com_pedido' && { pedidos: { some: {} } }),
+      ...(query.filtro === 'sem_visita' && { visitas: { none: {} } }),
     };
 
     const [clientes, total] = await this.prisma.$transaction([

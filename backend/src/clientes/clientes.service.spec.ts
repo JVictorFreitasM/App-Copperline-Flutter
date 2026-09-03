@@ -104,6 +104,43 @@ describe('ClientesService.listar', () => {
     );
   });
 
+  it('filtro "com_pedido" adiciona pedidos: { some: {} } ao where (ajustes-layout-mobile, item 6)', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new ClientesService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20, filtro: 'com_pedido' }, ESCOPO_TODOS);
+
+    expect(prisma.cliente.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ pedidos: { some: {} } }),
+      }),
+    );
+  });
+
+  it('filtro "sem_visita" adiciona visitas: { none: {} } ao where', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new ClientesService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20, filtro: 'sem_visita' }, ESCOPO_TODOS);
+
+    expect(prisma.cliente.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ visitas: { none: {} } }),
+      }),
+    );
+  });
+
+  it('sem filtro (undefined = "Todos") nao adiciona pedidos/visitas ao where', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new ClientesService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    const where = (prisma.cliente.findMany as jest.Mock).mock.calls[0][0].where;
+    expect(where.pedidos).toBeUndefined();
+    expect(where.visitas).toBeUndefined();
+  });
+
   it('escopo NENHUM retorna lista vazia sem consultar o banco', async () => {
     const prisma = prismaFake({ findMany: [{ id: '1' }], count: 1 });
     const service = new ClientesService(prisma as never);

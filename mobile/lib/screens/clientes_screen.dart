@@ -13,8 +13,10 @@ import 'verificar_conflito_screen.dart';
 /// lista com marca/nome/status. Consome GET /clientes (OS-BACKEND-11),
 /// mesmo provider de antes desta troca de referência - só o visual mudou.
 /// A referência mostra pills de filtro com contagem fixa ("Com pedido 12",
-/// "Sem visita 08") - omitidas de propósito: o backend não tem esse
-/// agregado, seria inventar número.
+/// "Sem visita 08") - ajustes-layout-mobile item 6: contagem fixa seria
+/// inventar número, mas o FILTRO em si (com_pedido/sem_visita) virou um
+/// parâmetro real de GET /clientes - os chips aqui mostram só o rótulo,
+/// sem contagem, e filtram de verdade.
 class ClientesScreen extends ConsumerStatefulWidget {
   const ClientesScreen({super.key});
 
@@ -27,6 +29,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   final _buscaController = TextEditingController();
   String? _nome;
   String? _cpfCnpj;
+  FiltroClientes? _filtro;
 
   @override
   void dispose() {
@@ -55,7 +58,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final params = (pagina: _pagina, nome: _nome, cpfCnpj: _cpfCnpj);
+    final params = (pagina: _pagina, nome: _nome, cpfCnpj: _cpfCnpj, filtro: _filtro);
     final resultadoAsync = ref.watch(clientesProvider(params));
 
     return ListView(
@@ -120,7 +123,15 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
+        _ChipsFiltro(
+          selecionado: _filtro,
+          aoSelecionar: (filtro) => setState(() {
+            _pagina = 1;
+            _filtro = filtro;
+          }),
+        ),
+        const SizedBox(height: 14),
         const Text(
           'Minha carteira',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -167,6 +178,76 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// Chips "Todos"/"Com pedido"/"Sem visita" (ajustes-layout-mobile, item 6) -
+/// sem contagem no rótulo (contagem fixa seria inventar número, a
+/// referência mostrava algo tipo "Com pedido 12"), mas o filtro em si é
+/// real (`filtro=com_pedido`/`filtro=sem_visita` em GET /clientes).
+class _ChipsFiltro extends StatelessWidget {
+  const _ChipsFiltro({required this.selecionado, required this.aoSelecionar});
+
+  final FiltroClientes? selecionado;
+  final ValueChanged<FiltroClientes?> aoSelecionar;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _Chip(rotulo: 'Todos', selecionado: selecionado == null, onTap: () => aoSelecionar(null)),
+          const SizedBox(width: 8),
+          _Chip(
+            rotulo: 'Com pedido',
+            selecionado: selecionado == FiltroClientes.comPedido,
+            onTap: () => aoSelecionar(FiltroClientes.comPedido),
+          ),
+          const SizedBox(width: 8),
+          _Chip(
+            rotulo: 'Sem visita',
+            selecionado: selecionado == FiltroClientes.semVisita,
+            onTap: () => aoSelecionar(FiltroClientes.semVisita),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.rotulo, required this.selecionado, required this.onTap});
+
+  final String rotulo;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selecionado ? AppColors.navy : AppColors.surface,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: selecionado ? null : Border.all(color: AppColors.line),
+          ),
+          child: Text(
+            rotulo,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selecionado ? Colors.white : AppColors.foreground,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
