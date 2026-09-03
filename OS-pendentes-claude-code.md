@@ -657,6 +657,21 @@ visão do supervisor). Sem base pra implementar sem antes construir uma
 tela de trajeto no mobile que não foi pedida por nenhuma OS - decisão do
 usuário foi não inventar essa tela só pra ter o que limpar.
 
+### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
+Decisão de adotar já confirmada com o usuário ("Sim, integrar agora").
+Shorebird CLI 1.6.120 instalado e empacotado numa imagem Docker própria
+(`copperline-flutter-shorebird`), pronta pra uso. **Bloqueada em ação do
+usuário**: o login browser-based (`shorebird login`) não funciona de
+dentro de um container headless (callback OAuth bind numa porta local
+aleatória, sem como pré-mapear no Docker) - o caminho correto pra CI/
+automação é API key, não login interativo. Falta o usuário:
+1. Criar conta em https://console.shorebird.dev (ou logar, se já tiver).
+2. Ir em Account → API Keys → Create API Key.
+3. Copiar o valor da chave (mostrado só uma vez) e enviar aqui.
+Com a chave em mãos, o resto (`SHOREBIRD_TOKEN` no ambiente de build,
+`shorebird init` no `mobile/`, wiring no fluxo de release/patch) segue
+sem precisar de mais nenhuma ação manual do usuário.
+
 ## Não iniciadas — `OS-novas-rodada.md`
 
 ### OS-MOBILE-29 — Validação ponta a ponta do push do Firebase
@@ -665,56 +680,22 @@ morto, renovação de token, dispositivo sem Google Play Services) —
 resultado esperado é um relatório de passou/falhou por cenário, com
 evidência. Precisa de dispositivo físico, não dá pra fazer sem isso.
 
-### OS-MOBILE-35 — Atualização automática do app (Shorebird/OTA)
-Decisão de adotar uma ferramenta nova (Shorebird) antes de implementar —
-vale alinhar com o usuário antes de integrar ao pipeline de build.
-
-### OS-WEB-37 — Gráficos de ranking maiores e horizontais
-Trocar os 3 gráficos de ranking (clientes/produtos/vendedores) pra barra
-horizontal, largura total — confirmar se `GET /dashboard/ranking` já cobre
-vendedor ou precisa de extensão pequena no backend.
-
-### OS-BACKEND-40 — Mapeamento de casos de uso de IA
-Tarefa de documentação (não código) — gerar `docs/casos-de-uso-ia.md`
-categorizando: já implementado / viável com dado atual / precisaria de
-dado adicional não sincronizado hoje.
-
-### OS-BACKEND-42 — Auditoria da sincronização incremental por entidade
-Investigação/relatório (não é suposto mudar código, a menos que algo
-esteja errado) — cadência configurada, última execução, status, volume
-processado por entidade, via `GET /admin/sync/:nomeEntidade/logs`.
+OS-WEB-37, OS-BACKEND-40 e OS-BACKEND-42, junto com os itens 1/2/4/5 de
+`OS-ajustes-layout-mobile.md`, já constam concluídos (ver parágrafo "Já
+concluídas e enviadas" acima) — removidos daqui pra não duplicar/ficar
+desatualizado.
 
 ## Não iniciadas — `OS-ajustes-layout-mobile.md`
 
-### 1. Card "Novo pedido" (hoje "Pedidos") — bug de navegação
-Título/subtítulo errados e destino aponta pra listagem, não pra criação.
-Confirmar em `cliente_detalhe_screen.dart` se a criação de pedido parte
-de lá antes de trocar o destino do card.
-
-### 2. "Buscar cliente" e "Check-in" na home vão pro mesmo lugar
-Ambos os cards da home apontam pra `ClientesScreen`, sem diferenciação —
-provável causa do "erro" percebido pelo usuário. Precisa reproduzir o
-clique em dispositivo real, capturar o stack trace exato, antes de
-corrigir o sintoma errado. "Buscar cliente" provavelmente devia ir pra
-`BuscaScreen` (busca global já existe).
+Restam só os itens que dependem de decisão de dado real no backend (meta/
+roteiro de visita, filtro agregado de cliente) — sem isso, vira número
+inventado, o que o projeto não faz.
 
 ### 3. Barra de progresso de visitas sumiu (home)
 Omitida de propósito (sem dado real de roteiro/meta no backend). Precisa
 de decisão: expor endpoint de "visitas planejadas vs. realizadas" no
 backend, ou ajustar a referência visual pra não depender desse dado. Não
 implementar com número inventado.
-
-### 4. Fonte pequena — tamanho e família tipográfica
-`TextTheme` sem `fontFamily` definida (usa Roboto/San Francisco padrão em
-vez de Arial/Helvetica da referência); vários tamanhos copiados 1:1 do CSS
-em `px` ficam pequenos demais como `sp` do Flutter. Ajuste centralizado no
-tema, revisão de piso mínimo de leitura (~11-12sp pro corpo).
-
-### 5. "Documentos" falta no menu lateral (drawer)
-Ajuste simples e isolado, sem dependência de backend — adicionar item no
-`_MenuLateral` de `app_shell.dart`, acima do "Sair", mesmo padrão de
-Mapa/Buscar/Rastreio. Agora que `DocumentosScreen` tem conteúdo real
-(OS-MOBILE-34), esse item fica ainda mais relevante de fazer logo.
 
 ### 6. Clientes: faltam chips de filtro e botão "Ver todos os clientes"
 Filtros "Todos"/"Com pedido"/"Sem visita" exigem parâmetro/contagem
@@ -727,10 +708,3 @@ completa da empresa vs. só do vendedor — implicação de permissão/escopo).
 Mesma causa raiz do item 3 — sem meta configurável no backend hoje. Decisão
 necessária: backend expõe meta (por vendedor ou global) antes de completar
 o card, ou referência visual é ajustada pra não depender disso.
-
-## Ordem sugerida (do próprio `OS-ajustes-layout-mobile.md`)
-1. Itens 1 e 2 (bugs de navegação) — maior impacto.
-2. Item 5 (Documentos no menu) — simples, isolado, sem dependência.
-3. Item 4 (fonte) — sem dependência de backend, mas exige validação visual.
-4. Itens 3, 6 e 7 — dependem de alinhamento sobre dado real de backend
-   antes de qualquer código.
