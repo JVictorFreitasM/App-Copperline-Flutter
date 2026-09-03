@@ -82,12 +82,39 @@ export class VendedorEscopoService {
       return { tipo: 'NENHUM' };
     }
 
+    // OS-BACKEND-48 - carteiras cobertas temporariamente (ferias/licenca)
+    // se somam ao escopo normal, nunca o substituem - reaproveita EQUIPE
+    // (ja significa "mais de um vendedor"), sem precisar mudar o contrato
+    // de EscopoClientes usado em todo lugar que consome escopo.
+    const cobertos = await this.obterVendedorIdsCobertos(vendedor.id);
+
     if (vendedor.papel === 'SUPERVISOR' || vendedor.papel === 'GERENTE') {
       const vendedorIds = await this.coletarEquipe(vendedor.id);
-      return { tipo: 'EQUIPE', vendedorIds };
+      const uniao = new Set([...vendedorIds, ...cobertos]);
+      return { tipo: 'EQUIPE', vendedorIds: [...uniao] };
+    }
+
+    if (cobertos.length > 0) {
+      return { tipo: 'EQUIPE', vendedorIds: [vendedor.id, ...cobertos] };
     }
 
     return { tipo: 'PROPRIO', vendedorId: vendedor.id };
+  }
+
+  // Coberturas ATIVAS agora (dataInicio <= agora <= dataFim) em que este
+  // vendedor e' o SUBSTITUTO - o fim da cobertura e' so' a passagem de
+  // dataFim, nenhum job precisa "desligar" nada.
+  private async obterVendedorIdsCobertos(vendedorSubstitutoId: string): Promise<string[]> {
+    const agora = new Date();
+    const coberturas = await this.prisma.coberturaTemporaria.findMany({
+      where: {
+        vendedorSubstitutoId,
+        dataInicio: { lte: agora },
+        dataFim: { gte: agora },
+      },
+      select: { vendedorOriginalId: true },
+    });
+    return coberturas.map((c) => c.vendedorOriginalId);
   }
 
   // BFS por nivel via supervisorId (Vendedor.subordinados) - inclui o

@@ -26,6 +26,7 @@ import { VisitasModule } from './visitas/visitas.module';
 import { MobileModule } from './mobile/mobile.module';
 import { AdminEndpointsModule } from './admin-endpoints/admin-endpoints.module';
 import { DocumentosModule } from './documentos/documentos.module';
+import { CoberturasModule } from './coberturas/coberturas.module';
 import { MetasModule } from './metas/metas.module';
 import { OportunidadesModule } from './oportunidades/oportunidades.module';
 
@@ -65,6 +66,7 @@ import { OportunidadesModule } from './oportunidades/oportunidades.module';
     DocumentosModule,
     MetasModule,
     OportunidadesModule,
+    CoberturasModule,
   ],
 })
 export class AppModule {}

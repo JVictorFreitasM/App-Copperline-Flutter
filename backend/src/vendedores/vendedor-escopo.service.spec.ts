@@ -1,6 +1,9 @@
 import { VendedorEscopoService } from './vendedor-escopo.service';
 
-function prismaFake(vendedores: Record<string, unknown>[]) {
+function prismaFake(
+  vendedores: Record<string, unknown>[],
+  coberturas: { vendedorSubstitutoId: string; vendedorOriginalId: string }[] = [],
+) {
   return {
     vendedor: {
       findFirst: jest.fn().mockImplementation(
@@ -12,6 +15,18 @@ function prismaFake(vendedores: Record<string, unknown>[]) {
           vendedores.filter((v) =>
             supervisorId.in.includes(v.supervisorId as string),
           ),
+      ),
+    },
+    coberturaTemporaria: {
+      findMany: jest.fn().mockImplementation(
+        async ({
+          where: { vendedorSubstitutoId },
+        }: {
+          where: { vendedorSubstitutoId: string };
+        }) =>
+          coberturas
+            .filter((c) => c.vendedorSubstitutoId === vendedorSubstitutoId)
+            .map((c) => ({ vendedorOriginalId: c.vendedorOriginalId })),
       ),
     },
   };
@@ -93,6 +108,65 @@ describe('VendedorEscopoService.resolverEscopoClientes', () => {
     expect(escopo.tipo).toBe('EQUIPE');
     if (escopo.tipo === 'EQUIPE') {
       expect(new Set(escopo.vendedorIds)).toEqual(new Set(['supervisor-1', 'vendedor-1']));
+    }
+  });
+
+  // OS-BACKEND-48
+  it('vendedor comum SEM cobertura ativa continua PROPRIO (nenhuma mudanca de comportamento)', async () => {
+    const prisma = prismaFake(
+      [{ id: 'v1', usuarioId: 'u1', papel: 'VENDEDOR', supervisorId: null }],
+      [],
+    );
+    const service = new VendedorEscopoService(prisma as never);
+
+    const escopo = await service.resolverEscopoClientes(
+      { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' },
+      'u1',
+    );
+
+    expect(escopo).toEqual({ tipo: 'PROPRIO', vendedorId: 'v1' });
+  });
+
+  it('vendedor comum com cobertura ativa passa a ver a propria carteira + a carteira coberta (EQUIPE)', async () => {
+    const prisma = prismaFake(
+      [
+        { id: 'v1', usuarioId: 'u1', papel: 'VENDEDOR', supervisorId: null },
+        { id: 'v-original', usuarioId: 'u-original', papel: 'VENDEDOR', supervisorId: null },
+      ],
+      [{ vendedorSubstitutoId: 'v1', vendedorOriginalId: 'v-original' }],
+    );
+    const service = new VendedorEscopoService(prisma as never);
+
+    const escopo = await service.resolverEscopoClientes(
+      { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' },
+      'u1',
+    );
+
+    expect(escopo.tipo).toBe('EQUIPE');
+    if (escopo.tipo === 'EQUIPE') {
+      expect(new Set(escopo.vendedorIds)).toEqual(new Set(['v1', 'v-original']));
+    }
+  });
+
+  it('supervisor com cobertura ativa ve a propria equipe UNIDA com a carteira coberta', async () => {
+    const prisma = prismaFake(
+      [
+        { id: 'sup1', usuarioId: 'u-sup', papel: 'SUPERVISOR', supervisorId: null },
+        { id: 'v1', usuarioId: 'u-v1', papel: 'VENDEDOR', supervisorId: 'sup1' },
+        { id: 'v-original', usuarioId: 'u-original', papel: 'VENDEDOR', supervisorId: null },
+      ],
+      [{ vendedorSubstitutoId: 'sup1', vendedorOriginalId: 'v-original' }],
+    );
+    const service = new VendedorEscopoService(prisma as never);
+
+    const escopo = await service.resolverEscopoClientes(
+      { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' },
+      'u-sup',
+    );
+
+    expect(escopo.tipo).toBe('EQUIPE');
+    if (escopo.tipo === 'EQUIPE') {
+      expect(new Set(escopo.vendedorIds)).toEqual(new Set(['sup1', 'v1', 'v-original']));
     }
   });
 });
