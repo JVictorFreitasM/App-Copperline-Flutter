@@ -133,6 +133,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     final base = ApiClient.baseUrl;
     if (!url.toString().startsWith('$base/auth/me')) {
+      // Pagina intermediaria carregou com sucesso (ex: formulario de login
+      // do IdP) - reinicia o timeout aqui em vez de deixar o timer original
+      // (armado desde o initState) continuar contando. Bug real: sem isso,
+      // o tempo que o usuario leva DIGITANDO email/senha contava como se
+      // fosse falha de carregamento - o timer disparava no meio do
+      // preenchimento, derrubando a WebView inteira (e os campos digitados
+      // junto) mesmo com a pagina carregada e funcionando normalmente.
+      _iniciarTimeoutTimer();
       return;
     }
 

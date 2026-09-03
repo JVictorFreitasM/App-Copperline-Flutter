@@ -24,6 +24,20 @@ import { IDP_AUTH } from './idp-auth.constants';
           // passar por /auth/login) não tem returnTo nenhum salvo, cai
           // nesse fallback e vê um 404 cru na API em vez do site.
           postLoginRedirect: configService.get<string>('FRONTEND_PUBLIC_URL'),
+          // Bug real encontrado: SEM isso, o fallback pos-logout da lib
+          // tambem e' "/" relativo ao proprio BACKEND (mesmo problema do
+          // postLoginRedirect acima, comentario identico se aplica) - so
+          // que aqui SEMPRE cai nesse fallback (logout nunca tem
+          // `returnTo`, diferente do login). O IdP valida esse destino por
+          // MATCH EXATO contra `System.postLogoutRedirectUris` (protecao
+          // contra open redirect, ver /session/end no IdP) - sem essa
+          // config, o app mandava a raiz do backend, que nunca bateria com
+          // nada cadastrado, e o IdP REJEITAVA o pedido de logout ANTES de
+          // destruir a propria sessao dele. Resultado: a sessao local do
+          // app morria certinho, mas a sessao do IdP continuava viva - no
+          // proximo /authorize o SSO reautenticava silenciosamente, dando
+          // a impressao de "logout nao funciona, volta pro dashboard".
+          postLogoutRedirect: configService.get<string>('FRONTEND_PUBLIC_URL'),
         }),
     },
   ],
