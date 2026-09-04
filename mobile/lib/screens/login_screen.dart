@@ -134,13 +134,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final base = ApiClient.baseUrl;
     if (!url.toString().startsWith('$base/auth/me')) {
       // Pagina intermediaria carregou com sucesso (ex: formulario de login
-      // do IdP) - reinicia o timeout aqui em vez de deixar o timer original
-      // (armado desde o initState) continuar contando. Bug real: sem isso,
-      // o tempo que o usuario leva DIGITANDO email/senha contava como se
-      // fosse falha de carregamento - o timer disparava no meio do
-      // preenchimento, derrubando a WebView inteira (e os campos digitados
-      // junto) mesmo com a pagina carregada e funcionando normalmente.
-      _iniciarTimeoutTimer();
+      // do IdP) - CANCELA o timeout, nao reinicia. Bug real corrigido aqui:
+      // reiniciar o timer (comportamento anterior) ainda contava o tempo
+      // que o usuario leva DIGITANDO email/senha - com um formulario que
+      // nao dispara novo onLoadStop enquanto o usuario so digita, o timer
+      // reiniciado expirava do mesmo jeito no meio do preenchimento. Uma
+      // pagina que ja carregou com sucesso nao é mais "carregamento
+      // travado" - o timer só precisa voltar a contar quando uma NOVA
+      // navegação começa de verdade (ver onLoadStart abaixo).
+      _timeoutTimer?.cancel();
       return;
     }
 
@@ -190,6 +192,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 InAppWebView(
                   key: ValueKey(_tentativa),
                   initialUrlRequest: URLRequest(url: WebUri.uri(_urlLogin)),
+                  // Rearma o timeout a cada navegação REAL que começa (troca
+                  // de página) - complementa o cancelamento em
+                  // onLoadStop/_aoTerminarCarregamento acima: enquanto o
+                  // usuário só digita numa página já carregada, nenhum dos
+                  // dois dispara, então o timer fica parado (correto -
+                  // digitação não é "carregamento travado").
+                  onLoadStart: (controller, url) => _iniciarTimeoutTimer(),
                   onLoadStop: _aoTerminarCarregamento,
                   onReceivedError: (controller, request, error) =>
                       _aoReceberErro(request, error),
