@@ -62,3 +62,82 @@ describe('EstoqueService.consultarPorIdentificador', () => {
     );
   });
 });
+
+function prismaMaisPedidosFake(overrides: {
+  pedidoItemGroupBy?: unknown[];
+  produtos?: unknown[];
+  saldos?: unknown[];
+}) {
+  return {
+    pedidoItem: {
+      groupBy: jest.fn().mockResolvedValue(overrides.pedidoItemGroupBy ?? []),
+    },
+    produto: {
+      findMany: jest.fn().mockResolvedValue(overrides.produtos ?? []),
+    },
+    saldoEstoque: {
+      findMany: jest.fn().mockResolvedValue(overrides.saldos ?? []),
+    },
+  };
+}
+
+describe('EstoqueService.obterMaisPedidos', () => {
+  it('exclui item CANCELADO do agrupamento (via where, nao pos-filtro)', async () => {
+    const prisma = prismaMaisPedidosFake({});
+    const service = new EstoqueService(prisma as never);
+
+    await service.obterMaisPedidos(10);
+
+    expect(prisma.pedidoItem.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ situacao: { not: 'CANCELADO' } }),
+      }),
+    );
+  });
+
+  it('junta quantidade pedida com saldo atual pelo codigo do produto', async () => {
+    const prisma = prismaMaisPedidosFake({
+      pedidoItemGroupBy: [
+        { produtoId: 'p1', _sum: { quantidadeVenda: { toString: () => '150' } } },
+      ],
+      produtos: [{ id: 'p1', nome: 'Cabo 10mm', codigo: 'COD-1' }],
+      saldos: [{ codigoProduto: 'COD-1', quantidadeDisponivel: { toString: () => '42' } }],
+    });
+    const service = new EstoqueService(prisma as never);
+
+    const [resultado] = await service.obterMaisPedidos(10);
+
+    expect(resultado).toEqual({
+      produtoId: 'p1',
+      nome: 'Cabo 10mm',
+      codigo: 'COD-1',
+      quantidadeTotalPedida: 150,
+      quantidadeDisponivel: '42',
+    });
+  });
+
+  it('produto sem saldo sincronizado retorna quantidadeDisponivel null, nao quebra', async () => {
+    const prisma = prismaMaisPedidosFake({
+      pedidoItemGroupBy: [
+        { produtoId: 'p1', _sum: { quantidadeVenda: { toString: () => '10' } } },
+      ],
+      produtos: [{ id: 'p1', nome: 'Sem saldo', codigo: 'COD-2' }],
+      saldos: [],
+    });
+    const service = new EstoqueService(prisma as never);
+
+    const [resultado] = await service.obterMaisPedidos(10);
+
+    expect(resultado.quantidadeDisponivel).toBeNull();
+  });
+
+  it('retorna lista vazia sem consultar produto/saldo quando nao ha nenhum PedidoItem', async () => {
+    const prisma = prismaMaisPedidosFake({ pedidoItemGroupBy: [] });
+    const service = new EstoqueService(prisma as never);
+
+    const resultado = await service.obterMaisPedidos(10);
+
+    expect(resultado).toEqual([]);
+    expect(prisma.produto.findMany).not.toHaveBeenCalled();
+  });
+});

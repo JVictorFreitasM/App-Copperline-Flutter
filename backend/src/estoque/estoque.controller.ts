@@ -1,13 +1,24 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
 import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 import { EstoqueService } from './estoque.service';
 import type { EstoqueConsultaDto } from './dto/estoque-response.dto';
+import { EstoqueMaisPedidosQueryDto } from './dto/estoque-mais-pedidos.dto';
+import type { ProdutoMaisPedidoDto } from './dto/estoque-mais-pedidos.dto';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver estoque.module.ts).
 @Controller('estoque')
 export class EstoqueController {
   constructor(private readonly estoqueService: EstoqueService) {}
+
+  // Precisa vir ANTES de ':identificador' abaixo (rota estatica vs
+  // parametro - ordem de declaracao importa no Nest).
+  @Get('mais-pedidos')
+  obterMaisPedidos(
+    @Query() query: EstoqueMaisPedidosQueryDto,
+  ): Promise<ProdutoMaisPedidoDto[]> {
+    return this.estoqueService.obterMaisPedidos(query.limite);
+  }
 
   // RateLimitGuard so age em cima de um usuario ja autenticado
   // (request.user), por isso vem depois de requireAuth no pipeline -

@@ -90,3 +90,13 @@ class EstoqueNotifier extends Notifier<EstoqueState> {
 }
 
 final estoqueProvider = NotifierProvider<EstoqueNotifier, EstoqueState>(EstoqueNotifier.new);
+
+/// Top 10 produtos mais pedidos (pedido do usuario, na tela de estoque) -
+/// GET /estoque/mais-pedidos, sem parametro de identificador (diferente do
+/// resto desta tela, que e' busca pontual) - por isso FutureProvider comum,
+/// nao amarrado ao EstoqueNotifier acima.
+final produtosMaisPedidosProvider = FutureProvider<List<ProdutoMaisPedido>>((ref) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJsonList('/estoque/mais-pedidos');
+  return json.map(ProdutoMaisPedido.fromJson).toList();
+});

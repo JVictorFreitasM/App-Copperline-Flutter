@@ -55,3 +55,34 @@ class ResultadoEstoque {
   // o produto existe mas nunca teve saldo sincronizado.
   final String? atualizadoEm;
 }
+
+/// Mesmo shape de `backend/src/estoque/dto/estoque-mais-pedidos.dto.ts`
+/// (ProdutoMaisPedidoDto, GET /estoque/mais-pedidos) - ranking por
+/// quantidade total pedida (nao valor), pra priorizar reposicao.
+class ProdutoMaisPedido {
+  const ProdutoMaisPedido({
+    required this.produtoId,
+    required this.nome,
+    required this.codigo,
+    required this.quantidadeTotalPedida,
+    required this.quantidadeDisponivel,
+  });
+
+  factory ProdutoMaisPedido.fromJson(Map<String, dynamic> json) {
+    return ProdutoMaisPedido(
+      produtoId: json['produtoId'] as String,
+      nome: json['nome'] as String?,
+      codigo: json['codigo'] as String,
+      quantidadeTotalPedida: (json['quantidadeTotalPedida'] as num).toDouble(),
+      quantidadeDisponivel: json['quantidadeDisponivel'] as String?,
+    );
+  }
+
+  final String produtoId;
+  final String? nome;
+  final String codigo;
+  final double quantidadeTotalPedida;
+  final String? quantidadeDisponivel;
+
+  String get titulo => nome ?? codigo;
+}

@@ -119,8 +119,45 @@ class _EstoqueScreenState extends ConsumerState<EstoqueScreen> {
               const SizedBox(height: 32),
               const Center(child: CircularProgressIndicator(color: AppColors.primary)),
             ],
+            const SizedBox(height: 24),
+            const Text('Mais pedidos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            const _ListaMaisPedidos(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ListaMaisPedidos extends ConsumerWidget {
+  const _ListaMaisPedidos();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final maisPedidosAsync = ref.watch(produtosMaisPedidosProvider);
+
+    return maisPedidosAsync.when(
+      data: (produtos) => produtos.isEmpty
+          ? const EstadoVazio(mensagem: 'Nenhum produto com pedido registrado ainda.')
+          : Column(
+              children: [
+                for (final produto in produtos) ...[
+                  ListItemTile(
+                    titulo: produto.titulo,
+                    subtitulo: '${produto.quantidadeTotalPedida.toStringAsFixed(0)} unidade(s) pedida(s)',
+                    valor: produto.quantidadeDisponivel != null
+                        ? '${produto.quantidadeDisponivel} em estoque'
+                        : 'Sem saldo sincronizado',
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      error: (erro, _) => ErroConexao(
+        mensagem: '$erro',
+        aoTentarNovamente: () => ref.invalidate(produtosMaisPedidosProvider),
       ),
     );
   }

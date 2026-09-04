@@ -21,3 +21,15 @@ export interface EstoqueConsultaDto {
   // em si) - null quando o produto existe mas nunca teve saldo sincronizado.
   atualizadoEm: string | null;
 }
+
+// Mesmo shape de backend/src/estoque/dto/estoque-mais-pedidos.dto.ts
+// (ProdutoMaisPedidoDto, GET /estoque/mais-pedidos) - ranking por
+// quantidade total pedida (não valor), pra priorizar reposição de
+// estoque.
+export interface ProdutoMaisPedidoDto {
+  produtoId: string;
+  nome: string | null;
+  codigo: string;
+  quantidadeTotalPedida: number;
+  quantidadeDisponivel: string | null;
+}
