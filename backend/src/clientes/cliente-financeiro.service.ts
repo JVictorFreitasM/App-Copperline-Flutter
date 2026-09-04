@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FinanceiroSvcClientService } from '../financeiro-svc-client/financeiro-svc-client.service';
+import { FinanceiroSvcFaultError } from '../financeiro-svc-client/financeiro-svc-fault.error';
 import type { PosicaoFinanceiraBruta } from '../financeiro-svc-client/financeiro-svc-client.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -57,9 +58,24 @@ export class ClienteFinanceiroService {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
     }
 
-    const posicao = await this.financeiroSvcClient.buscarPosicaoFinanceira(
-      cliente.idExternoErp,
-    );
+    let posicao: PosicaoFinanceiraBruta | null;
+    try {
+      posicao = await this.financeiroSvcClient.buscarPosicaoFinanceira(
+        cliente.idExternoErp,
+      );
+    } catch (error) {
+      // Fault de negocio do Financeiro.svc (ex: "cliente nao encontrado" no
+      // cadastro financeiro, mesmo que exista no cadastro comercial) nunca
+      // deve virar 500 generico pro front - vira 404 com a mesma semantica
+      // de "posicao nao encontrada" abaixo. Qualquer outro erro (rede,
+      // timeout, etc) continua propagando normalmente.
+      if (error instanceof FinanceiroSvcFaultError) {
+        throw new NotFoundException(
+          `Posição financeira não encontrada no ERP para o cliente '${clienteId}': ${error.mensagem ?? 'sem detalhe do ERP'}`,
+        );
+      }
+      throw error;
+    }
     if (!posicao) {
       throw new NotFoundException(
         `Posição financeira não encontrada no ERP para o cliente '${clienteId}'`,

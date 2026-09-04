@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { ClienteBoletoService } from './cliente-boleto.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
+import { FinanceiroSvcFaultError } from '../financeiro-svc-client/financeiro-svc-fault.error';
 
 const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
 
@@ -88,6 +89,23 @@ describe('ClienteBoletoService.obter', () => {
   it('lanca NotFoundException quando o download nao retorna buffer', async () => {
     const prisma = prismaFake(undefined);
     const financeiroSvcClient = financeiroSvcClientFake({ tokens: ['tok-1'], buffer: null });
+    const service = new ClienteBoletoService(prisma as never, financeiroSvcClient as never);
+
+    await expect(service.obter('c1', ESCOPO_TODOS, 'DOC-1')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('converte fault do Financeiro.svc em NotFoundException, nunca deixa vazar como 500', async () => {
+    const prisma = prismaFake(undefined);
+    const financeiroSvcClient = {
+      buscarTokenBoleto: jest
+        .fn()
+        .mockRejectedValue(
+          new FinanceiroSvcFaultError('BuscarTokenBoleto', '3', 'Cliente nao encontrado'),
+        ),
+      downloadBoleto: jest.fn(),
+    };
     const service = new ClienteBoletoService(prisma as never, financeiroSvcClient as never);
 
     await expect(service.obter('c1', ESCOPO_TODOS, 'DOC-1')).rejects.toThrow(

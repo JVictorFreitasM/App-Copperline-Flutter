@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
+import { FinanceiroSvcFaultError } from '../financeiro-svc-client/financeiro-svc-fault.error';
 import type { PosicaoFinanceiraBruta } from '../financeiro-svc-client/financeiro-svc-client.types';
 
 const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
@@ -95,6 +96,31 @@ describe('ClienteFinanceiroService.obter', () => {
       vendaBloqueada: false,
       inadimplente: true,
     });
+  });
+
+  it('converte fault do Financeiro.svc em NotFoundException, nunca deixa vazar como 500', async () => {
+    const prisma = prismaFake(undefined);
+    const financeiroSvcClient = {
+      buscarPosicaoFinanceira: jest
+        .fn()
+        .mockRejectedValue(
+          new FinanceiroSvcFaultError('BuscarPosicaoFinanceira', '3', 'Cliente nao encontrado'),
+        ),
+    };
+    const service = new ClienteFinanceiroService(prisma as never, financeiroSvcClient as never);
+
+    await expect(service.obter('c1', ESCOPO_TODOS)).rejects.toThrow(NotFoundException);
+  });
+
+  it('propaga erro que nao e fault de negocio (ex: rede/timeout) sem mascarar', async () => {
+    const prisma = prismaFake(undefined);
+    const erroDeRede = new Error('timeout');
+    const financeiroSvcClient = {
+      buscarPosicaoFinanceira: jest.fn().mockRejectedValue(erroDeRede),
+    };
+    const service = new ClienteFinanceiroService(prisma as never, financeiroSvcClient as never);
+
+    await expect(service.obter('c1', ESCOPO_TODOS)).rejects.toThrow(erroDeRede);
   });
 
   it('inadimplente e false quando nao ha saldo vencido', async () => {

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FinanceiroSvcClientService } from '../financeiro-svc-client/financeiro-svc-client.service';
+import { FinanceiroSvcFaultError } from '../financeiro-svc-client/financeiro-svc-fault.error';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   construirWhereClientePorEscopo,
@@ -45,24 +46,35 @@ export class ClienteBoletoService {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
     }
 
-    const tokens = await this.financeiroSvcClient.buscarTokenBoleto({
-      CodigoClienteSacado: cliente.idExternoErp,
-      NumeroDocumento: numeroDocumento,
-    });
-    const [token] = tokens;
-    if (!token) {
-      throw new NotFoundException(
-        `Boleto do documento '${numeroDocumento}' não encontrado para este cliente`,
-      );
-    }
+    try {
+      const tokens = await this.financeiroSvcClient.buscarTokenBoleto({
+        CodigoClienteSacado: cliente.idExternoErp,
+        NumeroDocumento: numeroDocumento,
+      });
+      const [token] = tokens;
+      if (!token) {
+        throw new NotFoundException(
+          `Boleto do documento '${numeroDocumento}' não encontrado para este cliente`,
+        );
+      }
 
-    const buffer = await this.financeiroSvcClient.downloadBoleto(token);
-    if (!buffer) {
-      throw new NotFoundException(
-        `Boleto do documento '${numeroDocumento}' não pôde ser baixado`,
-      );
-    }
+      const buffer = await this.financeiroSvcClient.downloadBoleto(token);
+      if (!buffer) {
+        throw new NotFoundException(
+          `Boleto do documento '${numeroDocumento}' não pôde ser baixado`,
+        );
+      }
 
-    return { buffer, nomeArquivo: `boleto-${numeroDocumento}.pdf` };
+      return { buffer, nomeArquivo: `boleto-${numeroDocumento}.pdf` };
+    } catch (error) {
+      // Mesmo criterio de ClienteFinanceiroService: fault de negocio do
+      // Financeiro.svc nunca deve vazar como 500 generico.
+      if (error instanceof FinanceiroSvcFaultError) {
+        throw new NotFoundException(
+          `Boleto do documento '${numeroDocumento}' não encontrado: ${error.mensagem ?? 'sem detalhe do ERP'}`,
+        );
+      }
+      throw error;
+    }
   }
 }
