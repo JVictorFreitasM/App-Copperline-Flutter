@@ -35,7 +35,6 @@ export default async function EstoquePage({
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-bold text-ink">Consulta de estoque</h1>
-      <BuscaEstoque identificadorInicial={identificador} />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-ink">Produtos mais pedidos</h2>
@@ -61,6 +60,8 @@ export default async function EstoquePage({
           </div>
         )}
       </section>
+
+      <BuscaEstoque identificadorInicial={identificador} />
     </main>
   );
 }

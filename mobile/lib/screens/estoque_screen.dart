@@ -56,6 +56,10 @@ class _EstoqueScreenState extends ConsumerState<EstoqueScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const Text('Mais pedidos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            const _ListaMaisPedidos(),
+            const SizedBox(height: 24),
             AppCard(
               child: Row(
                 children: [
@@ -119,10 +123,6 @@ class _EstoqueScreenState extends ConsumerState<EstoqueScreen> {
               const SizedBox(height: 32),
               const Center(child: CircularProgressIndicator(color: AppColors.primary)),
             ],
-            const SizedBox(height: 24),
-            const Text('Mais pedidos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 8),
-            const _ListaMaisPedidos(),
           ],
         ),
       ),
