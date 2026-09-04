@@ -29,6 +29,10 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   // regra existir.
   tipoVenda: TipoVendaProduto | null;
   comprimentoMetros: string | null;
+  // Nao vem do WK Radar (dado proprio, editavel via PATCH
+  // /admin/produtos/:id e POST /admin/produtos/:id/imagem, so' web).
+  precoFabricacao: string | null;
+  temImagem: boolean;
 }
 
 // Enum TipoVendaProduto do backend (schema.prisma) - usado por

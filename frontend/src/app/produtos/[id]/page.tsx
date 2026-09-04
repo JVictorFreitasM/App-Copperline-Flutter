@@ -8,6 +8,8 @@ import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
 import { SecondaryButton } from "@/components/design/button";
+import { EditarPrecoFabricacaoForm } from "./editar-preco-fabricacao-form";
+import { EnviarImagemForm } from "./enviar-imagem-form";
 import { SimularCalculo } from "./simular-calculo";
 
 // Tela de detalhe do produto (OS-WEB-15) - mostra o que a listagem não
@@ -20,7 +22,7 @@ export default async function ProdutoDetalhePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await exigirUsuarioAutenticado("/produtos");
+  const usuario = await exigirUsuarioAutenticado("/produtos");
 
   const { id } = await params;
 
@@ -65,10 +67,22 @@ export default async function ProdutoDetalhePage({
               )}
             </div>
 
-            <Card>
-              <p className="text-xs text-muted">Preço de venda</p>
-              <p className="text-4xl font-bold text-ink">{formatarMoeda(produto.precoVenda)}</p>
-            </Card>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[200px_1fr]">
+              {produto.temImagem && (
+                <Card className="flex items-center justify-center overflow-hidden p-0 sm:h-48">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- imagem enviada pelo usuário, sem otimização/CDN configurados pra upload dinâmico */}
+                  <img
+                    src={`/api/produtos/${produto.id}/imagem`}
+                    alt={produto.nome ?? "Produto"}
+                    className="h-full w-full object-cover"
+                  />
+                </Card>
+              )}
+              <Card>
+                <p className="text-xs text-muted">Preço de venda</p>
+                <p className="text-4xl font-bold text-ink">{formatarMoeda(produto.precoVenda)}</p>
+              </Card>
+            </div>
 
             <Card className="grid grid-cols-1 gap-4 text-sm text-ink sm:grid-cols-2">
               <p>
@@ -92,7 +106,26 @@ export default async function ProdutoDetalhePage({
                   {produto.comprimentoMetros}m
                 </p>
               )}
+              {produto.precoFabricacao && (
+                <p>
+                  <span className="font-medium">Preço de fabricação:</span>{" "}
+                  {formatarMoeda(produto.precoFabricacao)}
+                </p>
+              )}
             </Card>
+
+            {usuario.role === "admin" && (
+              <Card className="flex flex-col gap-4">
+                <h2 className="text-sm font-semibold text-ink">
+                  Dados administrativos (não vêm do ERP)
+                </h2>
+                <EditarPrecoFabricacaoForm
+                  produtoId={produto.id}
+                  valorAtual={produto.precoFabricacao}
+                />
+                <EnviarImagemForm produtoId={produto.id} />
+              </Card>
+            )}
 
             <SimularCalculo produtoId={produto.id} />
 

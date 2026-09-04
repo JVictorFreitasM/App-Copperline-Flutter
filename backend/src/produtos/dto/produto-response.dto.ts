@@ -25,6 +25,10 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   // (ver PENDENCIA em schema.prisma), então normalmente vem null hoje.
   tipoVenda: string | null;
   comprimentoMetros: string | null;
+  // Nao vem do WK Radar (dado proprio, editavel via PATCH
+  // /admin/produtos/:id) - ver comentario no schema.prisma.
+  precoFabricacao: string | null;
+  temImagem: boolean;
 }
 
 export function paraProdutoResumoDto(produto: Produto): ProdutoResumoDto {
@@ -51,5 +55,7 @@ export function paraProdutoDetalheDto(produto: Produto): ProdutoDetalheDto {
     referenciasGrade: produto.referenciasGrade,
     tipoVenda: produto.tipoVenda,
     comprimentoMetros: produto.comprimentoMetros?.toString() ?? null,
+    precoFabricacao: produto.precoFabricacao?.toString() ?? null,
+    temImagem: produto.imagemCaminho !== null,
   };
 }

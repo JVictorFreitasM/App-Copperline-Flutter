@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { PaginatedResult } from '../common/pagination';
 import { FavoritosService } from '../notificacoes/favoritos.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { ProdutoCalculoService } from './produto-calculo.service';
+import { ProdutoManualService } from './produto-manual.service';
 import type { ResultadoCalculoQuantidade } from './domain/calculo-quantidade-pedido';
 import { ProdutosService } from './produtos.service';
 import { ProdutosRupturaService } from './produtos-ruptura.service';
@@ -26,6 +27,7 @@ export class ProdutosController {
     private readonly usuariosService: UsuariosService,
     private readonly produtosRupturaService: ProdutosRupturaService,
     private readonly produtoCalculoService: ProdutoCalculoService,
+    private readonly produtoManualService: ProdutoManualService,
   ) {}
 
   @Get()
@@ -78,6 +80,15 @@ export class ProdutosController {
   @Get(':id')
   buscarPorId(@Param('id') id: string): Promise<ProdutoDetalheDto> {
     return this.produtosService.buscarPorId(id);
+  }
+
+  // Leitura (qualquer vendedor autenticado, mesmo criterio de GET ':id'
+  // acima) - a escrita (upload/edicao) fica em AdminProdutosController,
+  // role admin.
+  @Get(':id/imagem')
+  async imagem(@Param('id') id: string): Promise<StreamableFile> {
+    const { buffer, tipoMime } = await this.produtoManualService.obterImagem(id);
+    return new StreamableFile(buffer, { type: tipoMime });
   }
 
   // OS-BACKEND-24 - chamado antes de adicionar item ao pedido (mobile e

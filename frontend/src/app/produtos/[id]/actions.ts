@@ -1,7 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
+import type { ProdutoDetalheDto, ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
 
 // Estado do useActionState no Client Component (simular-calculo.tsx) -
 // mesmo padrão de ResultadoConsultaEstoque (estoque/actions.ts): um
@@ -52,6 +53,73 @@ export async function simularCalculo(
       mensagem: error instanceof ApiError ? error.message : "Erro desconhecido ao simular o cálculo.",
     };
   }
+}
+
+// Campos que NAO vem do WK Radar (precoFabricacao/imagem, pedido do
+// usuario) - editaveis so por admin, via PATCH/POST /admin/produtos/:id
+// (backend ja valida role admin via requireRole, ver produtos.module.ts;
+// aqui e' so' a chamada, sem checagem de role duplicada no front).
+export interface EstadoEdicaoManual {
+  erro: string | null;
+  sucesso: string | null;
+}
+
+export const ESTADO_EDICAO_MANUAL_INICIAL: EstadoEdicaoManual = { erro: null, sucesso: null };
+
+export async function atualizarPrecoFabricacao(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const valorRaw = String(formData.get("precoFabricacao") ?? "").trim();
+  const valor = Number(valorRaw);
+  if (!valorRaw || Number.isNaN(valor) || valor < 0) {
+    return { erro: "Informe um valor válido (maior ou igual a zero).", sucesso: null };
+  }
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precoFabricacao: valor }),
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar o preço.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath(`/produtos/${produtoId}`);
+  return { erro: null, sucesso: "Preço de fabricação atualizado." };
+}
+
+export async function enviarImagemProduto(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const imagem = formData.get("imagem");
+  if (!(imagem instanceof File) || imagem.size === 0) {
+    return { erro: "Selecione uma imagem.", sucesso: null };
+  }
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}/imagem`, {
+      method: "POST",
+      body: formData,
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao enviar a imagem.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath(`/produtos/${produtoId}`);
+  return { erro: null, sucesso: "Imagem atualizada." };
 }
 
 // apiFetch (lib/api.ts) embute o corpo cru da resposta de erro na mensagem

@@ -212,6 +212,23 @@ model Produto {
   // pra ser preenchido quando a regra for definida.
   tipoVenda TipoVendaProduto? @map("tipo_venda")
 
+  // Campos abaixo NAO vem do WK Radar (nao sincronizados) - dado proprio
+  // do sistema, preenchido manualmente via PATCH /produtos/:id. Por nao
+  // fazerem parte do `campos` mapeado em produto.sync.ts, o upsert de sync
+  // nunca os sobrescreve.
+  //
+  // precoFabricacao: pedido do usuario ("mostrar preco de fabricacao") -
+  // o Radar nao expoe custo/fabricacao no cadastro de produto (so
+  // precoVenda), por isso e' um campo nosso, editavel manualmente.
+  precoFabricacao Decimal? @map("preco_fabricacao") @db.Decimal(18, 6)
+  // Caminho no disco do servidor (mesmo padrao de armazenamento local ja
+  // usado por DocumentoStorageService/VisitaFotoStorageService) - so web
+  // tem UI de upload (pedido do usuario), mas o campo/endpoint fica no
+  // backend compartilhado, sem trava tecnica que impeça o mobile de usar
+  // no futuro.
+  imagemCaminho String? @map("imagem_caminho")
+  imagemTipoMime String? @map("imagem_tipo_mime")
+
   itensPedido PedidoItem[]
   favoritos   ProdutoFavorito[]
 
