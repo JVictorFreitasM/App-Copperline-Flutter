@@ -10,6 +10,7 @@ import '../notificacoes_config_screen.dart';
 import '../produtos_screen.dart';
 import '../rastreio_config_screen.dart';
 import '../roteiro_screen.dart';
+import '../tabelas_preco_screen.dart';
 import 'documentos_screen.dart';
 import 'relatorio_screen.dart';
 
@@ -321,6 +322,17 @@ class _MenuLateral extends ConsumerWidget {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen()));
+              },
+            ),
+            _ItemMenu(
+              icone: Icons.sell_outlined,
+              rotulo: 'Tabelas de preço',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const TabelasPrecoScreen()));
               },
             ),
             const Spacer(),

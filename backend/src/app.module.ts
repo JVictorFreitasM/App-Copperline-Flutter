@@ -29,6 +29,7 @@ import { DocumentosModule } from './documentos/documentos.module';
 import { CoberturasModule } from './coberturas/coberturas.module';
 import { MetasModule } from './metas/metas.module';
 import { OportunidadesModule } from './oportunidades/oportunidades.module';
+import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { OportunidadesModule } from './oportunidades/oportunidades.module';
     MetasModule,
     OportunidadesModule,
     CoberturasModule,
+    TabelasPrecoModule,
   ],
 })
 export class AppModule {}

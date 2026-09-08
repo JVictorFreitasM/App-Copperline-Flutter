@@ -235,6 +235,53 @@ model Produto {
   @@map("produtos")
 }
 
+// Sincronizada via Empresarial.svc/BuscarTabelasPreco (WCF legado, mesma
+// familia de Estoque.svc/Financeiro.svc - ver empresarial-svc-client) -
+// full refresh a cada execucao (`filtro: {}` traz TODAS as tabelas ativas
+// numa chamada so, confirmado empiricamente; sem cursor incremental
+// disponivel nesta operacao). CodigoItem de cada item corresponde a
+// Produto.codigo, mas SEM FK direta (mesmo motivo de SaldoEstoque -
+// tabela de preco pode referenciar item nao sincronizado como Produto
+// ainda).
+model TabelaPreco {
+  id             String   @id @default(uuid())
+  idExternoErp   String   @unique @map("id_externo_erp")
+  codigo         String   @unique
+  ativa          Boolean  @default(true)
+  // "Tabela padrao" (pedido do usuario: "possibilidade de trocar a
+  // tabela") - qual tabela e' a fonte de preco "oficial" pro resto do
+  // sistema quando houver mais de uma ativa. Only-one-true garantido em
+  // codigo (TabelaPrecoService.definirPadrao), nao em constraint de banco.
+  padrao         Boolean  @default(false)
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  itens ItemTabelaPreco[]
+
+  @@map("tabelas_preco")
+}
+
+model ItemTabelaPreco {
+  id            String @id @default(uuid())
+  tabelaPrecoId String @map("tabela_preco_id")
+  codigoItem    String @map("codigo_item")
+
+  preco                    Decimal   @db.Decimal(18, 6)
+  precoPromocional         Decimal?  @db.Decimal(18, 6)
+  quantidadeMinima         Decimal   @db.Decimal(20, 4)
+  quantidadeMaxima         Decimal   @db.Decimal(20, 4)
+  percentualDescontoMaximo Decimal   @db.Decimal(5, 2)
+  valorDescontoMaximo      Decimal   @db.Decimal(18, 6)
+  dataUltimoReajuste       DateTime? @map("data_ultimo_reajuste")
+  dataInicioPromocao       DateTime? @map("data_inicio_promocao")
+  dataFimPromocao          DateTime? @map("data_fim_promocao")
+
+  tabelaPreco TabelaPreco @relation(fields: [tabelaPrecoId], references: [id], onDelete: Cascade)
+
+  @@unique([tabelaPrecoId, codigoItem])
+  @@index([codigoItem])
+  @@map("itens_tabela_preco")
+}
+
 enum TipoVendaProduto {
   POC
   RET

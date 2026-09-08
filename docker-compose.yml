@@ -99,6 +99,7 @@ services:
       WK_RADAR_SALDO_ESTOQUE_DATA_INICIO_CARGA: ${WK_RADAR_SALDO_ESTOQUE_DATA_INICIO_CARGA}
       WK_RADAR_VENDEDOR_DATA_INICIO_CARGA: ${WK_RADAR_VENDEDOR_DATA_INICIO_CARGA}
       WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA: ${WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA}
+      WK_RADAR_TABELA_PRECO_DATA_INICIO_CARGA: ${WK_RADAR_TABELA_PRECO_DATA_INICIO_CARGA}
       WK_BI_URL: ${WK_BI_URL}
       WK_BI_BASE: ${WK_BI_BASE}
       WK_BI_USUARIO: ${WK_BI_USUARIO}
@@ -112,6 +113,9 @@ services:
       # operacao no final, 3 operacoes diferentes chamadas daqui), mesmas
       # credenciais WK_BI_* do Estoque.svc.
       WK_RADAR_FINANCEIRO_SVC_URL: ${WK_RADAR_FINANCEIRO_SVC_URL}
+      # Empresarial.svc - sincronizacao de tabela de preco, mesmas
+      # credenciais WK_BI_* do Estoque.svc.
+      WK_RADAR_EMPRESARIAL_SVC_URL: ${WK_RADAR_EMPRESARIAL_SVC_URL}
       # Firebase Cloud Messaging - vazio ate ser configurado (fail-closed
       # so no envio, nao no boot - ver PushNotificationClientService).
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}

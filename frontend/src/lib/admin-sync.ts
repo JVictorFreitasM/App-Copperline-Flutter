@@ -66,6 +66,7 @@ const ROTULOS_ENTIDADE: Record<string, string> = {
   "nota-fiscal": "Notas fiscais",
   saldo_estoque: "Saldo de estoque",
   vendedor: "Vendedores",
+  "tabela-preco": "Tabelas de preço",
 };
 
 export function rotuloEntidade(nomeEntidade: string): string {

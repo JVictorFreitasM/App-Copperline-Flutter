@@ -13,6 +13,7 @@ import {
   IconeGrade,
   IconeGrafico,
   IconeMapa,
+  IconeMoeda,
   IconePessoas,
   IconeRecibo,
   IconeAtualizar,
@@ -50,6 +51,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
         { href: "/pedidos", rotulo: "Pedidos", icone: <IconeClipboard /> },
         { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/notas-fiscais", rotulo: "Notas fiscais", icone: <IconeRecibo /> },
+        { href: "/tabelas-preco", rotulo: "Tabelas de preço", icone: <IconeMoeda /> },
       ],
     },
     ...(podeAprovar
