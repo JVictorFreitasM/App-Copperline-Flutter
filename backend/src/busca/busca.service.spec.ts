@@ -13,6 +13,10 @@ function prismaFake(overrides: {
   };
 }
 
+function precoProdutoServiceFake() {
+  return { obterPrecosDaTabelaPadrao: jest.fn().mockResolvedValue(new Map()) };
+}
+
 const CLIENTE_FAKE = {
   id: 'c1',
   idExternoErp: '1',
@@ -64,7 +68,7 @@ describe('BuscaService.buscar', () => {
       produtos: [PRODUTO_FAKE],
       pedidos: [PEDIDO_FAKE],
     });
-    const service = new BuscaService(prisma as never);
+    const service = new BuscaService(prisma as never, precoProdutoServiceFake() as never);
 
     const resultado = await service.buscar('teste');
 
@@ -78,7 +82,7 @@ describe('BuscaService.buscar', () => {
 
   it('busca cliente por razaoSocial/nomeFantasia/cpfCnpj com ILIKE (contains insensitive)', async () => {
     const prisma = prismaFake({});
-    const service = new BuscaService(prisma as never);
+    const service = new BuscaService(prisma as never, precoProdutoServiceFake() as never);
 
     await service.buscar('acme');
 
@@ -96,7 +100,7 @@ describe('BuscaService.buscar', () => {
 
   it('busca produto por nome/codigo/gtin', async () => {
     const prisma = prismaFake({});
-    const service = new BuscaService(prisma as never);
+    const service = new BuscaService(prisma as never, precoProdutoServiceFake() as never);
 
     await service.buscar('50010');
 
@@ -114,7 +118,7 @@ describe('BuscaService.buscar', () => {
 
   it('busca pedido por numero, incluindo o cliente', async () => {
     const prisma = prismaFake({});
-    const service = new BuscaService(prisma as never);
+    const service = new BuscaService(prisma as never, precoProdutoServiceFake() as never);
 
     await service.buscar('1234');
 

@@ -4,6 +4,7 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminProdutosController } from './admin-produtos.controller';
 import { ProdutoCalculoService } from './produto-calculo.service';
@@ -18,7 +19,7 @@ import { ProdutosService } from './produtos.service';
   // favoritos em ProdutosController (ver comentario la - ficaram aqui em
   // vez de num controller proprio pra garantir a ordem de match de rota
   // contra GET /produtos/:id, ver OS-BACKEND-19).
-  imports: [PrismaModule, NotificacoesModule, UsuariosModule],
+  imports: [PrismaModule, NotificacoesModule, UsuariosModule, TabelasPrecoModule],
   controllers: [ProdutosController, AdminProdutosController],
   providers: [
     ProdutosService,

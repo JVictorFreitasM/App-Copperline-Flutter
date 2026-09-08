@@ -5,6 +5,7 @@ import type { EstoqueConsultaDto } from '../estoque/dto/estoque-response.dto';
 import { paraPedidoResumoDto, type PedidoResumoDto } from '../pedidos/dto/pedido-response.dto';
 import { paraProdutoResumoDto, type ProdutoResumoDto } from '../produtos/dto/produto-response.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import {
   construirWhereClientePorEscopo,
   VendedorEscopoService,
@@ -48,6 +49,7 @@ export class MobileSnapshotService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly precoProdutoService: PrecoProdutoService,
   ) {}
 
   async obter(idpUser: IdpUser, usuarioId: string): Promise<MobileSnapshotDto> {
@@ -61,7 +63,7 @@ export class MobileSnapshotService {
     const escopo = await this.vendedorEscopoService.resolverEscopoClientes(idpUser, usuarioId);
     const whereClientes = construirWhereClientePorEscopo(escopo);
 
-    const [clientes, produtos, pedidos, saldosEstoque] = await Promise.all([
+    const [clientes, produtos, pedidos, saldosEstoque, precosTabela] = await Promise.all([
       whereClientes
         ? this.prisma.cliente.findMany({
             where: whereClientes,
@@ -81,6 +83,7 @@ export class MobileSnapshotService {
         include: { cliente: true },
       }),
       this.prisma.saldoEstoque.findMany({ take: LIMITE_SALDOS_ESTOQUE }),
+      this.precoProdutoService.obterPrecosDaTabelaPadrao(),
     ]);
 
     // Junta por codigo (SaldoEstoque nao tem FK pra Produto, mesmo padrao
@@ -116,7 +119,9 @@ export class MobileSnapshotService {
     return {
       geradoEm: new Date().toISOString(),
       clientes: clientes.map(paraClienteResumoDto),
-      produtos: produtos.map(paraProdutoResumoDto),
+      produtos: produtos.map((produto) =>
+        paraProdutoResumoDto(produto, produto.codigo ? precosTabela.get(produto.codigo) : undefined),
+      ),
       pedidos: pedidos.map(paraPedidoResumoDto),
       estoque,
     };

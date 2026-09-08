@@ -31,7 +31,17 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   temImagem: boolean;
 }
 
-export function paraProdutoResumoDto(produto: Produto): ProdutoResumoDto {
+// precoTabela (pedido do usuario: "coloque o preço de venda vindo da
+// tabela no preço do produto") - quando existe um item pra este produto
+// na TABELA PADRAO (ver PrecoProdutoService), ele SUBSTITUI
+// Produto.precoVenda cru como o preço exibido. Sem tabela padrão
+// definida, ou sem item pra este código nela, cai de volta pro
+// precoVenda sincronizado do cadastro (nunca fica sem preço por causa
+// disso).
+export function paraProdutoResumoDto(
+  produto: Produto,
+  precoTabela?: string,
+): ProdutoResumoDto {
   return {
     id: produto.id,
     idExternoErp: produto.idExternoErp,
@@ -39,16 +49,19 @@ export function paraProdutoResumoDto(produto: Produto): ProdutoResumoDto {
     nome: produto.nome,
     tipo: produto.tipo,
     inativo: produto.inativo,
-    precoVenda: produto.precoVenda?.toString() ?? null,
+    precoVenda: precoTabela ?? produto.precoVenda?.toString() ?? null,
     gtin: produto.gtin,
     incompleto: produto.incompleto,
     sincronizadoEm: produto.sincronizadoEm,
   };
 }
 
-export function paraProdutoDetalheDto(produto: Produto): ProdutoDetalheDto {
+export function paraProdutoDetalheDto(
+  produto: Produto,
+  precoTabela?: string,
+): ProdutoDetalheDto {
   return {
-    ...paraProdutoResumoDto(produto),
+    ...paraProdutoResumoDto(produto, precoTabela),
     idGrade1: produto.idGrade1,
     idGrade2: produto.idGrade2,
     idGrade3: produto.idGrade3,

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
 import { paginar, type PaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import {
   paraProdutoDetalheDto,
   paraProdutoResumoDto,
@@ -15,7 +16,10 @@ import type { ListarProdutosQueryDto } from './dto/listar-produtos-query.dto';
 // criterio de DDD).
 @Injectable()
 export class ProdutosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly precoProdutoService: PrecoProdutoService,
+  ) {}
 
   async listar(
     query: ListarProdutosQueryDto,
@@ -32,18 +36,23 @@ export class ProdutosService {
       }),
     };
 
-    const [produtos, total] = await this.prisma.$transaction([
-      this.prisma.produto.findMany({
-        where,
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-        orderBy: { nome: 'asc' },
-      }),
-      this.prisma.produto.count({ where }),
+    const [[produtos, total], precosTabela] = await Promise.all([
+      this.prisma.$transaction([
+        this.prisma.produto.findMany({
+          where,
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+          orderBy: { nome: 'asc' },
+        }),
+        this.prisma.produto.count({ where }),
+      ]),
+      this.precoProdutoService.obterPrecosDaTabelaPadrao(),
     ]);
 
     return paginar(
-      produtos.map(paraProdutoResumoDto),
+      produtos.map((produto) =>
+        paraProdutoResumoDto(produto, produto.codigo ? precosTabela.get(produto.codigo) : undefined),
+      ),
       total,
       query.page,
       query.limit,
@@ -57,6 +66,10 @@ export class ProdutosService {
       throw new NotFoundException(`Produto '${id}' não encontrado`);
     }
 
-    return paraProdutoDetalheDto(produto);
+    const precoTabela = produto.codigo
+      ? await this.precoProdutoService.obterPrecoPorCodigo(produto.codigo)
+      : null;
+
+    return paraProdutoDetalheDto(produto, precoTabela ?? undefined);
   }
 }

@@ -3,11 +3,12 @@ import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { BuscaController } from './busca.controller';
 import { BuscaService } from './busca.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, TabelasPrecoModule],
   controllers: [BuscaController],
   providers: [BuscaService],
 })

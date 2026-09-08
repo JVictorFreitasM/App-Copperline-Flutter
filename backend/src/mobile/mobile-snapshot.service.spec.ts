@@ -36,12 +36,17 @@ function vendedorEscopoServiceFake(escopo: { tipo: string; [k: string]: unknown 
   return { resolverEscopoClientes: jest.fn().mockResolvedValue(escopo) };
 }
 
+function precoProdutoServiceFake() {
+  return { obterPrecosDaTabelaPadrao: jest.fn().mockResolvedValue(new Map()) };
+}
+
 describe('MobileSnapshotService.obter', () => {
   it('lanca ForbiddenException quando o usuario nao e um vendedor cadastrado', async () => {
     const prisma = prismaFake({ vendedor: null });
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     await expect(service.obter(IDP_USER, 'u1')).rejects.toThrow(ForbiddenException);
@@ -52,6 +57,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'NENHUM' }) as never,
+      precoProdutoServiceFake() as never,
     );
 
     const resultado = await service.obter(IDP_USER, 'u1');
@@ -65,6 +71,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     await service.obter(IDP_USER, 'u1');
@@ -79,6 +86,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     await service.obter(IDP_USER, 'u1');
@@ -106,6 +114,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     const resultado = await service.obter(IDP_USER, 'u1');
@@ -129,6 +138,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     const resultado = await service.obter(IDP_USER, 'u1');
@@ -165,6 +175,7 @@ describe('MobileSnapshotService.obter', () => {
     const service = new MobileSnapshotService(
       prisma as never,
       vendedorEscopoServiceFake() as never,
+      precoProdutoServiceFake() as never,
     );
 
     const resultado = await service.obter(IDP_USER, 'u1');

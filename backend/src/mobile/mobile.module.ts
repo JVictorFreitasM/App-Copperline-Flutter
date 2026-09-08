@@ -5,6 +5,7 @@ import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PedidosModule } from '../pedidos/pedidos.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RastreioModule } from '../rastreio/rastreio.module';
+import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
@@ -23,6 +24,7 @@ import { MobileSnapshotService } from './mobile-snapshot.service';
     PedidosModule,
     VisitasModule,
     RastreioModule,
+    TabelasPrecoModule,
   ],
   controllers: [MobileController],
   providers: [MobileSnapshotService, FilaPendenteService],

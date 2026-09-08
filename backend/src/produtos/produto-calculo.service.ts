@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import {
   calcularQuantidadePedido,
   ComprimentoNaoConfiguradoError,
@@ -19,7 +20,10 @@ import type { ResultadoCalculoQuantidade } from './domain/calculo-quantidade-ped
 // HTTP claras.
 @Injectable()
 export class ProdutoCalculoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly precoProdutoService: PrecoProdutoService,
+  ) {}
 
   async calcular(
     produtoId: string,
@@ -32,7 +36,16 @@ export class ProdutoCalculoService {
       throw new NotFoundException(`Produto '${produtoId}' não encontrado`);
     }
 
-    if (produto.precoVenda === null) {
+    // Mesma fonte de preco usada na exibicao (pedido do usuario: "coloque
+    // o preço de venda vindo da tabela no preço do produto") - a tabela
+    // padrao, quando tem item pra este codigo, é o preço usado no
+    // calculo; sem ela, cai pro precoVenda cru sincronizado.
+    const precoTabela = produto.codigo
+      ? await this.precoProdutoService.obterPrecoPorCodigo(produto.codigo)
+      : null;
+    const precoVenda = precoTabela ? Number(precoTabela) : produto.precoVenda?.toNumber();
+
+    if (precoVenda === null || precoVenda === undefined) {
       throw new UnprocessableEntityException(
         `Produto '${produtoId}' sem preço de venda cadastrado - não é possível calcular o pedido`,
       );
@@ -42,7 +55,7 @@ export class ProdutoCalculoService {
       return calcularQuantidadePedido(
         produto.tipoVenda,
         produto.comprimentoMetros?.toNumber() ?? null,
-        produto.precoVenda.toNumber(),
+        precoVenda,
         metrosDesejados,
       );
     } catch (error) {

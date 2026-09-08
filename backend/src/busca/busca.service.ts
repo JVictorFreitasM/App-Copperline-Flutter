@@ -3,6 +3,7 @@ import { paraClienteResumoDto } from '../clientes/dto/cliente-response.dto';
 import { paraPedidoResumoDto } from '../pedidos/dto/pedido-response.dto';
 import { paraProdutoResumoDto } from '../produtos/dto/produto-response.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import type { BuscaResultadoDto } from './dto/busca-resultado.dto';
 
 // Numero de resultados por TIPO (nao no total) - cada um dos 3 findMany
@@ -18,40 +19,48 @@ const LIMITE_POR_TIPO = 5;
 // dominio (ver skill nest-endpoint, criterio de DDD).
 @Injectable()
 export class BuscaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly precoProdutoService: PrecoProdutoService,
+  ) {}
 
   async buscar(termo: string): Promise<BuscaResultadoDto> {
-    const [clientes, produtos, pedidos] = await this.prisma.$transaction([
-      this.prisma.cliente.findMany({
-        where: {
-          OR: [
-            { razaoSocial: { contains: termo, mode: 'insensitive' } },
-            { nomeFantasia: { contains: termo, mode: 'insensitive' } },
-            { cpfCnpj: { contains: termo } },
-          ],
-        },
-        take: LIMITE_POR_TIPO,
-      }),
-      this.prisma.produto.findMany({
-        where: {
-          OR: [
-            { nome: { contains: termo, mode: 'insensitive' } },
-            { codigo: { contains: termo, mode: 'insensitive' } },
-            { gtin: { contains: termo, mode: 'insensitive' } },
-          ],
-        },
-        take: LIMITE_POR_TIPO,
-      }),
-      this.prisma.pedido.findMany({
-        where: { numero: { contains: termo, mode: 'insensitive' } },
-        take: LIMITE_POR_TIPO,
-        include: { cliente: true },
-      }),
+    const [[clientes, produtos, pedidos], precosTabela] = await Promise.all([
+      this.prisma.$transaction([
+        this.prisma.cliente.findMany({
+          where: {
+            OR: [
+              { razaoSocial: { contains: termo, mode: 'insensitive' } },
+              { nomeFantasia: { contains: termo, mode: 'insensitive' } },
+              { cpfCnpj: { contains: termo } },
+            ],
+          },
+          take: LIMITE_POR_TIPO,
+        }),
+        this.prisma.produto.findMany({
+          where: {
+            OR: [
+              { nome: { contains: termo, mode: 'insensitive' } },
+              { codigo: { contains: termo, mode: 'insensitive' } },
+              { gtin: { contains: termo, mode: 'insensitive' } },
+            ],
+          },
+          take: LIMITE_POR_TIPO,
+        }),
+        this.prisma.pedido.findMany({
+          where: { numero: { contains: termo, mode: 'insensitive' } },
+          take: LIMITE_POR_TIPO,
+          include: { cliente: true },
+        }),
+      ]),
+      this.precoProdutoService.obterPrecosDaTabelaPadrao(),
     ]);
 
     return {
       clientes: clientes.map(paraClienteResumoDto),
-      produtos: produtos.map(paraProdutoResumoDto),
+      produtos: produtos.map((produto) =>
+        paraProdutoResumoDto(produto, produto.codigo ? precosTabela.get(produto.codigo) : undefined),
+      ),
       pedidos: pedidos.map(paraPedidoResumoDto),
     };
   }
