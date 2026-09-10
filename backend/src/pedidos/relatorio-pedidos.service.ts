@@ -74,12 +74,17 @@ export class RelatorioPedidosService {
     const dataInicialEfetiva = semPeriodoInformado ? hoje : filtro.dataInicial;
     const dataFinalEfetiva = semPeriodoInformado ? hoje : filtro.dataFinal;
 
+    // 'TODOS'/'EQUIPE' e' o unico par possivel aqui - 'PROPRIO'/'NENHUM' ja
+    // foram rejeitados com ForbiddenException acima.
+    const escopoResposta: 'TODOS' | 'EQUIPE' = escopo.tipo === 'TODOS' ? 'TODOS' : 'EQUIPE';
+
     if (vendedores.length === 0) {
       return {
         periodo: {
           dataInicial: dataInicialEfetiva ?? null,
           dataFinal: dataFinalEfetiva ?? null,
         },
+        escopo: escopoResposta,
         vendedores: [],
       };
     }
@@ -156,6 +161,7 @@ export class RelatorioPedidosService {
 
     return {
       periodo: { dataInicial: dataInicialEfetiva ?? null, dataFinal: dataFinalEfetiva ?? null },
+      escopo: escopoResposta,
       vendedores: vendedoresDto,
     };
   }

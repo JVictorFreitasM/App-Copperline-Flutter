@@ -44,6 +44,14 @@ export interface RelatorioPedidosDto {
   // RelatorioPedidosService.obter, "pedidos do dia (ou período
   // selecionado)").
   periodo: { dataInicial: string | null; dataFinal: string | null };
+  // Achado da auditoria de seguranca ("indicador explicito de escopo
+  // ativo no painel") - o front nunca deveria inferir isso sozinho (ex:
+  // por "lista vazia" ou pela ausencia do filtro de vendedor), tem que
+  // vir explicito do backend, unica fonte de verdade sobre qual escopo
+  // foi REALMENTE aplicado na query (ver RelatorioPedidosService.obter).
+  // NUNCA 'PROPRIO'/'NENHUM' aqui - obter() ja rejeita esses dois com
+  // ForbiddenException antes de montar a resposta.
+  escopo: 'TODOS' | 'EQUIPE';
   vendedores: RelatorioVendedorDto[];
 }
 

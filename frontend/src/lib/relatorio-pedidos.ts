@@ -29,7 +29,15 @@ export interface RelatorioVendedorDto {
 
 export interface RelatorioPedidosDto {
   periodo: { dataInicial: string | null; dataFinal: string | null };
+  // Escopo REALMENTE aplicado na query pelo backend (nunca inferir no
+  // front por "lista vazia" ou pela ausencia de filtro - ver comentário
+  // no DTO do backend).
+  escopo: "TODOS" | "EQUIPE";
   vendedores: RelatorioVendedorDto[];
+}
+
+export function rotuloEscopo(escopo: RelatorioPedidosDto["escopo"]): string {
+  return escopo === "TODOS" ? "Vendo: todos os vendedores" : "Vendo: minha equipe";
 }
 
 const ROTULOS_STATUS_APROVACAO: Record<string, string> = {

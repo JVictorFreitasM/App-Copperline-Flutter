@@ -4,6 +4,7 @@ import { exigirUsuarioAutenticado } from "@/lib/auth";
 import type { VendedorEquipeDto } from "@/lib/vendedores";
 import {
   rotuloStatusAprovacao,
+  rotuloEscopo,
   OPCOES_STATUS_APROVACAO,
   type RelatorioPedidosDto,
 } from "@/lib/relatorio-pedidos";
@@ -86,12 +87,19 @@ export default async function RelatorioPedidosPage({
       ) : (
         relatorio && (
           <>
-            {relatorio.periodo.dataInicial && (
-              <p className="text-sm text-muted">
-                Período: {formatarData(relatorio.periodo.dataInicial)} até{" "}
-                {formatarData(relatorio.periodo.dataFinal)}
-              </p>
-            )}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Achado da auditoria de seguranca: usuario nunca deve ver
+                  uma lista (mesmo vazia) sem saber qual escopo esta
+                  aplicado - "minha equipe" vs "todos os vendedores" (ver
+                  RelatorioPedidosDto.escopo, sempre vindo do backend). */}
+              <Badge>{rotuloEscopo(relatorio.escopo)}</Badge>
+              {relatorio.periodo.dataInicial && (
+                <p className="text-sm text-muted">
+                  Período: {formatarData(relatorio.periodo.dataInicial)} até{" "}
+                  {formatarData(relatorio.periodo.dataFinal)}
+                </p>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatCard

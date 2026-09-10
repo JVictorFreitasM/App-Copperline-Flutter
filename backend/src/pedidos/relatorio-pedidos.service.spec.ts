@@ -247,4 +247,41 @@ describe('RelatorioPedidosService.obter', () => {
     expect(resultado.vendedores[0].pedidos[0].statusAprovacao).toBeNull();
     expect(resultado.vendedores[0].pedidos[0].diasPendente).toBeNull();
   });
+
+  it('reporta escopo TODOS quando quem consulta e admin', async () => {
+    const prisma = prismaFake();
+    const service = new RelatorioPedidosService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+    );
+
+    const resultado = await service.obter(IDP_USER as never, 'u-admin', {});
+
+    expect(resultado.escopo).toBe('TODOS');
+  });
+
+  it('reporta escopo EQUIPE quando quem consulta e supervisor/gerente', async () => {
+    const prisma = prismaFake();
+    const service = new RelatorioPedidosService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+    );
+
+    const resultado = await service.obter(IDP_USER as never, 'u-sup', {});
+
+    expect(resultado.escopo).toBe('EQUIPE');
+  });
+
+  it('reporta escopo mesmo quando a equipe fica vazia (nenhum vendedor bate o filtro)', async () => {
+    const prisma = prismaFake({ vendedores: [] });
+    const service = new RelatorioPedidosService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: [] }) as never,
+    );
+
+    const resultado = await service.obter(IDP_USER as never, 'u-sup', {});
+
+    expect(resultado.escopo).toBe('EQUIPE');
+    expect(resultado.vendedores).toEqual([]);
+  });
 });
