@@ -9,10 +9,7 @@ plugins {
 
 android {
     namespace = "br.com.copperline.copperline_mobile"
-    // flutter_secure_storage exige compileSdk 37 (mais alto que o default do
-    // Flutter, 36) - compilar contra SDK mais alta e compatível com versoes
-    // anteriores.
-    compileSdk = 37
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
