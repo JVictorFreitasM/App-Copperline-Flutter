@@ -42,6 +42,35 @@ final produtosProvider = FutureProvider.family<
 
 final produtoDetalheProvider = FutureProvider.family<ProdutoDetalhe, String>((ref, id) async {
   final apiClient = ref.watch(apiClientProvider);
-  final json = await apiClient.getJson('/produtos/${Uri.encodeComponent(id)}');
-  return ProdutoDetalhe.fromJson(json);
+  try {
+    final json = await apiClient.getJson('/produtos/${Uri.encodeComponent(id)}');
+    return ProdutoDetalhe.fromJson(json);
+  } catch (_) {
+    // Sem rede - le do espelho local (mesmo criterio de produtosProvider
+    // acima). O snapshot so guarda o resumo (sem idGrade*), entao o
+    // detalhe offline sai sem informacao de grade - degradacao honesta,
+    // nao inventamos o que nao foi baixado.
+    final snapshotService = await ref.read(snapshotServiceProvider.future);
+    final todos = await snapshotService.produtos();
+    ProdutoResumo? resumo;
+    for (final p in todos) {
+      if (p.id == id) {
+        resumo = p;
+        break;
+      }
+    }
+    if (resumo == null) rethrow;
+    return ProdutoDetalhe(
+      id: resumo.id,
+      codigo: resumo.codigo,
+      nome: resumo.nome,
+      tipo: resumo.tipo,
+      inativo: resumo.inativo,
+      precoVenda: resumo.precoVenda,
+      gtin: resumo.gtin,
+      idGrade1: null,
+      idGrade2: null,
+      idGrade3: null,
+    );
+  }
 });
