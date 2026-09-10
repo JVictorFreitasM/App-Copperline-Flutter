@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
+import '../local_db/acao_pendente.dart';
 import '../local_db/fila_pendente_service.dart';
 import '../local_db/local_database.dart';
 import '../local_db/snapshot_service.dart';
@@ -33,6 +34,21 @@ final filaPendenteServiceProvider = FutureProvider<FilaPendenteService>((ref) as
 final contagemPendentesProvider = FutureProvider<int>((ref) async {
   final fila = await ref.watch(filaPendenteServiceProvider.future);
   return fila.contarPendentes();
+});
+
+/// Ações offline aguardando envio (PENDENTE/ERRO), filtradas por tipo -
+/// usado pra diferenciar visualmente, DENTRO da própria tela (sem precisar
+/// sair pra ver o indicador global de home_screen.dart), um item que
+/// existe só localmente daquele já confirmado pelo servidor. Mesmo
+/// critério de invalidação de contagemPendentesProvider (cada call site
+/// que enfileira/sincroniza invalida os dois juntos).
+final acoesPendentesPorTipoProvider = FutureProvider.family<List<AcaoPendente>, TipoAcaoFila>((
+  ref,
+  tipo,
+) async {
+  final fila = await ref.watch(filaPendenteServiceProvider.future);
+  final todas = await fila.listarPendentes();
+  return todas.where((a) => a.tipo == tipo).toList();
 });
 
 /// Dispara sincronização da fila sempre que a conectividade muda de "sem
@@ -79,6 +95,7 @@ class OfflineSyncNotifier {
     final fila = await _ref.read(filaPendenteServiceProvider.future);
     await fila.sincronizar();
     _ref.invalidate(contagemPendentesProvider);
+    _ref.invalidate(acoesPendentesPorTipoProvider);
   }
 
   void dispose() {

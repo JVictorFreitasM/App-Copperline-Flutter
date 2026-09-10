@@ -347,6 +347,9 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
   @override
   Widget build(BuildContext context) {
     final visitasHoje = ref.watch(minhasVisitasProvider(_hojeIso()));
+    final checkinsPendentes = ref.watch(
+      acoesPendentesPorTipoProvider(TipoAcaoFila.checkinVisita),
+    );
 
     return AppCard(
       child: Column(
@@ -367,14 +370,54 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
               'Não foi possível verificar visitas de hoje: $erro',
               style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
-            data: (visitas) => _conteudo(context, visitas),
+            data: (visitas) => _conteudo(
+              context,
+              visitas,
+              checkinsPendentes.value ?? const [],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _conteudo(BuildContext context, List<Visita> visitasHoje) {
+  // checkinPendenteAqui: check-in feito OFFLINE pra este cliente, ainda na
+  // fila local (OS-MOBILE-XX, "indicador visual de status de
+  // sincronização") - sem essa checagem, minhasVisitasProvider (dado do
+  // SERVIDOR) não sabe desse check-in ainda, e a tela voltaria a mostrar o
+  // botão "Fazer check-in" como se nada tivesse acontecido, arriscando um
+  // check-in duplicado enquanto o primeiro ainda não sincronizou.
+  Widget _conteudo(
+    BuildContext context,
+    List<Visita> visitasHoje,
+    List<AcaoPendente> checkinsPendentes,
+  ) {
+    final checkinPendenteAqui = checkinsPendentes.where(
+      (a) => a.payload['clienteId'] == widget.cliente.id,
+    ).firstOrNull;
+
+    if (checkinPendenteAqui != null) {
+      final comErro = checkinPendenteAqui.status == StatusAcaoPendente.erro;
+      return Row(
+        children: [
+          Icon(
+            comErro ? Icons.error_outline : Icons.cloud_upload_outlined,
+            size: 16,
+            color: AppColors.muted,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              comErro
+                  ? 'Falha ao sincronizar o check-in - será tentado novamente automaticamente.'
+                  : 'Check-in salvo - aguardando conexão para sincronizar com o servidor.',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          ),
+        ],
+      );
+    }
+
     if (!widget.cliente.temLocalizacao) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,13 +555,17 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     final foto = await ImagePicker().pickImage(source: ImageSource.camera);
     if (foto == null || !context.mounted) return;
 
-    final nota = await _pedirNotaOpcional(
+    final resultado = await _pedirNotaOpcional(
       context,
       titulo: 'Confirmar check-in',
       caminhoFoto: foto.path,
       textoConfirmar: 'Fazer check-in',
     );
-    if (nota == null || !context.mounted) return;
+    if (resultado == null || !context.mounted) return;
+    final nota = resultado.nota;
+    // caminhoFinal pode ter mudado se o usuário usou "Tirar novamente" no
+    // diálogo - sempre não-nulo aqui porque passamos caminhoFoto acima.
+    final caminhoFinal = resultado.caminhoFoto!;
 
     await _executar(
       context,
@@ -529,14 +576,14 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
               clienteId: widget.cliente.id,
               latitude: posicao.latitude,
               longitude: posicao.longitude,
-              caminhoFoto: foto.path,
+              caminhoFoto: caminhoFinal,
               nota: nota,
             );
         ref.invalidate(minhasVisitasProvider(_hojeIso()));
         return 'Check-in registrado.';
       },
       aoFalharPorRede: () async {
-        final fotoBase64 = base64Encode(await File(foto.path).readAsBytes());
+        final fotoBase64 = base64Encode(await File(caminhoFinal).readAsBytes());
         final fila = await ref.read(filaPendenteServiceProvider.future);
         await fila.enfileirar(
           tipo: TipoAcaoFila.checkinVisita,
@@ -550,6 +597,7 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
           },
         );
         ref.invalidate(contagemPendentesProvider);
+        ref.invalidate(acoesPendentesPorTipoProvider);
         return 'Sem conexão agora - check-in salvo e será enviado automaticamente '
             'quando a internet voltar.';
       },
@@ -575,12 +623,13 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
       return;
     }
 
-    final nota = await _pedirNotaOpcional(
+    final resultado = await _pedirNotaOpcional(
       context,
       titulo: 'Confirmar checkout',
       textoConfirmar: 'Fazer checkout',
     );
-    if (nota == null || !context.mounted) return;
+    if (resultado == null || !context.mounted) return;
+    final nota = resultado.nota;
 
     await _executar(
       context,
@@ -707,61 +756,88 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
 // Retorna a nota digitada (string vazia se deixada em branco) ou `null` se
 // o usuário cancelou o diálogo - distinção que o call site usa pra saber
 // se deve seguir com a ação ou abortar.
-Future<String?> _pedirNotaOpcional(
+// Retorna a nota digitada + o caminho FINAL da foto (pode ter mudado, se o
+// usuário usou "Tirar novamente" - ver caminhoFoto abaixo). null quando
+// cancelado. caminhoFoto só aparece (e só então o botão de refazer existe)
+// quando a chamada envolve foto (check-in) - checkout não passa esse
+// parâmetro.
+Future<({String nota, String? caminhoFoto})?> _pedirNotaOpcional(
   BuildContext context, {
   required String titulo,
   required String textoConfirmar,
   String? caminhoFoto,
 }) async {
   final controller = TextEditingController();
+  String? fotoAtual = caminhoFoto;
   try {
     final confirmado = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(titulo),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (caminhoFoto != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                // cacheWidth só reduz a resolução DECODIFICADA pra exibir a
-                // miniatura - o arquivo em si (enviado pro backend, com o
-                // EXIF intacto) não é alterado. Sem isso, decodificar a
-                // foto em resolução total (sem compressão desde o fix do
-                // EXIF) dentro de um diálogo já causou falha de asserção
-                // do framework em aparelho mais fraco.
-                child: Image.file(
-                  File(caminhoFoto),
-                  height: 160,
-                  fit: BoxFit.cover,
-                  cacheWidth: 800,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(titulo),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (fotoAtual != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  // cacheWidth só reduz a resolução DECODIFICADA pra exibir
+                  // a miniatura - o arquivo em si (enviado pro backend, com
+                  // o EXIF intacto) não é alterado. Sem isso, decodificar a
+                  // foto em resolução total (sem compressão desde o fix do
+                  // EXIF) dentro de um diálogo já causou falha de asserção
+                  // do framework em aparelho mais fraco.
+                  child: Image.file(
+                    File(fotoAtual!),
+                    height: 160,
+                    fit: BoxFit.cover,
+                    cacheWidth: 800,
+                    // Sem isso, trocar o arquivo (mesmo nome de path
+                    // reaproveitado pelo image_picker em alguns aparelhos)
+                    // podia manter a miniatura antiga em cache.
+                    key: ValueKey(fotoAtual),
+                  ),
                 ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final novaFoto = await ImagePicker().pickImage(
+                        source: ImageSource.camera,
+                      );
+                      if (novaFoto == null) return;
+                      setDialogState(() => fotoAtual = novaFoto.path);
+                    },
+                    icon: const Icon(Icons.replay, size: 16),
+                    label: const Text('Tirar novamente'),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(labelText: 'Nota (opcional)'),
+                maxLines: 2,
               ),
-              const SizedBox(height: 12),
             ],
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(labelText: 'Nota (opcional)'),
-              maxLines: 2,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(textoConfirmar),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(textoConfirmar),
-          ),
-        ],
       ),
     );
     if (confirmado != true) return null;
-    return controller.text.trim();
+    return (nota: controller.text.trim(), caminhoFoto: fotoAtual);
   } finally {
     controller.dispose();
   }
