@@ -1,6 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Query, StreamableFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
@@ -82,7 +93,16 @@ export class ClientesController {
   // segmentos vs 2), sem risco de colisao independente da ordem de
   // declaracao (diferente do caso de /produtos/favoritos, ver
   // produtos.controller.ts).
+  // Rate limit (achado da auditoria de seguranca: "ampliar cobertura de
+  // rate limiting em rotas sensiveis") - obterResumo chama um LLM externo
+  // pago (LlmClientService/OpenRouter) a cada cache-miss; sem limite, um
+  // usuario pedindo resumo de muitos clientes distintos em sequencia
+  // gera custo real sem controle. Mesmo padrao ja usado em
+  // estoque.controller.ts (RateLimitGuard so' age apos requireAuth, por
+  // usuario - ver comentario la).
   @Get(':id/resumo')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ prefixo: 'cliente-resumo-llm', limite: 20, janelaSegundos: 60 })
   async obterResumo(
     @Param('id') id: string,
     @CurrentUser() idpUser: IdpUser,
