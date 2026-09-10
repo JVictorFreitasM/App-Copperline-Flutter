@@ -42,6 +42,31 @@ export function construirWhereClientePorEscopo(
   }
 }
 
+// Mesmo escopo de construirWhereClientePorEscopo, mas para Pedido - filtra
+// pelo VENDEDOR DO CLIENTE (cliente.vendedores, many-to-many), nao por
+// Pedido.vendedorId direto: esse campo so' e' preenchido em pedido criado
+// localmente (POST /pedidos, ver comentario no schema.prisma) e fica NULL
+// em todo pedido sincronizado do WK Radar - a maioria. Usar vendedorId
+// direto aqui excluiria silenciosamente todo o historico sincronizado do
+// escopo de um vendedor comum. null = "nenhum pedido nunca bate" (escopo
+// NENHUM), mesmo criterio de construirWhereClientePorEscopo.
+export function construirWherePedidoPorEscopo(
+  escopo: EscopoClientes,
+): Prisma.PedidoWhereInput | null {
+  switch (escopo.tipo) {
+    case 'TODOS':
+      return {};
+    case 'PROPRIO':
+      return { cliente: { vendedores: { some: { vendedorId: escopo.vendedorId } } } };
+    case 'EQUIPE':
+      return {
+        cliente: { vendedores: { some: { vendedorId: { in: escopo.vendedorIds } } } },
+      };
+    case 'NENHUM':
+      return null;
+  }
+}
+
 @Injectable()
 export class VendedorEscopoService {
   constructor(private readonly prisma: PrismaService) {}

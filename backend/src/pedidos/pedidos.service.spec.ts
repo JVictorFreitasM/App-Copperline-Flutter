@@ -1,17 +1,22 @@
 import { NotFoundException } from '@nestjs/common';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { PedidosService } from './pedidos.service';
+
+const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
+const ESCOPO_PROPRIO: EscopoClientes = { tipo: 'PROPRIO', vendedorId: 'vend-1' };
+const ESCOPO_NENHUM: EscopoClientes = { tipo: 'NENHUM' };
 
 function prismaFake(overrides: {
   findMany?: unknown[];
   count?: number;
-  findUnique?: unknown;
+  findFirst?: unknown;
   historico?: unknown[];
 }) {
   return {
     pedido: {
       findMany: jest.fn().mockResolvedValue(overrides.findMany ?? []),
       count: jest.fn().mockResolvedValue(overrides.count ?? 0),
-      findUnique: jest.fn().mockResolvedValue(overrides.findUnique ?? null),
+      findFirst: jest.fn().mockResolvedValue(overrides.findFirst ?? null),
     },
     pedidoHistoricoStatus: {
       findMany: jest.fn().mockResolvedValue(overrides.historico ?? []),
@@ -36,14 +41,14 @@ describe('PedidosService.listar', () => {
     const prisma = prismaFake({ findMany: [pedidoBruto], count: 1 });
     const service = new PedidosService(prisma as never);
 
-    const resultado = await service.listar({ page: 1, limit: 20 });
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
 
     expect(resultado.data[0].cliente).toEqual({
       id: 'cli-1',
       razaoSocial: 'Cliente A',
     });
     expect(
-      (resultado.data[0] as Record<string, unknown>).itens,
+      (resultado.data[0] as unknown as Record<string, unknown>).itens,
     ).toBeUndefined();
   });
 
@@ -51,12 +56,10 @@ describe('PedidosService.listar', () => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);
 
-    await service.listar({
-      page: 1,
-      limit: 20,
-      clienteId: 'cli-1',
-      situacao: 'FATURADO',
-    });
+    await service.listar(
+      { page: 1, limit: 20, clienteId: 'cli-1', situacao: 'FATURADO' },
+      ESCOPO_TODOS,
+    );
 
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -69,7 +72,7 @@ describe('PedidosService.listar', () => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);
 
-    await service.listar({ page: 1, limit: 20, clienteNome: 'Acme' });
+    await service.listar({ page: 1, limit: 20, clienteNome: 'Acme' }, ESCOPO_TODOS);
 
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,12 +92,10 @@ describe('PedidosService.listar', () => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);
 
-    await service.listar({
-      page: 1,
-      limit: 20,
-      dataInicial: '2026-01-01',
-      dataFinal: '2026-01-31',
-    });
+    await service.listar(
+      { page: 1, limit: 20, dataInicial: '2026-01-01', dataFinal: '2026-01-31' },
+      ESCOPO_TODOS,
+    );
 
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -107,21 +108,73 @@ describe('PedidosService.listar', () => {
       }),
     );
   });
+
+  it('escopo PROPRIO filtra pelo vendedor do CLIENTE (nao Pedido.vendedorId, que fica null em pedido sincronizado)', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20 }, ESCOPO_PROPRIO);
+
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { cliente: { vendedores: { some: { vendedorId: 'vend-1' } } } },
+      }),
+    );
+  });
+
+  it('escopo NENHUM retorna lista vazia sem consultar o banco', async () => {
+    const prisma = prismaFake({ findMany: [{ id: 'nao deveria aparecer' }], count: 1 });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_NENHUM);
+
+    expect(resultado.data).toEqual([]);
+    expect(resultado.meta.total).toBe(0);
+    expect(prisma.pedido.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('PedidosService.buscarPorId', () => {
-  it('lança NotFoundException quando o pedido nao existe', async () => {
-    const prisma = prismaFake({ findUnique: null });
+  it('lança NotFoundException quando o pedido nao existe (ou nao esta no escopo)', async () => {
+    const prisma = prismaFake({ findFirst: null });
     const service = new PedidosService(prisma as never);
 
-    await expect(service.buscarPorId('inexistente')).rejects.toThrow(
+    await expect(
+      service.buscarPorId('inexistente', ESCOPO_TODOS),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('lança NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {
+    const prisma = prismaFake({ findFirst: { id: '1' } });
+    const service = new PedidosService(prisma as never);
+
+    await expect(service.buscarPorId('1', ESCOPO_NENHUM)).rejects.toThrow(
       NotFoundException,
+    );
+    expect(prisma.pedido.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('aplica o where de escopo junto do id (vendedor comum nao ve pedido de cliente fora da carteira)', async () => {
+    const prisma = prismaFake({ findFirst: null });
+    const service = new PedidosService(prisma as never);
+
+    await expect(
+      service.buscarPorId('pedido-de-outro', ESCOPO_PROPRIO),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(prisma.pedido.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'pedido-de-outro',
+          cliente: { vendedores: { some: { vendedorId: 'vend-1' } } },
+        },
+      }),
     );
   });
 
   it('mapeia itens com resumo de produto no detalhe', async () => {
     const prisma = prismaFake({
-      findUnique: {
+      findFirst: {
         id: '1',
         idExternoErp: 'ext-1',
         numero: 'PED-1',
@@ -149,7 +202,7 @@ describe('PedidosService.buscarPorId', () => {
     });
     const service = new PedidosService(prisma as never);
 
-    const resultado = await service.buscarPorId('1');
+    const resultado = await service.buscarPorId('1', ESCOPO_TODOS);
 
     expect(resultado.itens).toEqual([
       {
@@ -169,18 +222,28 @@ describe('PedidosService.buscarPorId', () => {
 });
 
 describe('PedidosService.obterHistorico', () => {
-  it('lanca NotFoundException quando o pedido nao existe', async () => {
-    const prisma = prismaFake({ findUnique: null });
+  it('lanca NotFoundException quando o pedido nao existe (ou nao esta no escopo)', async () => {
+    const prisma = prismaFake({ findFirst: null });
     const service = new PedidosService(prisma as never);
 
-    await expect(service.obterHistorico('inexistente')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.obterHistorico('inexistente', ESCOPO_TODOS),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('lanca NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {
+    const prisma = prismaFake({ findFirst: { id: 'pedido-1' } });
+    const service = new PedidosService(prisma as never);
+
+    await expect(
+      service.obterHistorico('pedido-1', ESCOPO_NENHUM),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.pedido.findFirst).not.toHaveBeenCalled();
   });
 
   it('retorna o historico em ordem cronologica, resolvendo o nome de quem alterou', async () => {
     const prisma = prismaFake({
-      findUnique: { id: 'pedido-1' },
+      findFirst: { id: 'pedido-1' },
       historico: [
         {
           id: 'h1',
@@ -200,7 +263,7 @@ describe('PedidosService.obterHistorico', () => {
     });
     const service = new PedidosService(prisma as never);
 
-    const resultado = await service.obterHistorico('pedido-1');
+    const resultado = await service.obterHistorico('pedido-1', ESCOPO_TODOS);
 
     expect(resultado).toEqual([
       {

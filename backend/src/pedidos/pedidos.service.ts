@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
 import { paginar, type PaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
+import { construirWherePedidoPorEscopo } from '../vendedores/vendedor-escopo.service';
 import {
   paraPedidoDetalheDto,
   paraPedidoResumoDto,
@@ -16,15 +18,25 @@ import type { ListarPedidosQueryDto } from './dto/listar-pedidos-query.dto';
 
 // So leitura sobre dado ja sincronizado do WK Radar (OS 07) - sem regra de
 // negocio, entao sem entidade de dominio separada (ver skill nest-endpoint,
-// criterio de DDD).
+// criterio de DDD). Todo metodo publico recebe EscopoClientes (achado
+// critico da auditoria de seguranca: sem esse filtro, qualquer usuario
+// autenticado enxergava pedido de qualquer cliente - ver
+// vendedor-escopo.service.ts).
 @Injectable()
 export class PedidosService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listar(
     query: ListarPedidosQueryDto,
+    escopo: EscopoClientes,
   ): Promise<PaginatedResult<PedidoResumoDto>> {
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    if (whereEscopo === null) {
+      return paginar([], 0, query.page, query.limit);
+    }
+
     const where: Prisma.PedidoWhereInput = {
+      ...whereEscopo,
       ...(query.clienteId && { clienteId: query.clienteId }),
       ...(query.clienteNome && {
         cliente: {
@@ -74,9 +86,14 @@ export class PedidosService {
     );
   }
 
-  async buscarPorId(id: string): Promise<PedidoDetalheDto> {
-    const pedido = await this.prisma.pedido.findUnique({
-      where: { id },
+  async buscarPorId(id: string, escopo: EscopoClientes): Promise<PedidoDetalheDto> {
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    if (whereEscopo === null) {
+      throw new NotFoundException(`Pedido '${id}' não encontrado`);
+    }
+
+    const pedido = await this.prisma.pedido.findFirst({
+      where: { id, ...whereEscopo },
       include: {
         cliente: true,
         itens: { include: { produto: true }, orderBy: { numero: 'asc' } },
@@ -92,9 +109,17 @@ export class PedidosService {
 
   // GET /pedidos/:id/historico (OS-BACKEND-33) - ordem cronologica
   // (criterio de aceite).
-  async obterHistorico(id: string): Promise<PedidoHistoricoStatusDto[]> {
-    const pedido = await this.prisma.pedido.findUnique({
-      where: { id },
+  async obterHistorico(
+    id: string,
+    escopo: EscopoClientes,
+  ): Promise<PedidoHistoricoStatusDto[]> {
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    if (whereEscopo === null) {
+      throw new NotFoundException(`Pedido '${id}' não encontrado`);
+    }
+
+    const pedido = await this.prisma.pedido.findFirst({
+      where: { id, ...whereEscopo },
       select: { id: true },
     });
     if (!pedido) {

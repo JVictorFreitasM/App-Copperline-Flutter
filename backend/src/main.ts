@@ -12,6 +12,17 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
+  // CORS explicito (achado da auditoria de seguranca) - sem isso a
+  // politica fica implicita/permissiva por omissao. FRONTEND_PUBLIC_URL
+  // ja e' a mesma env var usada pelo idp-client acima como origem
+  // confiavel do front (idp-auth.module.ts) - reaproveitada aqui em vez
+  // de uma nova var, mesmo valor em todo ambiente. Nunca origin: '*' numa
+  // API com rota autenticada por cookie de sessao (credentials: true).
+  app.enableCors({
+    origin: configService.getOrThrow<string>('FRONTEND_PUBLIC_URL'),
+    credentials: true,
+  });
+
   // Gzip global (OS-BACKEND-29: GET /mobile/snapshot pode devolver um JSON
   // grande - catalogo de produtos + clientes do vendedor + pedidos
   // recentes numa resposta so). Beneficia qualquer resposta acima do

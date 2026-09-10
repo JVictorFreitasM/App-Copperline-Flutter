@@ -79,8 +79,11 @@ services:
       # idp-auth.module.ts) - acontece sempre que o login comeca direto por
       # um card no portal do IdP, em vez de GET /auth/login desta app. Sem
       # isso, o usuario cai no "/" do proprio BACKEND (404 cru) em vez do
-      # site (frontend).
-      FRONTEND_PUBLIC_URL: http://localhost:3020
+      # site (frontend). Tambem a origem confiavel de CORS (main.ts) - IP da
+      # rede local (nao localhost, que so bateria no navegador rodando na
+      # mesma maquina do backend), mesmo criterio de IDP_AUTHORIZE_URL/
+      # IDP_REDIRECT_URI/API_PUBLIC_URL acima - muda junto se o IP mudar.
+      FRONTEND_PUBLIC_URL: http://192.168.2.97:3020
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       WK_RADAR_API_URL: ${WK_RADAR_API_URL}
       WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}

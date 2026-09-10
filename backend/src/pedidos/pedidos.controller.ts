@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { SimularDescontoResultado } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoResultadoDto } from './criar-pedido.service';
@@ -44,10 +45,12 @@ export class PedidosController {
   ) {}
 
   @Get()
-  listar(
+  async listar(
     @Query() query: ListarPedidosQueryDto,
+    @CurrentUser() idpUser: IdpUser,
   ): Promise<PaginatedResult<PedidoResumoDto>> {
-    return this.pedidosService.listar(query);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.listar(query, escopo);
   }
 
   // "/relatorio" ANTES de "/:id" - mesmo motivo de 'favoritos' em
@@ -65,15 +68,23 @@ export class PedidosController {
   }
 
   @Get(':id')
-  buscarPorId(@Param('id') id: string): Promise<PedidoDetalheDto> {
-    return this.pedidosService.buscarPorId(id);
+  async buscarPorId(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.buscarPorId(id, escopo);
   }
 
   // OS-BACKEND-33 - "/:id/historico" e' mais especifico que "/:id" (3
   // segmentos vs 2), sem risco de colisao independente da ordem.
   @Get(':id/historico')
-  obterHistorico(@Param('id') id: string): Promise<PedidoHistoricoStatusDto[]> {
-    return this.pedidosService.obterHistorico(id);
+  async obterHistorico(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoHistoricoStatusDto[]> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.obterHistorico(id, escopo);
   }
 
   // OS-BACKEND-22-A - simulacao pura (nunca cria SolicitacaoDesconto nem
@@ -114,5 +125,18 @@ export class PedidosController {
       usuario.id,
     );
     return this.criarPedidoService.criar(dto, usuario.id, escopo);
+  }
+
+  // Achado critico da auditoria de seguranca: listar/buscarPorId/
+  // obterHistorico nao filtravam por escopo, expondo pedido de qualquer
+  // cliente a qualquer usuario autenticado. Mesmo escopo ja usado em
+  // criar() acima (VendedorEscopoService/EscopoClientes) - reaproveitado
+  // aqui em vez de requireRole('admin') no modulo porque o app mobile
+  // (vendedor comum) chama GET /pedidos e GET /pedidos/:id diretamente
+  // (pedidos_screen.dart/pedido_detalhe_screen.dart), nao so' via
+  // /mobile/snapshot.
+  private async resolverEscopo(idpUser: IdpUser): Promise<EscopoClientes> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.vendedorEscopoService.resolverEscopoClientes(idpUser, usuario.id);
   }
 }
