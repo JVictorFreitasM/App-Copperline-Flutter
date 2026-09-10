@@ -8,7 +8,6 @@ class TabelaPrecoResumo {
     required this.id,
     required this.codigo,
     required this.ativa,
-    required this.padrao,
     required this.quantidadeItens,
     required this.sincronizadoEm,
   });
@@ -18,7 +17,6 @@ class TabelaPrecoResumo {
       id: json['id'] as String,
       codigo: json['codigo'] as String,
       ativa: json['ativa'] as bool,
-      padrao: json['padrao'] as bool,
       quantidadeItens: json['quantidadeItens'] as int,
       sincronizadoEm: json['sincronizadoEm'] as String,
     );
@@ -27,7 +25,6 @@ class TabelaPrecoResumo {
   final String id;
   final String codigo;
   final bool ativa;
-  final bool padrao;
   final int quantidadeItens;
   final String sincronizadoEm;
 }

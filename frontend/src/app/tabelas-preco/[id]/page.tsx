@@ -9,7 +9,6 @@ import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { Card } from "@/components/design/card";
 import { ListItem } from "@/components/design/list-item";
 import { Paginacao } from "@/components/paginacao";
-import { DefinirPadraoForm } from "./definir-padrao-form";
 
 const LIMITE_POR_PAGINA = 30;
 
@@ -20,7 +19,7 @@ export default async function TabelaPrecoDetalhePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ page?: string }>;
 }) {
-  const usuario = await exigirUsuarioAutenticado("/tabelas-preco");
+  await exigirUsuarioAutenticado("/tabelas-preco");
 
   const { id } = await params;
   const { page } = await searchParams;
@@ -68,18 +67,14 @@ export default async function TabelaPrecoDetalhePage({
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-ink">Tabela {tabela.codigo}</h1>
                 <BadgeAtivoInativo inativo={!tabela.ativa} />
-                {tabela.padrao && <Badge enfase>Padrão</Badge>}
               </div>
             </div>
 
-            <Card className="flex flex-col gap-3 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
+            <Card className="text-sm text-ink">
               <p className="text-xs text-muted">
                 {tabela.quantidadeItens} item(ns) · sincronizada em{" "}
                 {formatarDataHora(tabela.sincronizadoEm)}
               </p>
-              {usuario.role === "admin" && (
-                <DefinirPadraoForm tabelaId={tabela.id} padrao={tabela.padrao} />
-              )}
             </Card>
 
             <section className="flex flex-col gap-3">

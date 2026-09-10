@@ -10,10 +10,10 @@ import {
 } from './dto/tabela-preco-response.dto';
 import type { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
-// Sem regra de negocio (leitura de dado ja sincronizado + um unico
-// controle administrativo simples - qual tabela e' a padrao) - sem
-// entidade de dominio separada, mesmo criterio de NotasFiscaisService (ver
-// skill nest-endpoint).
+// Sem regra de negocio (leitura de dado ja sincronizado) - sem entidade de
+// dominio separada, mesmo criterio de NotasFiscaisService (ver skill
+// nest-endpoint). Selecionar qual codigo sincronizar fica em
+// ConfiguracaoTabelaPrecoService (config, nao leitura de catalogo).
 @Injectable()
 export class TabelasPrecoService {
   constructor(private readonly prisma: PrismaService) {}
@@ -58,27 +58,5 @@ export class TabelasPrecoService {
     ]);
 
     return paginar(itens.map(paraItemTabelaPrecoDto), total, query.page, query.limit);
-  }
-
-  // "Trocar a tabela" (pedido do usuario) - qual tabela e' a fonte de
-  // preco "oficial" pro resto do sistema. So uma pode ser padrao por vez -
-  // garantido aqui via transacao (unset em todas + set na escolhida), nao
-  // em constraint de banco (Postgres nao tem "unique where true" simples
-  // sem index parcial, e o volume de tabelas nao justifica isso agora).
-  async definirPadrao(id: string): Promise<TabelaPrecoResumoDto> {
-    const tabela = await this.prisma.tabelaPreco.findUnique({ where: { id } });
-    if (!tabela) {
-      throw new NotFoundException(`Tabela de preço '${id}' não encontrada`);
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.tabelaPreco.updateMany({
-        where: { padrao: true, id: { not: id } },
-        data: { padrao: false },
-      }),
-      this.prisma.tabelaPreco.update({ where: { id }, data: { padrao: true } }),
-    ]);
-
-    return this.buscarPorId(id);
   }
 }

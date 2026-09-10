@@ -4,7 +4,6 @@ export interface TabelaPrecoResumoDto {
   id: string;
   codigo: string;
   ativa: boolean;
-  padrao: boolean;
   quantidadeItens: number;
   sincronizadoEm: string;
 }
@@ -30,7 +29,6 @@ export function paraTabelaPrecoResumoDto(
     id: tabela.id,
     codigo: tabela.codigo,
     ativa: tabela.ativa,
-    padrao: tabela.padrao,
     quantidadeItens: tabela._count.itens,
     sincronizadoEm: tabela.sincronizadoEm.toISOString(),
   };

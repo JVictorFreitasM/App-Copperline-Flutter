@@ -5,6 +5,10 @@ function empresarialSvcClientFake(tabelas: TabelaPrecoBruta[]) {
   return { buscarTabelasPreco: jest.fn().mockResolvedValue(tabelas) };
 }
 
+function configuracaoTabelaPrecoServiceFake(codigoSelecionado: string | null = '110') {
+  return { obterCodigoSelecionado: jest.fn().mockResolvedValue(codigoSelecionado) };
+}
+
 function prismaFake(overrides: { tabelaExistente?: { id: string } } = {}) {
   const tabelaId = overrides.tabelaExistente?.id ?? 'tabela-1';
   const tx = {
@@ -48,20 +52,40 @@ function tabelaBrutaFake(overrides: Partial<TabelaPrecoBruta> = {}): TabelaPreco
 }
 
 describe('TabelaPrecoSyncStrategy', () => {
-  it('fetch() ignora a janela incremental (full refresh sempre)', async () => {
+  it('fetch() busca so o codigo selecionado (nunca todas as tabelas)', async () => {
     const client = empresarialSvcClientFake([tabelaBrutaFake()]);
-    const strategy = new TabelaPrecoSyncStrategy(client as never, prismaFake() as never);
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
 
     const resultado = await strategy.fetch(JANELA);
 
-    expect(client.buscarTabelasPreco).toHaveBeenCalledWith();
+    expect(client.buscarTabelasPreco).toHaveBeenCalledWith('110');
     expect(resultado.registros).toHaveLength(1);
+  });
+
+  it('fetch() nao chama a API quando nenhum codigo foi selecionado ainda', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake(null) as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(client.buscarTabelasPreco).not.toHaveBeenCalled();
+    expect(resultado.registros).toEqual([]);
+    expect(resultado.avisos).toHaveLength(1);
   });
 
   it('map() converte valores BR (numero e data) corretamente', () => {
     const strategy = new TabelaPrecoSyncStrategy(
       empresarialSvcClientFake([]) as never,
       prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake() as never,
     );
 
     const mapeado = strategy.map(tabelaBrutaFake());
@@ -74,26 +98,12 @@ describe('TabelaPrecoSyncStrategy', () => {
     expect(mapeado.itens[0].dataInicioPromocao).toBeNull();
   });
 
-  it('upsert() nunca toca no campo `padrao` (administrativo, nao sincronizado)', async () => {
-    const prisma = prismaFake();
-    const strategy = new TabelaPrecoSyncStrategy(
-      empresarialSvcClientFake([]) as never,
-      prisma as never,
-    );
-    const mapeado = strategy.map(tabelaBrutaFake());
-
-    await strategy.upsert(mapeado);
-
-    const chamadaUpsert = prisma.tx.tabelaPreco.upsert.mock.calls[0][0];
-    expect(chamadaUpsert.create).not.toHaveProperty('padrao');
-    expect(chamadaUpsert.update).not.toHaveProperty('padrao');
-  });
-
-  it('upsert() remove item que sumiu da resposta do ERP (full refresh)', async () => {
+  it('upsert() remove item que sumiu da resposta do ERP (full refresh do codigo selecionado)', async () => {
     const prisma = prismaFake({ tabelaExistente: { id: 'tabela-1' } });
     const strategy = new TabelaPrecoSyncStrategy(
       empresarialSvcClientFake([]) as never,
       prisma as never,
+      configuracaoTabelaPrecoServiceFake() as never,
     );
     const mapeado = strategy.map(tabelaBrutaFake());
 

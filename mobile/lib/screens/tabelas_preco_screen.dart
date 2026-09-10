@@ -43,10 +43,7 @@ class TabelasPrecoScreen extends ConsumerWidget {
                         subtitulo:
                             '${tabela.quantidadeItens} item(ns) · sincronizada em '
                             '${formatarDataHora(tabela.sincronizadoEm)}',
-                        valor: tabela.padrao ? 'Padrão' : null,
-                        tag: tabela.padrao
-                            ? const AppBadge(texto: 'Padrão', enfase: true)
-                            : (!tabela.ativa ? const AppBadge(texto: 'Inativa') : null),
+                        tag: !tabela.ativa ? const AppBadge(texto: 'Inativa') : null,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => TabelaPrecoDetalheScreen(id: tabela.id),

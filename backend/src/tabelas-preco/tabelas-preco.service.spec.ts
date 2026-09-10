@@ -98,27 +98,3 @@ describe('TabelasPrecoService.listarItens', () => {
     expect(resultado.meta.total).toBe(1);
   });
 });
-
-describe('TabelasPrecoService.definirPadrao', () => {
-  it('lanca NotFoundException quando a tabela nao existe', async () => {
-    const service = new TabelasPrecoService(prismaFake({ tabela: null }) as never);
-
-    await expect(service.definirPadrao('inexistente')).rejects.toThrow(NotFoundException);
-  });
-
-  it('desmarca as demais tabelas padrao antes de marcar a escolhida', async () => {
-    const prisma = prismaFake();
-    const service = new TabelasPrecoService(prisma as never);
-
-    await service.definirPadrao('t1');
-
-    expect(prisma.tabelaPreco.updateMany).toHaveBeenCalledWith({
-      where: { padrao: true, id: { not: 't1' } },
-      data: { padrao: false },
-    });
-    expect(prisma.tabelaPreco.update).toHaveBeenCalledWith({
-      where: { id: 't1' },
-      data: { padrao: true },
-    });
-  });
-});

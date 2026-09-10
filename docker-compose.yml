@@ -119,6 +119,7 @@ services:
       # Empresarial.svc - sincronizacao de tabela de preco, mesmas
       # credenciais WK_BI_* do Estoque.svc.
       WK_RADAR_EMPRESARIAL_SVC_URL: ${WK_RADAR_EMPRESARIAL_SVC_URL}
+      WK_RADAR_EMPRESARIAL_SVC_TIMEOUT_MS: ${WK_RADAR_EMPRESARIAL_SVC_TIMEOUT_MS}
       # Firebase Cloud Messaging - vazio ate ser configurado (fail-closed
       # so no envio, nao no boot - ver PushNotificationClientService).
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}

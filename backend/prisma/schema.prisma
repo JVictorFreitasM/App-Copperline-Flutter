@@ -236,28 +236,39 @@ model Produto {
 }
 
 // Sincronizada via Empresarial.svc/BuscarTabelasPreco (WCF legado, mesma
-// familia de Estoque.svc/Financeiro.svc - ver empresarial-svc-client) -
-// full refresh a cada execucao (`filtro: {}` traz TODAS as tabelas ativas
-// numa chamada so, confirmado empiricamente; sem cursor incremental
-// disponivel nesta operacao). CodigoItem de cada item corresponde a
-// Produto.codigo, mas SEM FK direta (mesmo motivo de SaldoEstoque -
-// tabela de preco pode referenciar item nao sincronizado como Produto
-// ainda).
+// familia de Estoque.svc/Financeiro.svc - ver empresarial-svc-client).
+// Decisao revisada com o usuario: NAO faz mais full refresh (`filtro:{}`,
+// todas as tabelas) - confirmado empiricamente que isso leva 90-190s so'
+// na chamada, contra poucos segundos consultando UM codigo especifico
+// (mesma operacao, `filtro:{Codigo: x}`). O sync agora busca so' o codigo
+// configurado em ConfiguracaoTabelaPreco.codigoSelecionado - sem selecao,
+// nao sincroniza nada (ver TabelaPrecoSyncStrategy.fetch). CodigoItem de
+// cada item corresponde a Produto.codigo, mas SEM FK direta (mesmo motivo
+// de SaldoEstoque - tabela de preco pode referenciar item nao
+// sincronizado como Produto ainda).
 model TabelaPreco {
   id             String   @id @default(uuid())
   idExternoErp   String   @unique @map("id_externo_erp")
   codigo         String   @unique
   ativa          Boolean  @default(true)
-  // "Tabela padrao" (pedido do usuario: "possibilidade de trocar a
-  // tabela") - qual tabela e' a fonte de preco "oficial" pro resto do
-  // sistema quando houver mais de uma ativa. Only-one-true garantido em
-  // codigo (TabelaPrecoService.definirPadrao), nao em constraint de banco.
-  padrao         Boolean  @default(false)
   sincronizadoEm DateTime @map("sincronizado_em")
 
   itens ItemTabelaPreco[]
 
   @@map("tabelas_preco")
+}
+
+// Singleton (1 linha) - qual codigo de tabela de preco o sync deve
+// acompanhar (pedido do usuario: "pegue apenas a tabela 110, o sync das
+// outras só vai acontecer se ela for selecionada"). Escolher aqui e' o
+// que TAMBEM define a fonte de preco "oficial" pro resto do sistema
+// (PrecoProdutoService) - uma unica decisao, nao duas separadas.
+model ConfiguracaoTabelaPreco {
+  id                String   @id @default(uuid())
+  codigoSelecionado String?  @map("codigo_selecionado")
+  atualizadoEm      DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_tabela_preco")
 }
 
 model ItemTabelaPreco {

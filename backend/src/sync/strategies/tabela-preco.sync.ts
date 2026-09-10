@@ -7,6 +7,7 @@ import type {
   TabelaPrecoBruta,
 } from '../../empresarial-svc-client/empresarial-svc-client.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ConfiguracaoTabelaPrecoService } from '../../tabelas-preco/configuracao-tabela-preco.service';
 import type {
   SyncFetchResultado,
   SyncStrategy,
@@ -33,12 +34,15 @@ export interface TabelaPrecoMapeada {
   itens: ItemTabelaPrecoMapeado[];
 }
 
-// nomeEntidade = 'tabela-preco'. IGNORA o cursor incremental (janela.desde),
-// mesmo padrao ja usado por SaldoEstoqueSyncStrategy - confirmado
-// empiricamente em 2026-09-08: `filtro:{}` (sem Codigo) traz TODAS as
-// tabelas de preco ativas numa chamada so, sem paginacao/filtro
-// incremental disponivel nesta operacao. Full refresh a cada execucao e'
-// mais simples e mais confiavel do que depender de algo nao suportado.
+// nomeEntidade = 'tabela-preco'. IGNORA o cursor incremental (janela.desde)
+// - decisao revisada com o usuario: NAO faz mais full refresh (`filtro:{}`,
+// todas as tabelas). Confirmado empiricamente em 2026-09-08 que isso leva
+// 90-190s so' na chamada (~7,9MB de resposta, dezenas de tabelas), contra
+// poucos segundos consultando UM codigo especifico (mesma operacao,
+// `filtro:{Codigo: x}`) - exatamente o que o Postman testa. O sync agora
+// so busca o codigo configurado em ConfiguracaoTabelaPrecoService - sem
+// selecao (codigoSelecionado null), fetch() nao chama a API NENHUMA vez
+// (nada pra sincronizar ainda).
 //
 // agendamento='CONFIGURAVEL' (ver sync-strategy.interface.ts) - intervalo
 // editavel via GET/PATCH /admin/sync/configuracoes (mesmo mecanismo ja
@@ -54,10 +58,21 @@ export class TabelaPrecoSyncStrategy
   constructor(
     private readonly empresarialSvcClient: EmpresarialSvcClientService,
     private readonly prisma: PrismaService,
+    private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
   ) {}
 
   async fetch(_janela: SyncWindow): Promise<SyncFetchResultado<TabelaPrecoBruta>> {
-    const registros = await this.empresarialSvcClient.buscarTabelasPreco();
+    const codigo = await this.configuracaoTabelaPrecoService.obterCodigoSelecionado();
+    if (!codigo) {
+      return {
+        registros: [],
+        avisos: [
+          'Nenhuma tabela de preco selecionada - configure via PATCH /admin/tabelas-preco/configuracao antes de sincronizar.',
+        ],
+      };
+    }
+
+    const registros = await this.empresarialSvcClient.buscarTabelasPreco(codigo);
     return { registros, avisos: [] };
   }
 
@@ -71,49 +86,57 @@ export class TabelaPrecoSyncStrategy
   }
 
   async upsert(mapeado: TabelaPrecoMapeada): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const sincronizadoEm = new Date();
+    await this.prisma.$transaction(
+      async (tx) => {
+        const sincronizadoEm = new Date();
 
-      // `padrao` deliberadamente FORA daqui - campo administrativo (ver
-      // TabelaPrecoService.definirPadrao), nunca sobrescrito pelo sync.
-      const tabela = await tx.tabelaPreco.upsert({
-        where: { idExternoErp: mapeado.idExternoErp },
-        create: {
-          idExternoErp: mapeado.idExternoErp,
-          codigo: mapeado.codigo,
-          ativa: mapeado.ativa,
-          sincronizadoEm,
-        },
-        update: {
-          codigo: mapeado.codigo,
-          ativa: mapeado.ativa,
-          sincronizadoEm,
-        },
-      });
-
-      for (const item of mapeado.itens) {
-        await tx.itemTabelaPreco.upsert({
-          where: {
-            tabelaPrecoId_codigoItem: {
-              tabelaPrecoId: tabela.id,
-              codigoItem: item.codigoItem,
-            },
+        const tabela = await tx.tabelaPreco.upsert({
+          where: { idExternoErp: mapeado.idExternoErp },
+          create: {
+            idExternoErp: mapeado.idExternoErp,
+            codigo: mapeado.codigo,
+            ativa: mapeado.ativa,
+            sincronizadoEm,
           },
-          create: { tabelaPrecoId: tabela.id, ...item },
-          update: item,
+          update: {
+            codigo: mapeado.codigo,
+            ativa: mapeado.ativa,
+            sincronizadoEm,
+          },
         });
-      }
 
-      // Full refresh - item que sumiu da resposta do ERP nao deveria
-      // continuar valendo localmente (ex: item removido da tabela de
-      // preco). Deleta o que nao veio nesta chamada.
-      await tx.itemTabelaPreco.deleteMany({
-        where: {
-          tabelaPrecoId: tabela.id,
-          codigoItem: { notIn: mapeado.itens.map((item) => item.codigoItem) },
-        },
-      });
-    });
+        // Paralelo (nao sequencial) - confirmado empiricamente em
+        // 2026-09-08: uma tabela com centenas de itens estourava o timeout
+        // PADRAO de transacao interativa do Prisma (5s) fazendo um upsert
+        // de cada vez. `timeout` explicito abaixo da uma margem generosa
+        // de qualquer forma, pro caso raro de uma tabela MUITO grande.
+        await Promise.all(
+          mapeado.itens.map((item) =>
+            tx.itemTabelaPreco.upsert({
+              where: {
+                tabelaPrecoId_codigoItem: {
+                  tabelaPrecoId: tabela.id,
+                  codigoItem: item.codigoItem,
+                },
+              },
+              create: { tabelaPrecoId: tabela.id, ...item },
+              update: item,
+            }),
+          ),
+        );
+
+        // Full refresh - item que sumiu da resposta do ERP nao deveria
+        // continuar valendo localmente (ex: item removido da tabela de
+        // preco). Deleta o que nao veio nesta chamada.
+        await tx.itemTabelaPreco.deleteMany({
+          where: {
+            tabelaPrecoId: tabela.id,
+            codigoItem: { notIn: mapeado.itens.map((item) => item.codigoItem) },
+          },
+        });
+      },
+      { timeout: 60_000 },
+    );
   }
 }
 

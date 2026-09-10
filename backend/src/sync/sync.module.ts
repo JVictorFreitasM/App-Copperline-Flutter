@@ -4,6 +4,7 @@ import { EmpresarialSvcClientModule } from '../empresarial-svc-client/empresaria
 import { ErpClientModule } from '../erp-client/erp-client.module';
 import { EstoqueSvcClientModule } from '../estoque-svc-client/estoque-svc-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { ClienteSyncStrategy } from './strategies/cliente.sync';
 import { NotaFiscalSyncStrategy } from './strategies/nota-fiscal.sync';
 import { PedidoSyncStrategy } from './strategies/pedido.sync';
@@ -25,6 +26,7 @@ import { SyncService } from './sync.service';
     ErpClientModule,
     EstoqueSvcClientModule,
     EmpresarialSvcClientModule,
+    TabelasPrecoModule,
   ],
   providers: [
     ClienteSyncStrategy,

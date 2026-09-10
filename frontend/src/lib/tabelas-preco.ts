@@ -5,10 +5,6 @@ export interface TabelaPrecoResumoDto {
   id: string;
   codigo: string;
   ativa: boolean;
-  // "Tabela padrão" (pedido do usuário: "possibilidade de trocar a
-  // tabela") - qual tabela é a fonte de preço oficial pro resto do
-  // sistema, editável via PATCH /admin/tabelas-preco/:id/padrao.
-  padrao: boolean;
   quantidadeItens: number;
   sincronizadoEm: string;
 }
@@ -25,4 +21,15 @@ export interface ItemTabelaPrecoDto {
   dataUltimoReajuste: string | null;
   dataInicioPromocao: string | null;
   dataFimPromocao: string | null;
+}
+
+// Mesmo shape de
+// backend/src/tabelas-preco/configuracao-tabela-preco.service.ts
+// (ConfiguracaoTabelaPrecoDto) - qual codigo o sync deve acompanhar
+// (pedido do usuário: "pegue apenas a tabela 110, o sync das outras só
+// vai acontecer se ela for selecionada"). Escolher aqui TAMBÉM define a
+// fonte de preço "oficial" pro resto do sistema - uma única decisão.
+export interface ConfiguracaoTabelaPrecoDto {
+  codigoSelecionado: string | null;
+  atualizadoEm: string;
 }

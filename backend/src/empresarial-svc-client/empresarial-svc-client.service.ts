@@ -33,8 +33,16 @@ export class EmpresarialSvcClientService {
       usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
       senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
     };
+    // NAO reaproveita WK_BI_REQUEST_TIMEOUT_MS (60s, calibrado pro
+    // Estoque.svc) - confirmado empiricamente em 2026-09-08 que
+    // BuscarTabelasPreco com filtro:{} (full refresh, todas as tabelas
+    // numa chamada so, ~7,9MB de resposta) leva ~90s do HOST mas ~188s de
+    // DENTRO do container backend (rede do Docker ~2x mais lenta nesse
+    // ambiente, medido com node fetch direto no container) - 60s e ate
+    // 180s ja estouraram timeout em tentativas reais de sync. 5min da
+    // margem de verdade.
     this.requestTimeoutMs = Number(
-      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
+      this.configService.get('WK_RADAR_EMPRESARIAL_SVC_TIMEOUT_MS') ?? 300_000,
     );
   }
 

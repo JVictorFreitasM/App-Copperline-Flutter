@@ -43,16 +43,9 @@ class _TabelaPrecoDetalheScreenState extends ConsumerState<TabelaPrecoDetalheScr
           data: (tabela) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Tabela ${tabela.codigo}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                  ),
-                  if (tabela.padrao) const AppBadge(texto: 'Padrão', enfase: true),
-                ],
+              Text(
+                'Tabela ${tabela.codigo}',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 4),
               Text(
