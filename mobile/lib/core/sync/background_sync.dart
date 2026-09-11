@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import '../api_client.dart';
 import '../auth/session_storage.dart';
 import '../local_db/fila_pendente_service.dart';
 import '../local_db/local_database.dart';
+import '../server_config.dart';
 
 const nomeTarefaSincronizacaoFila = 'sincronizacao-fila-pendente';
 
@@ -33,7 +35,18 @@ void callbackDispatcherSincronizacao() {
       return true;
     }
 
-    final apiClient = ApiClient(sessionStorage);
+    // Isolate sem Riverpod - lê o SharedPreferences direto, mesmo dado que
+    // ConfigurarServidorScreen grava no app principal (ver server_config.dart).
+    final prefs = await SharedPreferences.getInstance();
+    final baseUrl = ServerConfigService(prefs).obterUrl();
+    if (baseUrl == null) {
+      // Sem servidor configurado - não deveria acontecer se há cookie
+      // salvo (login exige servidor configurado), mas nada a sincronizar
+      // sem endereço pra onde mandar.
+      return true;
+    }
+
+    final apiClient = ApiClient(baseUrl, sessionStorage);
     final localDatabase = await LocalDatabase.abrir();
     final filaService = FilaPendenteService(apiClient, localDatabase);
     // sincronizar() já trata falha de rede internamente (mantém PENDENTE,

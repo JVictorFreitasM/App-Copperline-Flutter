@@ -2,9 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/api_client.dart';
 import '../core/auth/auth_notifier.dart';
+import '../core/server_config.dart';
 import '../widgets/listagem_feedback.dart';
+import 'configurar_servidor_screen.dart';
 
 // Nome do cookie de sessão do express-session (backend não configurou um
 // nome customizado - ver src/main.ts do backend e proxy.ts do frontend
@@ -46,8 +47,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // a MESMA URL que já falhou, sem reconstruir o estado interno da WebView.
   int _tentativa = 0;
 
-  Uri get _urlLogin {
-    final base = ApiClient.baseUrl;
+  Uri _urlLogin(String base) {
     final returnTo = '$base/auth/me';
     return Uri.parse(
       '$base/auth/login?returnTo=${Uri.encodeComponent(returnTo)}',
@@ -131,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (_processandoLogin || url == null || _erroCarregamento != null) {
       return;
     }
-    final base = ApiClient.baseUrl;
+    final base = ref.read(serverUrlProvider)!;
     if (!url.toString().startsWith('$base/auth/me')) {
       // Pagina intermediaria carregou com sucesso (ex: formulario de login
       // do IdP) - CANCELA o timeout, nao reinicia. Bug real corrigido aqui:
@@ -174,8 +174,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseUrl = ref.watch(serverUrlProvider);
+
+    // Sem servidor configurado (primeira abertura de um build sem
+    // --dart-define, ou dados do app limpos) - bloqueia aqui, antes de
+    // tentar montar a WebView com uma URL inexistente.
+    if (baseUrl == null) {
+      return const ConfigurarServidorScreen();
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Entrar')),
+      appBar: AppBar(
+        title: const Text('Entrar'),
+        actions: [
+          // Editável a qualquer momento, não só na primeira configuração -
+          // pedido explícito do usuário: IP da rede muda (DHCP), sem
+          // precisar reinstalar o app pra apontar pro endereço novo.
+          IconButton(
+            icon: const Icon(Icons.dns_outlined),
+            tooltip: 'Configurar servidor',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ConfigurarServidorScreen(permitirVoltar: true),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: _erroCarregamento != null
           ? Center(
               child: Padding(
@@ -190,8 +215,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           : Stack(
               children: [
                 InAppWebView(
-                  key: ValueKey(_tentativa),
-                  initialUrlRequest: URLRequest(url: WebUri.uri(_urlLogin)),
+                  key: ValueKey('$_tentativa-$baseUrl'),
+                  initialUrlRequest: URLRequest(url: WebUri.uri(_urlLogin(baseUrl))),
                   // Rearma o timeout a cada navegação REAL que começa (troca
                   // de página) - complementa o cancelamento em
                   // onLoadStop/_aoTerminarCarregamento acima: enquanto o

@@ -8,10 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:copperline_mobile/core/api_client.dart';
 import 'package:copperline_mobile/core/api_exception.dart';
 
-// Rodar com --dart-define=API_BASE_URL=http://teste.local (mesmo valor do
-// baseUrl do Dio fake abaixo) - os testes de mensagem de SocketException
-// chamam ApiClient.baseUrl (usado no texto da mensagem), que lança
-// StateError se a env var não estiver definida (ver api_client.dart).
+// baseUrl agora é resolvido em runtime (ServerConfigService, ver
+// server_config.dart), não mais um --dart-define fixo - os testes de
+// mensagem de SocketException leem `_dio.options.baseUrl` (instância),
+// que já vem de _dioComAdapter abaixo ('http://teste.local'), sem
+// depender de nenhuma env var pra rodar.
 //
 // OS-MOBILE-31/33: cobre o retry com backoff (leitura) e a mensagem
 // específica por subtipo de SocketException - ambos adicionados nesta

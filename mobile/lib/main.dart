@@ -2,7 +2,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/push/push_navigation.dart';
+import 'core/server_config.dart';
 import 'screens/auth_gate.dart';
 import 'theme/app_theme.dart';
 
@@ -19,7 +21,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR');
   await Firebase.initializeApp();
-  runApp(const ProviderScope(child: CopperlineApp()));
+  // Resolvido UMA vez aqui (nao FutureProvider) - server_config.dart e'
+  // consultado em toda chamada de API (apiClientProvider), um carregamento
+  // assincrono espalharia AsyncValue por uma arvore de providers hoje
+  // sincrona.
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [
+        serverConfigServiceProvider.overrideWithValue(ServerConfigService(prefs)),
+      ],
+      child: const CopperlineApp(),
+    ),
+  );
 }
 
 class CopperlineApp extends StatelessWidget {

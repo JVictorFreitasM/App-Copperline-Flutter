@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_exception.dart';
 import 'auth/idp_user.dart';
 import 'auth/session_storage.dart';
+import 'server_config.dart';
 
 // OS-MOBILE-31: backoff pra falha transitória de rede (timeout/conexão
 // recusada/sem rota) em leituras. Não aplicado a POST/PATCH/multipart de
@@ -17,13 +18,6 @@ const _atrasosRetry = [
   Duration(milliseconds: 1200),
   Duration(milliseconds: 3000),
 ];
-
-// URL base da API NestJS, injetada por ambiente (flutter run/build
-// --dart-define=API_BASE_URL=http://...) - nunca hardcoded (ver critério
-// de aceite da OS-MOBILE-11). Sem valor padrão de propósito: rodar sem
-// definir falha alto e claro em vez de silenciosamente apontar pra um host
-// que pode não existir no ambiente de quem estiver rodando.
-const String _apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
 /// Subconjunto de [ApiClient] (getJson/postJsonList) usado por serviços
 /// que não devem depender da classe concreta inteira (ex: `SnapshotService`/
@@ -43,7 +37,11 @@ abstract interface class ApiJsonClient {
 /// web (aqui o app precisa fazer isso manualmente, ver `login_screen.dart`
 /// pra como o cookie chega até aqui).
 class ApiClient implements ApiJsonClient {
-  ApiClient(SessionStorage sessionStorage)
+  // baseUrl agora vem resolvida em runtime (ServerConfigService/
+  // serverUrlProvider, ver server_config.dart) - deixou de ser um
+  // --dart-define fixo pra sempre poder ser editada pelo usuário sem
+  // rebuild (tela "Configurar servidor" antes do login).
+  ApiClient(String baseUrl, SessionStorage sessionStorage)
     : this._(
         Dio(
           BaseOptions(
@@ -79,16 +77,7 @@ class ApiClient implements ApiJsonClient {
   final Dio _dio;
   final SessionStorage? _sessionStorage;
 
-  static String get baseUrl {
-    if (_apiBaseUrl.isEmpty) {
-      throw StateError(
-        'API_BASE_URL não configurada - rode com '
-        '--dart-define=API_BASE_URL=http://<host>:3010 '
-        '(ver README do projeto mobile).',
-      );
-    }
-    return _apiBaseUrl;
-  }
+  String get baseUrl => _dio.options.baseUrl;
 
   @override
   Future<Map<String, dynamic>> getJson(String path) async {
@@ -322,5 +311,15 @@ class ApiClient implements ApiJsonClient {
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(ref.watch(sessionStorageProvider));
+  final baseUrl = ref.watch(serverUrlProvider);
+  if (baseUrl == null || baseUrl.isEmpty) {
+    throw StateError(
+      'Servidor não configurado - a LoginScreen deveria ter bloqueado o '
+      'acesso até a ConfigurarServidorScreen ser preenchida antes disso.',
+    );
+  }
+  // ref.watch (não read) - salvar uma nova URL em ConfigurarServidorScreen
+  // reconstrói este provider automaticamente com o Dio apontando pro
+  // endereço novo, sem exigir reiniciar o app.
+  return ApiClient(baseUrl, ref.watch(sessionStorageProvider));
 });

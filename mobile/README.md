@@ -25,6 +25,14 @@ flutter build apk --debug --dart-define=API_BASE_URL=http://<IP-da-rede>:3010
 flutter install # com o celular conectado via USB e depuração USB ativada
 ```
 
+O IP da rede local muda com o DHCP - **isso não exige mais rebuild**: a
+tela de login tem um botão (ícone de servidor na AppBar) que abre
+`ConfigurarServidorScreen`, onde o endereço é editado e salvo em runtime
+(`SharedPreferences`, ver `core/server_config.dart`). O `--dart-define`
+acima vira só o valor **inicial** (útil pra já instalar apontando pro
+endereço certo na primeira vez); depois disso, mudar o IP é só reabrir
+essa tela no app, sem recompilar nada.
+
 Dois pré-requisitos que não são óbvios e já causaram falha silenciosa de
 login numa configuração anterior (com `localhost`, ver histórico da
 OS-MOBILE-12):
@@ -43,8 +51,9 @@ OS-MOBILE-12):
 
 ## Rodando localmente
 
-A URL base da API **não tem valor padrão hardcoded** — precisa ser passada
-via `--dart-define` a cada execução/build:
+A URL base da API é resolvida em **runtime** (`ServerConfigService`, ver
+`core/server_config.dart`), não mais fixa em tempo de build. `--dart-define`
+continua funcionando como valor **inicial** (opcional):
 
 ```bash
 # Emulador Android (10.0.2.2 é o alias do host visto de dentro do emulador)
@@ -54,9 +63,11 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3010
 flutter run --dart-define=API_BASE_URL=http://192.168.x.x:3010
 ```
 
-Sem essa variável, o app sobe mas lança um erro claro ao tentar chamar a
-API (`ApiClient.baseUrl`), em vez de silenciosamente apontar pra um host
-que pode não existir no ambiente de quem estiver rodando.
+Sem essa variável (ou depois de limpar os dados do app), a `LoginScreen`
+mostra `ConfigurarServidorScreen` - uma tela bloqueante pedindo o endereço
+do servidor antes de qualquer outra coisa - em vez de lançar erro. Uma vez
+salvo, o app lembra entre sessões; mudar o IP depois é só reabrir essa
+tela (ícone de servidor na AppBar do login), sem rebuild.
 
 > **Alvo Android/iOS, não web**: a autenticação usa `flutter_inappwebview`
 > (WebView nativa + acesso ao cookie jar) — não roda em `flutter run -d

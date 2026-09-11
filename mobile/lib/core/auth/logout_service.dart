@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../api_client.dart';
+import '../server_config.dart';
 
 /// Encerra a sessão no servidor abrindo `/auth/logout` numa WebView sem
 /// interface (`HeadlessInAppWebView`) - sem isso, o logout só limparia o
@@ -11,13 +11,17 @@ import '../api_client.dart';
 /// WebView desde o login (compartilhado entre instâncias no mesmo app),
 /// não precisa ser repassado manualmente aqui.
 class LogoutService {
+  LogoutService(this._baseUrl);
+
+  final String _baseUrl;
+
   Future<void> encerrarSessaoNoServidor() async {
     final concluido = Completer<void>();
     late final HeadlessInAppWebView headlessWebView;
 
     headlessWebView = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(
-        url: WebUri('${ApiClient.baseUrl}/auth/logout'),
+        url: WebUri('$_baseUrl/auth/logout'),
       ),
       onLoadStop: (controller, url) {
         if (!concluido.isCompleted) {
@@ -39,4 +43,14 @@ class LogoutService {
   }
 }
 
-final logoutServiceProvider = Provider<LogoutService>((ref) => LogoutService());
+final logoutServiceProvider = Provider<LogoutService>((ref) {
+  // Logout só acontece a partir de uma sessão já autenticada, que exige
+  // servidor configurado (ver LoginScreen) - null aqui indicaria estado
+  // impossível, então falha alto em vez de tentar um logout "pra
+  // nenhum lugar".
+  final baseUrl = ref.watch(serverUrlProvider);
+  if (baseUrl == null || baseUrl.isEmpty) {
+    throw StateError('Servidor não configurado - impossível fazer logout.');
+  }
+  return LogoutService(baseUrl);
+});
