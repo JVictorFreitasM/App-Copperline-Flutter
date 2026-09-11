@@ -822,3 +822,88 @@ do Radar). Novas OS que dependem disso, adicionadas nesta rodada:
   funcional, não há o que repetir.
 - **OS-BACKEND-47** (assinatura digital de pedido): não há pedido real
   criado pelo app pra assinar (fluxo de criação ainda 100% bloqueado).
+
+---
+
+# Adendo — rodada `OS-correcoes-analise.md` (auditoria de segurança/UX)
+
+Concluídas nesta rodada, sem intervenção do usuário: correção do achado
+crítico de IDOR em `/pedidos` (`GET /pedidos`, `/pedidos/:id`,
+`/pedidos/:id/historico` não filtravam por vendedor - qualquer usuário
+autenticado via app via qualquer pedido de qualquer cliente; corrigido
+reaproveitando o mesmo `VendedorEscopoService` já usado em `/clientes`,
+filtrando pelo vendedor do CLIENTE, não `Pedido.vendedorId`, que fica null
+em todo pedido sincronizado do WK Radar), CORS explícito em `main.ts` (+
+correção de `FRONTEND_PUBLIC_URL`, que estava com `localhost` em vez do IP
+da rede local), guarda de regressão real (app Nest sobe de verdade, não só
+chama o service) pra ordem de rotas estáticas vs `:id` em
+pedidos/produtos/estoque/clientes, rate limit em `GET /clientes/:id/resumo`
+(chamada LLM externa paga), indicador de escopo ativo
+(`TODOS`/`EQUIPE`) no painel `/admin/relatorio-pedidos`, indicador de
+check-in pendente de sincronização no app (evitava check-in duplicado ao
+reconectar) e opção "tirar novamente" no preview de foto do check-in,
+fallback offline pro detalhe de produto no app (só a listagem tinha),
+correção do build do APK travado havia dias por `compileSdk = 37`
+incompatível (SDK 37 só existe como pacote preview `37.0` - rebaixado
+`flutter_secure_storage` pra `10.3.1`, que pede `compileSdk 36`), e o
+redesenho da sincronização de tabela de preço pra buscar só o código
+selecionado (antes buscava o catálogo inteiro a cada sync - reduziu de
+~5min pra ~15s).
+
+## Pendente ou parcial
+
+### Rate limiting em mais rotas sensíveis (parcial)
+ 
+Aplicado só em `/clientes/:id/resumo`. Falta levantar junto ao time outros
+candidatos (ex: `POST /pedidos/simular-desconto`,
+`POST /admin/endpoints/importar-swagger`) e confirmar com o time do IdP
+central se há rate limit em tentativas de login/OTP.
+
+### Indicador de sync pendente para "pedido" (parcial/bloqueado)
+
+Feito só para check-in de visita. Não se aplica a pedido porque o app
+mobile ainda não tem nenhuma tela de *criar* pedido (só listagem/detalhe,
+só-leitura) - `TipoAcaoFila.criarPedido` existe no enum só por paridade
+com o backend, nunca é enfileirado hoje. Bloqueado pelo mesmo motivo de
+fundo da OS-MOBILE-23 acima (criação de pedido no app depende dos 6 IDs de
+referência do Radar).
+
+### Aviso de simulação de desconto não reserva nada
+
+Não implementado - nem web nem mobile têm hoje uma tela que consuma
+`POST /pedidos/simular-desconto`. Reavaliar se essa tela ainda está no
+roadmap antes de tratar como pendência; se não estiver, fechar como
+não-aplicável.
+
+### Girar credenciais do `.env`
+
+Não iniciado. Precisa de coordenação com quem administra o WK Radar -
+rotacionar sem avisar quebra a sincronização em produção.
+
+### Checklist de deploy (API key / cookie domain)
+
+Não iniciado. Relacionado ao ponto já documentado na skill `idp-client`
+sobre `NODE_ENV=production` precisar estar setado corretamente pra
+`cookie.secure` funcionar, e `SESSION_COOKIE_DOMAIN` estar correta em
+produção.
+
+### Log de auditoria de acesso administrativo
+
+Não iniciado. Reforça a correção do IDOR de `/pedidos` - registrar quem
+acessou qual recurso sensível e quando.
+
+### Row Level Security nativo (Pedido/Cliente/SolicitacaoDesconto)
+
+Não iniciado. Precisa de POC em staging medindo impacto de performance
+antes de decidir viabilidade.
+
+### Exportação agendada de relatórios de pedidos
+
+Não iniciado. O campo `escopo` já adicionado no relatório serve de base
+pra isso quando for priorizado.
+
+### Certificate pinning (mobile)
+
+Não iniciado. Precisa de processo de rotação de certificado acordado com
+o time de infra antes de habilitar em produção (senão trava o app quando
+o certificado do backend for renovado).
