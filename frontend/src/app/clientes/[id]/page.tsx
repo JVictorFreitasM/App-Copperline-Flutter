@@ -18,6 +18,7 @@ import { ListItem } from "@/components/design/list-item";
 import { StatCard } from "@/components/design/stat-card";
 import { Timeline } from "@/components/design/timeline";
 import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
+import { TabelasPrecoCliente } from "./tabelas-preco-cliente";
 
 // Opções fixas de período (OS-WEB-31, critério de aceite explícito: "1 e 6
 // meses") - 12 meses mantido como terceira opção (era o único valor antes
@@ -37,7 +38,7 @@ export default async function ClienteDetalhePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ meses?: string }>;
 }) {
-  await exigirUsuarioAutenticado("/clientes");
+  const usuario = await exigirUsuarioAutenticado("/clientes");
 
   const { id } = await params;
   const mesesParam = Number((await searchParams).meses);
@@ -87,6 +88,23 @@ export default async function ClienteDetalhePage({
     } catch (error) {
       erroFinanceiro =
         error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
+    }
+  }
+
+  // Tabelas de preço associadas (OS-novas-implementacoes.md Bloco 1) -
+  // isolado (mesmo critério do financeiro acima) - vendedor comum também
+  // lê essa rota (escopada), não é admin-only, só a EDIÇÃO é.
+  let codigosTabelaPreco: string[] = [];
+  if (cliente) {
+    try {
+      const resposta = await apiFetch<{ codigos: string[] }>(
+        `/clientes/${encodeURIComponent(id)}/tabelas-preco`,
+        { cache: "no-store" },
+      );
+      codigosTabelaPreco = resposta.codigos;
+    } catch {
+      // Silencioso - seção some da tela em vez de mostrar erro pra um
+      // dado secundário (mesmo critério de PrecosPorTabela em produtos).
     }
   }
 
@@ -223,6 +241,17 @@ export default async function ClienteDetalhePage({
                   Última fatura em {formatarData(financeiro.dataUltimaFatura)}.
                 </p>
               )}
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-ink">Tabelas de preço</h2>
+              <Card>
+                <TabelasPrecoCliente
+                  clienteId={cliente.id}
+                  codigosIniciais={codigosTabelaPreco}
+                  podeEditar={usuario.role === "admin"}
+                />
+              </Card>
             </section>
 
             <section className="flex flex-col gap-3">

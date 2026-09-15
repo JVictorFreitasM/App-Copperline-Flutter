@@ -6,6 +6,7 @@ import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
@@ -34,6 +35,7 @@ import { ClientesService } from './clientes.service';
     VendedoresModule,
     VisitasModule,
     FinanceiroSvcClientModule,
+    TabelasPrecoModule,
   ],
   controllers: [ClientesController],
   providers: [

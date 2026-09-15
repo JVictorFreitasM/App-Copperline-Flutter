@@ -3,13 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { ConfiguracaoTabelaPrecoDto } from "@/lib/tabelas-preco";
-
-export interface EstadoSelecaoTabela {
-  erro: string | null;
-  sucesso: string | null;
-}
-
-export const ESTADO_SELECAO_TABELA_INICIAL: EstadoSelecaoTabela = { erro: null, sucesso: null };
+import type { EstadoSelecaoTabela } from "./estado-selecao-tabela";
 
 // "Pegue apenas a tabela 110, o sync das outras só vai acontecer se ela
 // for selecionada" (pedido do usuário) - a seleção acontece ANTES do

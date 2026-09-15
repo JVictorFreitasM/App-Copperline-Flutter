@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
-import { selecionarTabelaPreco, ESTADO_SELECAO_TABELA_INICIAL } from "./actions";
+import { selecionarTabelaPreco } from "./actions";
+import { ESTADO_SELECAO_TABELA_INICIAL } from "./estado-selecao-tabela";
 
 // Admin-only (checagem real no backend). Texto livre (não um <select>
 // entre tabelas já sincronizadas) de propósito - a seleção acontece ANTES

@@ -26,6 +26,7 @@ import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import type { ClienteLocalizacaoDto } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import type { ClienteResumoLlmDto } from './cliente-resumo-llm.service';
+import { ClienteTabelaPrecoService } from '../tabelas-preco/cliente-tabela-preco.service';
 import { ClientesService } from './clientes.service';
 import type { ConflitoClienteDto } from './clientes.service';
 import type {
@@ -57,6 +58,7 @@ export class ClientesController {
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly visitasService: VisitasService,
     private readonly clienteLocalizacaoService: ClienteLocalizacaoService,
+    private readonly clienteTabelaPrecoService: ClienteTabelaPrecoService,
   ) {}
 
   @Get()
@@ -121,6 +123,21 @@ export class ClientesController {
   ): Promise<ClienteEstatisticasDto> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clienteEstatisticasService.obter(id, query.meses, escopo);
+  }
+
+  // OS-novas-implementacoes.md Bloco 1 - "/:id/tabelas-preco" mais
+  // especifico que "/:id" (3 segmentos vs 2), mesmo raciocinio de
+  // "/:id/resumo"/"/:id/estatisticas" acima. Retorna so os CODIGOS
+  // associados - o front decide "fixa" (sem seletor) quando length===1,
+  // sem duplicar essa regra aqui.
+  @Get(':id/tabelas-preco')
+  async listarTabelasPreco(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<{ codigos: string[] }> {
+    const escopo = await this.resolverEscopo(idpUser);
+    const codigos = await this.clienteTabelaPrecoService.listarPorCliente(id, escopo);
+    return { codigos };
   }
 
   // OS-BACKEND-36 - "/:id/financeiro" e' mais especifico que "/:id" (3

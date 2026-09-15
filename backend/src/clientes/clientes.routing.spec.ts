@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { REDIS_CLIENT } from '../redis/redis.constants';
+import { ClienteTabelaPrecoService } from '../tabelas-preco/cliente-tabela-preco.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { VisitasService } from '../visitas/visitas.service';
@@ -41,6 +42,7 @@ describe('ClientesController - ordem de rotas estaticas vs :id', () => {
         { provide: VendedorEscopoService, useValue: {} },
         { provide: VisitasService, useValue: {} },
         { provide: ClienteLocalizacaoService, useValue: {} },
+        { provide: ClienteTabelaPrecoService, useValue: {} },
         { provide: REDIS_CLIENT, useValue: {} },
       ],
     }).compile();
