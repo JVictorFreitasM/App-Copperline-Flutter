@@ -3,19 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { DocumentoDto } from "@/lib/documentos";
+import type { EstadoUpload, EstadoRemocao } from "./estado-documentos";
 
 const ROTA = "/admin/documentos";
 
 function mensagemErro(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
-
-export interface EstadoUpload {
-  erro: string | null;
-  sucesso: string | null;
-}
-
-export const ESTADO_UPLOAD_INICIAL: EstadoUpload = { erro: null, sucesso: null };
 
 // Campos do FormData (nome/categoria/arquivo) já batem 1:1 com o que
 // AdminDocumentosController espera (OS-BACKEND-41) - repassa o próprio
@@ -43,12 +37,6 @@ export async function uploadDocumento(
     return { erro: mensagemErro(error, "Erro desconhecido ao enviar o documento."), sucesso: null };
   }
 }
-
-export interface EstadoRemocao {
-  erro: string | null;
-}
-
-export const ESTADO_REMOCAO_INICIAL: EstadoRemocao = { erro: null };
 
 export async function removerDocumento(
   id: string,

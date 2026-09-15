@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { SecondaryButton } from "@/components/design/button";
-import { removerDocumento, ESTADO_REMOCAO_INICIAL } from "./actions";
+import { removerDocumento } from "./actions";
+import { ESTADO_REMOCAO_INICIAL } from "./estado-documentos";
 
 // Client Component isolado por linha (mesmo padrão de rodar-agora-form.tsx)
 // - .bind(null, id) fecha o id do documento antes de virar a assinatura

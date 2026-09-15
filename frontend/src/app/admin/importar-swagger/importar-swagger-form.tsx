@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import { Card } from "@/components/design/card";
-import { importarSwagger, ESTADO_INICIAL } from "./actions";
+import { importarSwagger } from "./actions";
+import { ESTADO_INICIAL } from "./estado-importacao";
 
 // Assistente de importação (OS-WEB-25) - interface pra POST
 // /admin/endpoints/importar-swagger (OS-BACKEND-30). useActionState (mesmo

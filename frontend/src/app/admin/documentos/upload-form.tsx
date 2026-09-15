@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import { Card } from "@/components/design/card";
-import { uploadDocumento, ESTADO_UPLOAD_INICIAL } from "./actions";
+import { uploadDocumento } from "./actions";
+import { ESTADO_UPLOAD_INICIAL } from "./estado-documentos";
 
 // Client Component isolado (mesmo padrão de rodar-agora-form.tsx) - só o
 // formulário precisa de useActionState, o resto da página continua Server

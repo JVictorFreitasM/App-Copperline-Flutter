@@ -2,21 +2,7 @@
 
 import { adminApiFetch } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api";
-
-export interface ImportarSwaggerResultado {
-  nomeEntidade: string;
-  avisoRevisaoNecessaria: true;
-  modeloPrismaRascunho: string;
-  syncStrategyRascunho: string;
-  camposNaoMapeados: string[];
-}
-
-export interface EstadoImportacao {
-  resultado: ImportarSwaggerResultado | null;
-  erro: string | null;
-}
-
-export const ESTADO_INICIAL: EstadoImportacao = { resultado: null, erro: null };
+import type { EstadoImportacao, ImportarSwaggerResultado } from "./estado-importacao";
 
 // useActionState (mesmo padrao da OS-WEB-28) em vez de redirect com o
 // resultado na query string - o rascunho gerado (2 blocos de codigo) e'
