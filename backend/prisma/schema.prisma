@@ -102,9 +102,40 @@ model Cliente {
   pedidos                Pedido[]
   vendedores             ClienteVendedor[]
   visitas                Visita[]
+  tabelasPreco           ClienteTabelaPreco[]
+  agendamentosVisita     AgendamentoVisita[]
   localizacaoDefinidaPor Vendedor?         @relation("ClienteLocalizacaoDefinidaPor", fields: [localizacaoDefinidaPorId], references: [id])
 
   @@map("clientes")
+}
+
+// N:N cliente<->tabela de preco (OS-novas-implementacoes.md Bloco 1) -
+// decisao confirmada com o usuario (simplifica a proposta original da OS,
+// que cogitava tambem restringir por vendedor): o admin decide quais
+// tabelas um cliente tem (1 ou mais). Com 1 so', o vendedor nao escolhe
+// ("fixa"); com 2+, QUALQUER vendedor que atenda aquele cliente ve' todas
+// as tabelas associadas e escolhe entre elas - sem camada extra de
+// visibilidade por vendedor. Cliente SEM nenhuma linha aqui cai no
+// fallback global antigo (ConfiguracaoTabelaPreco.codigoSelecionado, ver
+// PrecoProdutoService) - decisao confirmada, nao quebra cliente ainda nao
+// migrado pra essa feature.
+//
+// codigo (String), NAO tabelaPrecoId (FK) - mesmo criterio ja usado em
+// ConfiguracaoTabelaPreco.codigoSelecionado: a linha de TabelaPreco so'
+// existe DEPOIS de sincronizada (upsert por idExternoErp do Radar) - uma
+// FK aqui criaria um problema de bootstrap (admin associando um codigo
+// que o sync ainda nunca buscou). O proprio sync (tabela-preco.sync.ts)
+// passa a acompanhar todo codigo referenciado aqui, alem do global.
+model ClienteTabelaPreco {
+  id        String   @id @default(uuid())
+  clienteId String   @map("cliente_id")
+  codigo    String
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, codigo])
+  @@map("clientes_tabelas_preco")
 }
 
 // N:N (OS-BACKEND-23) - o WK Radar modela vinculo de cliente com vendedor
@@ -228,11 +259,54 @@ model Produto {
   // no futuro.
   imagemCaminho String? @map("imagem_caminho")
   imagemTipoMime String? @map("imagem_tipo_mime")
+  // Catalogo proprio (nao vem do Radar), editavel pelo admin - ver
+  // TipoAcondicionamento abaixo.
+  tipoAcondicionamentoId String?               @map("tipo_acondicionamento_id")
+  tipoAcondicionamento   TipoAcondicionamento? @relation(fields: [tipoAcondicionamentoId], references: [id])
+
+  // Peso liquido/bruto (OS-novas-implementacoes.md Bloco 3) - VEM do WK
+  // Radar (campos de nivel superior `pesoLiquido`/`pesoBruto`, confirmado
+  // empiricamente contra a API real - NAO fica dentro de `dimensoes` como
+  // comprimento), mapeado em produto.sync.ts so quando a unidade
+  // (`unidadeMedidaPesoLiquido`/`unidadeMedidaPesoBruto`) e' exatamente
+  // "kg" (mesmo criterio fail-safe de comprimentoMetros - qualquer outra
+  // unidade fica null, nunca interpretada errado). Peso da PECA/unidade de
+  // venda (nao taxa por metro - decisao confirmada com o usuario): pra
+  // somar no pedido, multiplica por PedidoItem.quantidadeVenda, nao pelos
+  // metros pedidos.
+  pesoLiquidoKg Decimal? @map("peso_liquido_kg") @db.Decimal(12, 3)
+  pesoBrutoKg   Decimal? @map("peso_bruto_kg") @db.Decimal(12, 3)
 
   itensPedido PedidoItem[]
   favoritos   ProdutoFavorito[]
 
   @@map("produtos")
+}
+
+// Catalogo extensivel de tipo de acondicionamento (OS-novas-implementacoes.md
+// Bloco 4) - NAO sincronizado do Radar (dado proprio do sistema, mesmo
+// criterio de precoFabricacao/imagemCaminho acima), cadastravel pelo admin
+// em runtime sem precisar de deploy (diferente de um enum fixo tipo
+// TipoVendaProduto).
+model TipoAcondicionamento {
+  id    String  @id @default(uuid())
+  nome  String
+  ativo Boolean @default(true)
+  // OS-novas-implementacoes.md Bloco 4 (revisao) - null = retalho (corte
+  // fracionario livre); preenchido = tamanho fixo, pedido tem que ser
+  // multiplo exato deste valor (calcularQuantidadePedido bloqueia caso
+  // contrario). "Multiplo" (ex: rolo de 100m) e "unidade" (peca fechada,
+  // tamanhoPadrao=1) sao o mesmo calculo - decisao confirmada com o
+  // usuario de nao ter um campo de "modo" separado. Pertence ao TIPO, nao
+  // ao produto (decisao confirmada) - produtos do mesmo tipo compartilham
+  // o mesmo tamanho padrao.
+  tamanhoPadrao Decimal? @map("tamanho_padrao") @db.Decimal(10, 3)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  produtos Produto[]
+
+  @@map("tipos_acondicionamento")
 }
 
 // Sincronizada via Empresarial.svc/BuscarTabelasPreco (WCF legado, mesma
@@ -359,6 +433,26 @@ model Pedido {
   dataHoraUltimaAlteracao DateTime?           @map("data_hora_ultima_alteracao")
   clienteId               String?             @map("cliente_id")
   valorTotal              Decimal?            @map("valor_total") @db.Decimal(18, 6)
+
+  // Tela de listagem web (layout de referencia) - "Data de Criacao" da
+  // tabela. Mapeado do Radar (dataEmissao, formato DD/MM/YYYY) - so pedido
+  // sincronizado tem; pedido criado local usa a data de criacao real (ver
+  // CriarPedidoService).
+  dataEmissao         DateTime? @map("data_emissao")
+  // UF do endereco de entrega (filtro "Localizacao") - derivado do
+  // idMunicipio do Radar (codigo IBGE de 7 digitos, os 2 primeiros
+  // identificam a UF - tabela estatica, sem sync de um catalogo de
+  // municipios). So ~7% dos pedidos tem localEntrega preenchido no Radar -
+  // fica null pra maioria, esperado (nao e falha de sync).
+  ufEntrega           String?   @map("uf_entrega") @db.VarChar(2)
+  // Vendedor do PRÓPRIO pedido sincronizado (Radar `pedido.vendedores[0].id`,
+  // resolvido contra Vendedor.idExternoErp) - conceito DIFERENTE de
+  // `vendedorId` acima (que so existe pra pedido criado localmente por
+  // este sistema, e significa "quem criou"). Null quando o Radar nao
+  // informa vendedor OU o vendedor referenciado ainda nao foi sincronizado
+  // (nunca cria stub aqui - Vendedor tem campos de autenticacao vinculados,
+  // diferente do stub simples de Cliente/Produto).
+  vendedorRadarId     String?   @map("vendedor_radar_id")
   // true quando esta linha foi criada como stub por NotaFiscalSyncStrategy
   // (OS 09, nota fiscal referenciando um pedido ainda nao sincronizado) -
   // pedidoSync sempre grava false ao completar os dados de verdade. Mesmo
@@ -381,8 +475,20 @@ model Pedido {
   percentualDescontoSolicitado Decimal?           @map("percentual_desconto_solicitado") @db.Decimal(5, 2)
   statusLocal                  StatusPedidoLocal? @map("status_local")
 
+  // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - soma de
+  // Produto.pesoLiquidoKg/pesoBrutoKg * PedidoItem.quantidadeVenda de cada
+  // item, calculado e CONGELADO na criacao (CriarPedidoService), mesmo
+  // criterio ja usado por valorTotal (nunca recalculado a cada leitura).
+  // Null quando QUALQUER item do pedido tem produto sem peso cadastrado -
+  // um total parcial seria enganoso (nunca expor peso "quase completo"
+  // como se fosse o total real). So calculado pra pedido criado local
+  // (POST /pedidos) - pedido sincronizado do ERP nao passa por aqui.
+  pesoLiquidoTotalKg Decimal? @map("peso_liquido_total_kg") @db.Decimal(14, 3)
+  pesoBrutoTotalKg   Decimal? @map("peso_bruto_total_kg") @db.Decimal(14, 3)
+
   cliente              Cliente?                @relation(fields: [clienteId], references: [id])
   vendedor             Vendedor?               @relation(fields: [vendedorId], references: [id])
+  vendedorRadar        Vendedor?               @relation("PedidoVendedorRadar", fields: [vendedorRadarId], references: [id])
   itens                PedidoItem[]
   notasFiscais         NotaFiscalPedido[]
   solicitacoesDesconto SolicitacaoDesconto[]
@@ -436,6 +542,23 @@ model PedidoHistoricoStatus {
 // BASE (Produto.idExternoErp = produtoServico.id) e idItemGrade1/2/3 ficam
 // gravados aqui so como colunas descritivas (qual combinacao foi pedida),
 // nao como parte da chave de relacionamento.
+// Tela de detalhe do pedido (layout de referencia ref1.jpeg) - aprovacao
+// GRANULAR por item, conceito NOVO e distinto de SolicitacaoDesconto (que
+// decide o pedido INTEIRO de uma vez, ligado ao limite de desconto - ver
+// solicitacao-desconto.entity.ts). Aqui e' uma revisao mais simples, sem
+// regra de hierarquia/autoaprovacao: qualquer usuario com escopo sobre o
+// pedido (mesmo EscopoClientes ja usado em PedidosService) pode decidir um
+// item, sem exigir papel especifico nem bloquear autoaprovacao - por isso
+// fica direto no service, sem entidade de dominio propria (ver skill
+// nestjs, "DDD so onde ha regra de negocio real").
+enum StatusAprovacaoItemPedido {
+  PENDENTE
+  APROVADO
+  REJEITADO
+
+  @@map("status_aprovacao_item_pedido")
+}
+
 model PedidoItem {
   id              String              @id @default(uuid())
   pedidoId        String              @map("pedido_id")
@@ -450,8 +573,18 @@ model PedidoItem {
   situacao        SituacaoItemPedido?
   sincronizadoEm  DateTime            @map("sincronizado_em")
 
-  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto Produto? @relation(fields: [produtoId], references: [id])
+  // Revisao por item (ver comentario do enum acima) - default PENDENTE pra
+  // item sincronizado do ERP e pra item recem-criado localmente, nunca
+  // sobrescrito pelo upsert de sync (produto.sync.ts nao referencia esses
+  // campos, mesmo criterio ja usado pra precoFabricacao/imagemCaminho em
+  // Produto).
+  statusAprovacao StatusAprovacaoItemPedido @default(PENDENTE) @map("status_aprovacao")
+  decididoPorId   String?                   @map("decidido_por_id")
+  decididoEm      DateTime?                 @map("decidido_em")
+
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto    Produto? @relation(fields: [produtoId], references: [id])
+  decididoPor Usuario? @relation(fields: [decididoPorId], references: [id])
 
   @@unique([pedidoId, numero])
   @@index([produtoId])
@@ -606,6 +739,8 @@ model Usuario {
   acoesFilaProcessadas   AcaoFilaProcessada[]
   historicoStatusPedidos PedidoHistoricoStatus[]
   documentosEnviados     Documento[]
+  agendamentosVisitaCriados AgendamentoVisita[]
+  itensPedidoDecididos   PedidoItem[]
 
   @@map("usuarios")
 }
@@ -768,6 +903,14 @@ model Vendedor {
   // dados de verdade no proximo full refresh.
   incompleto Boolean @default(false)
 
+  // OS-novas-implementacoes.md Bloco 5 - "permitir check-in sem
+  // agendamento". Default TRUE (nao false) de proposito: preserva o
+  // comportamento ATUAL do sistema (check-in sempre funcionou sem
+  // conceito de agendamento) pra todo vendedor ja existente - exigir
+  // agendamento e' uma restricao NOVA que o admin liga explicitamente por
+  // vendedor, nunca fica ligada por omissao.
+  permiteCheckinSemAgendamento Boolean @default(true) @map("permite_checkin_sem_agendamento")
+
   usuario Usuario? @relation(fields: [usuarioId], references: [id])
 
   clientes ClienteVendedor[]
@@ -776,13 +919,39 @@ model Vendedor {
   solicitacoesParaAprovar     SolicitacaoDesconto[] @relation("SolicitacaoAprovadorEsperado")
   solicitacoesDecididas       SolicitacaoDesconto[] @relation("SolicitacaoAprovador")
   pedidosCriados              Pedido[]
+  pedidosComoVendedorRadar    Pedido[]              @relation("PedidoVendedorRadar")
   visitas                     Visita[]
   clientesLocalizacaoDefinida Cliente[]             @relation("ClienteLocalizacaoDefinidaPor")
   metas                       MetaVendedor[]
   coberturasComoOriginal      CoberturaTemporaria[] @relation("CoberturaVendedorOriginal")
   coberturasComoSubstituto    CoberturaTemporaria[] @relation("CoberturaVendedorSubstituto")
+  agendamentosVisita          AgendamentoVisita[]
 
   @@map("vendedores")
+}
+
+// Agendamento previo de visita (OS-novas-implementacoes.md Bloco 5) -
+// feature NOVA (nao existia nenhum conceito de agendamento antes) -
+// decisao confirmada com o usuario: construir do zero, junto com a
+// excecao de check-in sem agendamento (Vendedor.permiteCheckinSemAgendamento
+// acima). VisitasService.checkin() exige um agendamento pra HOJE
+// (clienteId+vendedorId+dataHoraPrevista no dia do check-in) quando a
+// flag do vendedor estiver desligada - ver criterio de aceite.
+model AgendamentoVisita {
+  id               String   @id @default(uuid())
+  clienteId        String   @map("cliente_id")
+  vendedorId       String   @map("vendedor_id")
+  dataHoraPrevista DateTime @map("data_hora_prevista")
+  criadoPorId      String   @map("criado_por_id")
+  criadoEm         DateTime @default(now()) @map("criado_em")
+
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  vendedor  Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
+  criadoPor Usuario  @relation(fields: [criadoPorId], references: [id])
+
+  @@index([vendedorId, dataHoraPrevista])
+  @@index([clienteId])
+  @@map("agendamentos_visita")
 }
 
 enum PapelVendedor {
