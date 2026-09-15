@@ -6,6 +6,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminVisitasController } from './admin-visitas.controller';
+import { AgendamentosVisitaController } from './agendamentos-visita.controller';
+import { AgendamentosVisitaService } from './agendamentos-visita.service';
 import { VisitaFotoStorageService } from './visita-foto-storage.service';
 import { VisitasController } from './visitas.controller';
 import { VisitasService } from './visitas.service';
@@ -16,9 +18,13 @@ import { VisitasService } from './visitas.service';
   // ClientesModule/SolicitacoesDescontoModule/RastreioModule.
   imports: [PrismaModule, UsuariosModule, VendedoresModule],
   // AdminVisitasController fica protegido so por ApiKeyGuard (ver seu
-  // proprio @UseGuards) - so VisitasController entra no requireAuth abaixo.
-  controllers: [VisitasController, AdminVisitasController],
-  providers: [VisitasService, VisitaFotoStorageService],
+  // proprio @UseGuards) - so VisitasController/AgendamentosVisitaController
+  // entram no requireAuth abaixo. AgendamentosVisitaController fica aqui
+  // (nao um modulo proprio) - Bloco 5 e' extensao direta do fluxo de
+  // visita (VisitasService.checkin() consulta AgendamentoVisita), mesmo
+  // raciocinio de manter as duas coisas juntas.
+  controllers: [VisitasController, AdminVisitasController, AgendamentosVisitaController],
+  providers: [VisitasService, VisitaFotoStorageService, AgendamentosVisitaService],
   // VisitasService exportado pra ClientesModule (OS-BACKEND-28) montar
   // GET /clientes/:id/visitas sem duplicar a logica de listagem aqui.
   exports: [VisitasService],
@@ -29,6 +35,6 @@ export class VisitasModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
-      .forRoutes(VisitasController);
+      .forRoutes(VisitasController, AgendamentosVisitaController);
   }
 }

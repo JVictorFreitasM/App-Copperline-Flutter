@@ -10,6 +10,7 @@ import '../core/localizacao_atual.dart';
 import '../core/models/cliente.dart';
 import '../core/models/cliente_resumo_llm.dart';
 import '../core/models/visita.dart';
+import '../core/providers/agendamentos_visita_provider.dart';
 import '../core/providers/clientes_provider.dart';
 import '../core/providers/cliente_resumo_llm_provider.dart';
 import '../core/providers/offline_provider.dart';
@@ -114,6 +115,8 @@ class ClienteDetalheScreen extends ConsumerWidget {
               const Divider(color: AppColors.line, height: 1),
               const SizedBox(height: 18),
               _CardVisita(cliente: cliente),
+              const SizedBox(height: 16),
+              _CardAgendamento(cliente: cliente),
               const SizedBox(height: 16),
               _CardResumoLlm(clienteId: id),
               const SizedBox(height: 24),
@@ -750,6 +753,121 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
 
   void _mostrarSnackBar(BuildContext context, String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+  }
+}
+
+/// Agendamento de visita sem check-in (OS-novas-implementacoes.md Bloco 5) -
+/// mostra os próximos agendamentos DESTE vendedor pra este cliente e
+/// permite criar um novo (data/hora). Quando o vendedor tem
+/// `permiteCheckinSemAgendamento = false` (configurado pelo admin/web,
+/// `Vendedor.permiteCheckinSemAgendamento`), o check-in em `_CardVisita`
+/// exige um agendamento pra hoje - esse card é onde ele cria esse
+/// agendamento antes.
+class _CardAgendamento extends ConsumerWidget {
+  const _CardAgendamento({required this.cliente});
+
+  final ClienteDetalhe cliente;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final agendamentos = ref.watch(agendamentosPorClienteProvider(cliente.id));
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Agendamento de visita',
+                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink),
+              ),
+              TextButton.icon(
+                onPressed: () => _agendar(context, ref),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Agendar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          agendamentos.when(
+            loading: () => const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+            error: (erro, _) => Text(
+              'Não foi possível carregar os agendamentos: $erro',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+            data: (lista) {
+              final futuros = lista.toList()
+                ..sort((a, b) => a.dataHoraPrevista.compareTo(b.dataHoraPrevista));
+              if (futuros.isEmpty) {
+                return const Text(
+                  'Nenhum agendamento registrado para este cliente.',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final agendamento in futuros)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_outlined, size: 14, color: AppColors.muted),
+                          const SizedBox(width: 6),
+                          Text(
+                            formatarDataHora(agendamento.dataHoraPrevista.toIso8601String()),
+                            style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _agendar(BuildContext context, WidgetRef ref) async {
+    final agora = DateTime.now();
+    final data = await showDatePicker(
+      context: context,
+      initialDate: agora,
+      firstDate: agora,
+      lastDate: agora.add(const Duration(days: 365)),
+    );
+    if (data == null || !context.mounted) return;
+
+    final hora = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (hora == null || !context.mounted) return;
+
+    final dataHora = DateTime(data.year, data.month, data.day, hora.hour, hora.minute);
+
+    try {
+      await ref
+          .read(agendamentosVisitaServiceProvider)
+          .criar(clienteId: cliente.id, dataHoraPrevista: dataHora);
+      ref.invalidate(agendamentosPorClienteProvider(cliente.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Agendamento criado.')));
+      }
+    } catch (erro) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Falha ao agendar: $erro')));
+      }
+    }
   }
 }
 

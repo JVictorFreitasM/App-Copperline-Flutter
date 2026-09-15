@@ -22,6 +22,10 @@ export interface VendedorListaDto {
   papel: PapelVendedor;
   supervisorId: string | null;
   supervisorNome: string | null;
+  // OS-novas-implementacoes.md Bloco 5 - default true em todo vendedor
+  // (ver comentario no schema.prisma) ate' um admin desligar
+  // explicitamente pra exigir agendamento previo de visita.
+  permiteCheckinSemAgendamento: boolean;
 }
 
 export interface AtualizarHierarquiaInput {
@@ -91,6 +95,7 @@ export class VendedoresHierarquiaService {
         papel: true,
         supervisorId: true,
         supervisor: { select: { nome: true } },
+        permiteCheckinSemAgendamento: true,
       },
     });
 
@@ -102,7 +107,32 @@ export class VendedoresHierarquiaService {
       papel: vendedor.papel,
       supervisorId: vendedor.supervisorId,
       supervisorNome: vendedor.supervisor?.nome ?? null,
+      permiteCheckinSemAgendamento: vendedor.permiteCheckinSemAgendamento,
     }));
+  }
+
+  // OS-novas-implementacoes.md Bloco 5 - toggle isolado (nao dentro de
+  // atualizar()/hierarquia, campo sem relacao nenhuma com papel/supervisor).
+  async atualizarPermiteCheckinSemAgendamento(
+    vendedorId: string,
+    permite: boolean,
+  ): Promise<VendedorHierarquiaDto> {
+    const vendedor = await this.prisma.vendedor.findUnique({ where: { id: vendedorId } });
+    if (!vendedor) {
+      throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado`);
+    }
+
+    const atualizado = await this.prisma.vendedor.update({
+      where: { id: vendedorId },
+      data: { permiteCheckinSemAgendamento: permite },
+    });
+
+    return {
+      id: atualizado.id,
+      nome: atualizado.nome,
+      papel: atualizado.papel,
+      supervisorId: atualizado.supervisorId,
+    };
   }
 
   async atualizar(

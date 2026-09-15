@@ -11,6 +11,10 @@ export interface VendedorListaDto {
   papel: PapelVendedor;
   supervisorId: string | null;
   supervisorNome: string | null;
+  // OS-novas-implementacoes.md Bloco 5 - default true em todo vendedor
+  // (ver schema.prisma) ate' um admin desligar explicitamente pra exigir
+  // agendamento previo de visita.
+  permiteCheckinSemAgendamento: boolean;
 }
 
 export interface AtualizarHierarquiaInput {

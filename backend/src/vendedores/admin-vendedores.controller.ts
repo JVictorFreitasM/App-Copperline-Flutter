@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AtualizarHierarquiaVendedorDto } from './dto/atualizar-hierarquia-vendedor.dto';
+import { AtualizarPermiteCheckinSemAgendamentoDto } from './dto/atualizar-permite-checkin-sem-agendamento.dto';
 import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
 import type { VendedorHierarquiaDto, VendedorListaDto } from './vendedores-hierarquia.service';
 
@@ -27,5 +28,19 @@ export class AdminVendedoresController {
     @Body() dto: AtualizarHierarquiaVendedorDto,
   ): Promise<VendedorHierarquiaDto> {
     return this.vendedoresHierarquiaService.atualizar(id, dto);
+  }
+
+  // OS-novas-implementacoes.md Bloco 5 - toggle "permitir check-in sem
+  // agendamento", mesmo controller/guard de :id/hierarquia (config
+  // administrativa de vendedor, mesmo criterio).
+  @Patch(':id/permite-checkin-sem-agendamento')
+  atualizarPermiteCheckinSemAgendamento(
+    @Param('id') id: string,
+    @Body() dto: AtualizarPermiteCheckinSemAgendamentoDto,
+  ): Promise<VendedorHierarquiaDto> {
+    return this.vendedoresHierarquiaService.atualizarPermiteCheckinSemAgendamento(
+      id,
+      dto.permiteCheckinSemAgendamento,
+    );
   }
 }

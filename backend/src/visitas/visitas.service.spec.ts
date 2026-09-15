@@ -68,6 +68,7 @@ function prismaFake(overrides: {
   visitasEquipe?: Record<string, unknown>[];
   totalVisitasEquipe?: number;
   visitaPorId?: Record<string, unknown> | null;
+  agendamentoHoje?: Record<string, unknown> | null;
 } = {}) {
   const tx = {
     visita: { update: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => visitaBruta(data)) },
@@ -79,7 +80,20 @@ function prismaFake(overrides: {
       findFirst: jest
         .fn()
         .mockResolvedValue(
-          'vendedor' in overrides ? overrides.vendedor : { id: 'vendedor-1', nome: 'Fulano' },
+          'vendedor' in overrides
+            ? overrides.vendedor
+            // permiteCheckinSemAgendamento:true - default de todo vendedor
+            // (OS-novas-implementacoes.md Bloco 5), preserva o
+            // comportamento testado aqui sem exigir agendamento pra cada
+            // teste que nao e' especificamente sobre essa feature.
+            : { id: 'vendedor-1', nome: 'Fulano', permiteCheckinSemAgendamento: true },
+        ),
+    },
+    agendamentoVisita: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(
+          'agendamentoHoje' in overrides ? overrides.agendamentoHoje : null,
         ),
     },
     cliente: {
@@ -284,6 +298,68 @@ describe('VisitasService.checkin', () => {
     );
     expect(resultado.temFoto).toBe(true);
     expect(resultado.checkoutEm).toBeNull();
+  });
+
+  // OS-novas-implementacoes.md Bloco 5 - "permitir check-in sem agendamento"
+  describe('com permiteCheckinSemAgendamento = false', () => {
+    it('bloqueia com UnprocessableEntityException quando nao ha agendamento pra hoje', async () => {
+      const prisma = prismaFake({
+        vendedor: { id: 'vendedor-1', nome: 'Fulano', permiteCheckinSemAgendamento: false },
+        agendamentoHoje: null,
+      });
+      const service = new VisitasService(
+        prisma as never,
+        fotoStorageFake() as never,
+        vendedorEscopoServiceFake() as never,
+      );
+
+      await expect(
+        service.checkin(
+          'u1',
+          { clienteId: 'cliente-1', latitude: -23.5505, longitude: -46.6333 },
+          FOTO_BUFFER,
+        ),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(prisma.visita.create).not.toHaveBeenCalled();
+    });
+
+    it('permite o check-in quando existe agendamento pra hoje, pro mesmo cliente', async () => {
+      const prisma = prismaFake({
+        vendedor: { id: 'vendedor-1', nome: 'Fulano', permiteCheckinSemAgendamento: false },
+        agendamentoHoje: { id: 'agendamento-1' },
+      });
+      const service = new VisitasService(
+        prisma as never,
+        fotoStorageFake() as never,
+        vendedorEscopoServiceFake() as never,
+      );
+
+      await service.checkin(
+        'u1',
+        { clienteId: 'cliente-1', latitude: -23.5505, longitude: -46.6333 },
+        FOTO_BUFFER,
+      );
+
+      expect(prisma.visita.create).toHaveBeenCalled();
+    });
+  });
+
+  it('permite o check-in sem checar agendamento quando permiteCheckinSemAgendamento e true (default)', async () => {
+    const prisma = prismaFake();
+    const service = new VisitasService(
+      prisma as never,
+      fotoStorageFake() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await service.checkin(
+      'u1',
+      { clienteId: 'cliente-1', latitude: -23.5505, longitude: -46.6333 },
+      FOTO_BUFFER,
+    );
+
+    expect(prisma.agendamentoVisita.findFirst).not.toHaveBeenCalled();
+    expect(prisma.visita.create).toHaveBeenCalled();
   });
 });
 

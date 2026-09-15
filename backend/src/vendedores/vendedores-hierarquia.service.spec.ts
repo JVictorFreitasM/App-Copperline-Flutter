@@ -30,6 +30,7 @@ function prismaFake(vendedores: Record<string, unknown>[]) {
           supervisor: linha.supervisorId
             ? { nome: linhas.get(linha.supervisorId as string)?.nome ?? null }
             : null,
+          permiteCheckinSemAgendamento: linha.permiteCheckinSemAgendamento ?? true,
         }));
       }),
       findUnique: jest.fn().mockImplementation(
@@ -53,6 +54,9 @@ function prismaFake(vendedores: Record<string, unknown>[]) {
             ...linha,
             ...(data.papel !== undefined ? { papel: data.papel } : {}),
             ...(data.supervisorId !== undefined ? { supervisorId: data.supervisorId } : {}),
+            ...(data.permiteCheckinSemAgendamento !== undefined
+              ? { permiteCheckinSemAgendamento: data.permiteCheckinSemAgendamento }
+              : {}),
           };
           linhas.set(id, atualizado);
           return atualizado;
@@ -81,6 +85,7 @@ describe('VendedoresHierarquiaService.listar', () => {
         papel: 'SUPERVISOR',
         supervisorId: null,
         supervisorNome: null,
+        permiteCheckinSemAgendamento: true,
       },
       {
         id: 'v1',
@@ -90,6 +95,7 @@ describe('VendedoresHierarquiaService.listar', () => {
         papel: 'VENDEDOR',
         supervisorId: 'sup1',
         supervisorNome: 'Ana Supervisora',
+        permiteCheckinSemAgendamento: true,
       },
     ]);
   });
@@ -220,5 +226,31 @@ describe('VendedoresHierarquiaService.listarEquipe', () => {
     const resultado = await service.listarEquipe(IDP_USER as never, 'u-sup');
 
     expect(resultado.map((v) => v.id).sort()).toEqual(['v1', 'v2']);
+  });
+});
+
+// OS-novas-implementacoes.md Bloco 5
+describe('VendedoresHierarquiaService.atualizarPermiteCheckinSemAgendamento', () => {
+  it('lanca NotFoundException quando o vendedor nao existe', async () => {
+    const prisma = prismaFake([]);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
+
+    await expect(
+      service.atualizarPermiteCheckinSemAgendamento('inexistente', false),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('desliga a flag (passa a exigir agendamento pra esse vendedor)', async () => {
+    const prisma = prismaFake([
+      { id: 'v1', nome: 'Beto', papel: 'VENDEDOR', supervisorId: null },
+    ]);
+    const service = new VendedoresHierarquiaService(prisma as never, vendedorEscopoServiceFake() as never);
+
+    await service.atualizarPermiteCheckinSemAgendamento('v1', false);
+
+    expect(prisma.vendedor.update).toHaveBeenCalledWith({
+      where: { id: 'v1' },
+      data: { permiteCheckinSemAgendamento: false },
+    });
   });
 });

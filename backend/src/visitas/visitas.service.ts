@@ -88,6 +88,7 @@ export class VisitasService {
     momentoOverride?: Date,
   ): Promise<VisitaDto> {
     const vendedor = await this.resolverVendedor(usuarioId);
+    const checkinEm = momentoOverride ?? new Date();
 
     // Check-in so pode ser feito num cliente que o PROPRIO vendedor atende
     // (nao a equipe inteira, mesmo que ele seja supervisor/gerente) -
@@ -122,6 +123,34 @@ export class VisitasService {
       );
     }
 
+    // OS-novas-implementacoes.md Bloco 5 - "permitir check-in sem
+    // agendamento". Default do vendedor e' TRUE (preserva o
+    // comportamento de sempre) - so quando um admin desliga essa flag
+    // PARA aquele vendedor especifico e' que passa a exigir um
+    // AgendamentoVisita previo, pro MESMO cliente, com dataHoraPrevista
+    // caindo no dia do check-in (mesmo raciocinio de "agenda do dia", ver
+    // AgendamentosVisitaService).
+    if (!vendedor.permiteCheckinSemAgendamento) {
+      const inicioDoDia = new Date(checkinEm);
+      inicioDoDia.setHours(0, 0, 0, 0);
+      const fimDoDia = new Date(checkinEm);
+      fimDoDia.setHours(23, 59, 59, 999);
+
+      const agendamentoHoje = await this.prisma.agendamentoVisita.findFirst({
+        where: {
+          clienteId: input.clienteId,
+          vendedorId: vendedor.id,
+          dataHoraPrevista: { gte: inicioDoDia, lte: fimDoDia },
+        },
+        select: { id: true },
+      });
+      if (!agendamentoHoje) {
+        throw new UnprocessableEntityException(
+          `Check-in em '${input.clienteId}' exige agendamento prévio para hoje - crie um via POST /agendamentos-visita, ou peça ao admin para habilitar check-in sem agendamento para este vendedor`,
+        );
+      }
+    }
+
     // Um vendedor so pode ter UMA visita aberta por vez (criterio de
     // aceite, decisao confirmada com o usuario) - bloqueia com erro claro
     // em vez de fechar a anterior sozinho. "Aberta" exclui cancelada (ver
@@ -137,7 +166,6 @@ export class VisitasService {
       );
     }
 
-    const checkinEm = momentoOverride ?? new Date();
     await this.validarFotoOuFalhar(fotoBuffer, checkinEm);
     const fotoCaminho = await this.fotoStorageService.salvar(fotoBuffer);
 

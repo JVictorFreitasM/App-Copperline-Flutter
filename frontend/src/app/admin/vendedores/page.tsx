@@ -7,6 +7,7 @@ import { Card } from "@/components/design/card";
 import { Badge } from "@/components/badge";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
 import { HierarquiaForm } from "./hierarquia-form";
+import { PermiteCheckinToggle } from "./permite-checkin-toggle";
 
 // Gestão de hierarquia de vendedores (OS-WEB-21) - consome GET/PATCH
 // admin/vendedores/* (o GET foi adicionado nesta OS, ver
@@ -71,6 +72,13 @@ export default async function AdminVendedoresPage() {
                   </summary>
                   <HierarquiaForm vendedor={vendedor} opcoesSupervisor={opcoesSupervisor} />
                 </details>
+
+                <div className="mt-3">
+                  <PermiteCheckinToggle
+                    vendedorId={vendedor.id}
+                    permiteInicial={vendedor.permiteCheckinSemAgendamento}
+                  />
+                </div>
               </Card>
             );
           })}

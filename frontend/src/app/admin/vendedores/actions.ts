@@ -53,3 +53,23 @@ export async function atualizarHierarquia(
   revalidatePath(ROTA);
   return { erro: null, sucesso: "Hierarquia atualizada." };
 }
+
+// OS-novas-implementacoes.md Bloco 5 - toggle isolado (checkbox, nao
+// select) - sem useActionState/estado de sucesso-erro visivel pra nao
+// duplicar a UI da hierarquia acima; o proprio checkbox marcado/desmarcado
+// apos o revalidatePath ja e' o feedback.
+export async function atualizarPermiteCheckinSemAgendamento(
+  vendedorId: string,
+  permite: boolean,
+): Promise<void> {
+  await adminApiFetch(
+    `/admin/vendedores/${encodeURIComponent(vendedorId)}/permite-checkin-sem-agendamento`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permiteCheckinSemAgendamento: permite }),
+      cache: "no-store",
+    },
+  );
+  revalidatePath(ROTA);
+}
