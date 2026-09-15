@@ -9,7 +9,12 @@ function configuracaoTabelaPrecoServiceFake(codigoSelecionado: string | null = '
   return { obterCodigoSelecionado: jest.fn().mockResolvedValue(codigoSelecionado) };
 }
 
-function prismaFake(overrides: { tabelaExistente?: { id: string } } = {}) {
+function prismaFake(
+  overrides: {
+    tabelaExistente?: { id: string };
+    codigosDeCliente?: { codigo: string }[];
+  } = {},
+) {
   const tabelaId = overrides.tabelaExistente?.id ?? 'tabela-1';
   const tx = {
     tabelaPreco: {
@@ -22,6 +27,9 @@ function prismaFake(overrides: { tabelaExistente?: { id: string } } = {}) {
   };
   return {
     tx,
+    clienteTabelaPreco: {
+      findMany: jest.fn().mockResolvedValue(overrides.codigosDeCliente ?? []),
+    },
     $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
   };
 }
@@ -79,6 +87,54 @@ describe('TabelaPrecoSyncStrategy', () => {
     expect(client.buscarTabelasPreco).not.toHaveBeenCalled();
     expect(resultado.registros).toEqual([]);
     expect(resultado.avisos).toHaveLength(1);
+  });
+
+  // OS-novas-implementacoes.md Bloco 1 - alem do global, sincroniza toda
+  // tabela associada a algum cliente (ClienteTabelaPreco).
+  it('fetch() tambem busca codigos associados a cliente, alem do global', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const prisma = prismaFake({ codigosDeCliente: [{ codigo: '205' }, { codigo: '310' }] });
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      prisma as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    await strategy.fetch(JANELA);
+
+    expect(client.buscarTabelasPreco).toHaveBeenCalledWith('110');
+    expect(client.buscarTabelasPreco).toHaveBeenCalledWith('205');
+    expect(client.buscarTabelasPreco).toHaveBeenCalledWith('310');
+    expect(client.buscarTabelasPreco).toHaveBeenCalledTimes(3);
+  });
+
+  it('fetch() nao duplica chamada quando o codigo global tambem esta associado a um cliente', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const prisma = prismaFake({ codigosDeCliente: [{ codigo: '110' }] });
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      prisma as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    await strategy.fetch(JANELA);
+
+    expect(client.buscarTabelasPreco).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetch() sincroniza codigos de cliente mesmo sem nenhum codigo global selecionado', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const prisma = prismaFake({ codigosDeCliente: [{ codigo: '205' }] });
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      prisma as never,
+      configuracaoTabelaPrecoServiceFake(null) as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(client.buscarTabelasPreco).toHaveBeenCalledWith('205');
+    expect(resultado.registros).toHaveLength(1);
   });
 
   it('map() converte valores BR (numero e data) corretamente', () => {

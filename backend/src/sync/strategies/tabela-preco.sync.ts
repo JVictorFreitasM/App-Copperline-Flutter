@@ -61,19 +61,43 @@ export class TabelaPrecoSyncStrategy
     private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
   ) {}
 
+  // OS-novas-implementacoes.md Bloco 1 - alem do codigo global
+  // (ConfiguracaoTabelaPrecoService, comportamento original), agora
+  // tambem acompanha toda tabela associada a algum cliente
+  // (ClienteTabelaPreco) - decisao confirmada com o usuario: sincronizar N
+  // tabelas em sequencia (~15s cada) e' aceitavel. Cada codigo busca numa
+  // chamada separada (a API so aceita um `Codigo` por vez no filtro, ver
+  // empresarial-svc-client) - sem chamada nenhuma se nao houver codigo
+  // algum configurado (nem global, nem por cliente).
   async fetch(_janela: SyncWindow): Promise<SyncFetchResultado<TabelaPrecoBruta>> {
-    const codigo = await this.configuracaoTabelaPrecoService.obterCodigoSelecionado();
-    if (!codigo) {
+    const codigos = await this.obterCodigosParaSincronizar();
+    if (codigos.length === 0) {
       return {
         registros: [],
         avisos: [
-          'Nenhuma tabela de preco selecionada - configure via PATCH /admin/tabelas-preco/configuracao antes de sincronizar.',
+          'Nenhuma tabela de preco selecionada (nem global, nem associada a cliente) - configure via PATCH /admin/tabelas-preco/configuracao ou POST /admin/clientes/:clienteId/tabelas-preco antes de sincronizar.',
         ],
       };
     }
 
-    const registros = await this.empresarialSvcClient.buscarTabelasPreco(codigo);
+    const registros: TabelaPrecoBruta[] = [];
+    for (const codigo of codigos) {
+      registros.push(...(await this.empresarialSvcClient.buscarTabelasPreco(codigo)));
+    }
     return { registros, avisos: [] };
+  }
+
+  private async obterCodigosParaSincronizar(): Promise<string[]> {
+    const codigoGlobal = await this.configuracaoTabelaPrecoService.obterCodigoSelecionado();
+    const codigosDeCliente = await this.prisma.clienteTabelaPreco.findMany({
+      select: { codigo: true },
+      distinct: ['codigo'],
+    });
+
+    const codigos = new Set<string>();
+    if (codigoGlobal) codigos.add(codigoGlobal);
+    for (const associacao of codigosDeCliente) codigos.add(associacao.codigo);
+    return [...codigos];
   }
 
   map(bruto: TabelaPrecoBruta): TabelaPrecoMapeada {
