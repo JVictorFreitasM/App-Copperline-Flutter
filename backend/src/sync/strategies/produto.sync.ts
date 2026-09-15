@@ -38,6 +38,10 @@ const CAMPOS_PRODUTO = [
   'complemento.gtin',
   'dimensoes.comprimento',
   'dimensoes.unidadeMedidaComprimento',
+  'pesoLiquido',
+  'unidadeMedidaPesoLiquido',
+  'pesoBruto',
+  'unidadeMedidaPesoBruto',
 ];
 
 // Valor do enum unidadeMedidaComprimento que consideramos "metro" (OS-BACKEND-24)
@@ -46,6 +50,13 @@ const CAMPOS_PRODUTO = [
 // (incluindo null/undefined) faz comprimentoMetros ficar null - fail-safe,
 // nunca assume metro por omissao.
 const UNIDADE_MEDIDA_METRO = 'Metro';
+
+// Valor do enum unidadeMedidaPesoLiquido/unidadeMedidaPesoBruto que
+// consideramos "kg" (OS-novas-implementacoes.md Bloco 3) - confirmado
+// empiricamente contra o ambiente real (valores observados:
+// "Nenhum"/"kg"). Mesmo criterio fail-safe de UNIDADE_MEDIDA_METRO acima -
+// qualquer unidade diferente fica null.
+const UNIDADE_MEDIDA_KG = 'kg';
 
 const MAPA_TIPO: Record<TipoProdutoWkRadar, TipoProduto> = {
   Invalido: 'INVALIDO',
@@ -141,6 +152,14 @@ export class ProdutoSyncStrategy implements SyncStrategy<
         bruto.dimensoes?.unidadeMedidaComprimento === UNIDADE_MEDIDA_METRO
           ? (bruto.dimensoes?.comprimento ?? null)
           : null,
+      pesoLiquidoKg:
+        bruto.unidadeMedidaPesoLiquido === UNIDADE_MEDIDA_KG
+          ? (bruto.pesoLiquido ?? null)
+          : null,
+      pesoBrutoKg:
+        bruto.unidadeMedidaPesoBruto === UNIDADE_MEDIDA_KG
+          ? (bruto.pesoBruto ?? null)
+          : null,
     };
   }
 
@@ -167,6 +186,8 @@ export class ProdutoSyncStrategy implements SyncStrategy<
       idGrade3: mapeado.idGrade3,
       referenciasGrade,
       comprimentoMetros: mapeado.comprimentoMetros,
+      pesoLiquidoKg: mapeado.pesoLiquidoKg,
+      pesoBrutoKg: mapeado.pesoBrutoKg,
       incompleto: false,
       sincronizadoEm,
     };

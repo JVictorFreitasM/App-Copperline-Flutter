@@ -43,6 +43,8 @@ describe('ProdutoSyncStrategy.map', () => {
       idGrade3: null,
       referenciasGrade: [],
       comprimentoMetros: null,
+      pesoLiquidoKg: null,
+      pesoBrutoKg: null,
     });
   });
 
@@ -64,6 +66,38 @@ describe('ProdutoSyncStrategy.map', () => {
     };
 
     expect(strategy.map(bruto).comprimentoMetros).toBeNull();
+  });
+
+  it('mapeia pesoLiquidoKg/pesoBrutoKg quando a unidade e "kg"', () => {
+    const bruto: WkRadarProduto = {
+      id: '456',
+      inativo: false,
+      pesoLiquido: 20,
+      unidadeMedidaPesoLiquido: 'kg',
+      pesoBruto: 22.5,
+      unidadeMedidaPesoBruto: 'kg',
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.pesoLiquidoKg).toBe(20);
+    expect(mapeado.pesoBrutoKg).toBe(22.5);
+  });
+
+  it('NAO mapeia pesoLiquidoKg/pesoBrutoKg quando a unidade nao e "kg" (fail-safe)', () => {
+    const bruto: WkRadarProduto = {
+      id: '456',
+      inativo: false,
+      pesoLiquido: 20,
+      unidadeMedidaPesoLiquido: 'Nenhum',
+      pesoBruto: 22.5,
+      unidadeMedidaPesoBruto: 'Nenhum',
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.pesoLiquidoKg).toBeNull();
+    expect(mapeado.pesoBrutoKg).toBeNull();
   });
 
   it('preserva referenciasGrade sem transformar em linhas proprias (decisao desta OS)', () => {

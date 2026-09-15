@@ -44,6 +44,15 @@ export interface WkRadarProduto {
   referenciasGrade?: WkRadarProdutoReferenciaGrade[] | null;
   complemento?: WkRadarProdutoComplemento | null;
   dimensoes?: WkRadarProdutoDimensoes | null;
+  // pesoLiquido/pesoBruto (OS-novas-implementacoes.md Bloco 3) - campos de
+  // NIVEL SUPERIOR no payload real do Radar (confirmado empiricamente,
+  // GET /empresarial/v1/produto com Fields[] - NAO ficam dentro de
+  // `dimensoes`, ao contrario de comprimento). unidadeMedidaPeso* e' o
+  // enum irmao de cada um (valores observados: "Nenhum"/"kg").
+  pesoLiquido?: number | null;
+  unidadeMedidaPesoLiquido?: string | null;
+  pesoBruto?: number | null;
+  unidadeMedidaPesoBruto?: string | null;
 }
 
 export interface ProdutoMapeado {
@@ -61,4 +70,6 @@ export interface ProdutoMapeado {
   idGrade3: string | null;
   referenciasGrade: WkRadarProdutoReferenciaGrade[];
   comprimentoMetros: number | null;
+  pesoLiquidoKg: number | null;
+  pesoBrutoKg: number | null;
 }
