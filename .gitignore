@@ -17,3 +17,7 @@ CLAUDE.md
 /frontend/dist/
 /frontend/AGENTS.md
 /frontend/CLAUDE.md
+
+# Documentos de OS (rascunhos/pendencias de trabalho) - uso interno,
+# nao versionado a partir de agora (pedido do usuario).
+/OS-*.md
