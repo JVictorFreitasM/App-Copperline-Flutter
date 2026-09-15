@@ -18,17 +18,23 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   idGrade2: string | null;
   idGrade3: string | null;
   referenciasGrade: unknown;
-  // tipoVenda/comprimentoMetros (OS-BACKEND-24) expostos aqui pra
-  // OS-WEB-22 poder mostrar o badge POC/RET/KM e o contexto de por que uma
-  // simulação (POST /:id/calcular) falhou (ex: "sem tipoVenda
-  // configurado") - ainda sem regra de classificação automática definida
-  // (ver PENDENCIA em schema.prisma), então normalmente vem null hoje.
+  // tipoVenda (OS-BACKEND-24): campo legado, NAO usado mais pelo calculo
+  // de quantidade (ver OS-novas-implementacoes.md Bloco 4, revisao) - a
+  // regra POC/RET/KM nunca foi definida e o campo sempre vem null na
+  // pratica; quem decide o bloqueio hoje e' tipoAcondicionamento.tamanhoPadrao.
+  // Mantido exposto so' por retrocompatibilidade, sem uso funcional.
   tipoVenda: string | null;
   comprimentoMetros: string | null;
   // Nao vem do WK Radar (dado proprio, editavel via PATCH
   // /admin/produtos/:id) - ver comentario no schema.prisma.
   precoFabricacao: string | null;
   temImagem: boolean;
+  tipoAcondicionamentoId: string | null;
+  // OS-novas-implementacoes.md Bloco 3 - vem do WK Radar (só confiável
+  // quando a unidade sincronizada é "kg", ver UNIDADE_MEDIDA_KG em
+  // produto.sync.ts); null quando o ERP não informa peso pra este produto.
+  pesoLiquidoKg: string | null;
+  pesoBrutoKg: string | null;
 }
 
 // precoTabela (pedido do usuario: "coloque o preço de venda vindo da
@@ -70,5 +76,8 @@ export function paraProdutoDetalheDto(
     comprimentoMetros: produto.comprimentoMetros?.toString() ?? null,
     precoFabricacao: produto.precoFabricacao?.toString() ?? null,
     temImagem: produto.imagemCaminho !== null,
+    tipoAcondicionamentoId: produto.tipoAcondicionamentoId,
+    pesoLiquidoKg: produto.pesoLiquidoKg?.toString() ?? null,
+    pesoBrutoKg: produto.pesoBrutoKg?.toString() ?? null,
   };
 }

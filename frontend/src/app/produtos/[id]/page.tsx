@@ -2,14 +2,17 @@ import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import { rotuloTipoProduto, rotuloTipoVenda, type ProdutoDetalheDto } from "@/lib/produtos";
-import { formatarMoeda } from "@/lib/formatacao";
+import type { TipoAcondicionamentoDto } from "@/lib/tipos-acondicionamento";
+import { formatarMoeda, formatarPeso } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
 import { SecondaryButton } from "@/components/design/button";
 import { EditarPrecoFabricacaoForm } from "./editar-preco-fabricacao-form";
+import { EditarTipoAcondicionamentoForm } from "./editar-tipo-acondicionamento-form";
 import { EnviarImagemForm } from "./enviar-imagem-form";
+import { PrecosPorTabela } from "./precos-por-tabela";
 import { SimularCalculo } from "./simular-calculo";
 
 // Tela de detalhe do produto (OS-WEB-15) - mostra o que a listagem não
@@ -29,6 +32,7 @@ export default async function ProdutoDetalhePage({
   let produto: ProdutoDetalheDto | null = null;
   let naoEncontrado = false;
   let erro: string | null = null;
+  let tiposAcondicionamento: TipoAcondicionamentoDto[] = [];
 
   try {
     produto = await apiFetch<ProdutoDetalheDto>(`/produtos/${encodeURIComponent(id)}`, {
@@ -39,6 +43,21 @@ export default async function ProdutoDetalhePage({
       naoEncontrado = true;
     } else {
       erro = error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
+    }
+  }
+
+  // So busca o catalogo (leitura aberta, GET /tipos-acondicionamento) se o
+  // produto existe e quem esta vendo e admin (unico papel que edita) - sem
+  // gastar essa chamada a toa pro vendedor comum, que so le a tela.
+  if (produto && usuario.role === "admin") {
+    try {
+      tiposAcondicionamento = await apiFetch<TipoAcondicionamentoDto[]>(
+        "/tipos-acondicionamento",
+        { cache: "no-store" },
+      );
+    } catch {
+      // Falha aqui nao derruba a tela inteira - so o seletor fica sem
+      // opcoes (usuario ve erro claro se tentar salvar mesmo assim).
     }
   }
 
@@ -112,6 +131,17 @@ export default async function ProdutoDetalhePage({
                   {formatarMoeda(produto.precoFabricacao)}
                 </p>
               )}
+              {produto.pesoLiquidoKg && (
+                <p>
+                  <span className="font-medium">Peso líquido:</span>{" "}
+                  {formatarPeso(produto.pesoLiquidoKg)}
+                </p>
+              )}
+              {produto.pesoBrutoKg && (
+                <p>
+                  <span className="font-medium">Peso bruto:</span> {formatarPeso(produto.pesoBrutoKg)}
+                </p>
+              )}
             </Card>
 
             {usuario.role === "admin" && (
@@ -123,11 +153,18 @@ export default async function ProdutoDetalhePage({
                   produtoId={produto.id}
                   valorAtual={produto.precoFabricacao}
                 />
+                <EditarTipoAcondicionamentoForm
+                  produtoId={produto.id}
+                  tipoAtualId={produto.tipoAcondicionamentoId}
+                  opcoes={tiposAcondicionamento}
+                />
                 <EnviarImagemForm produtoId={produto.id} />
               </Card>
             )}
 
             <SimularCalculo produtoId={produto.id} />
+
+            <PrecosPorTabela produtoId={produto.id} />
 
             {(produto.idGrade1 || produto.idGrade2 || produto.idGrade3) && (
               <Card className="text-sm text-ink">

@@ -83,6 +83,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
                 icone: <IconeEscudo />,
               },
               { href: "/admin/vendedores", rotulo: "Vendedores", icone: <IconePessoas /> },
+              {
+                href: "/admin/tipos-acondicionamento",
+                rotulo: "Tipos de acondicionamento",
+                icone: <IconeCamadas />,
+              },
               { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
               {
                 href: "/admin/importar-swagger",

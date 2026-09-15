@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { ProdutoDetalheDto, ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
+import type { EstadoEdicaoManual } from "./estado-edicao-manual";
 
 // Estado do useActionState no Client Component (simular-calculo.tsx) -
 // mesmo padrão de ResultadoConsultaEstoque (estoque/actions.ts): um
@@ -30,13 +31,24 @@ export async function simularCalculo(
     return { status: "invalido", mensagem: "Informe um valor de metros maior que zero." };
   }
 
+  // codigoTabela/percentualDesconto opcionais (OS-novas-implementacoes.md
+  // Bloco 1) - campo vazio nunca vira string vazia no body, senão o
+  // backend trataria "" como um código de tabela de verdade.
+  const codigoTabelaRaw = String(formData.get("codigoTabela") ?? "").trim();
+  const percentualDescontoRaw = String(formData.get("percentualDesconto") ?? "").trim();
+  const percentualDesconto = percentualDescontoRaw ? Number(percentualDescontoRaw) : undefined;
+
   try {
     const resultado = await apiFetch<ResultadoCalculoQuantidadeDto>(
       `/produtos/${encodeURIComponent(produtoId)}/calcular`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metrosDesejados }),
+        body: JSON.stringify({
+          metrosDesejados,
+          ...(codigoTabelaRaw && { codigoTabela: codigoTabelaRaw }),
+          ...(percentualDesconto !== undefined && { percentualDesconto }),
+        }),
         cache: "no-store",
       },
     );
@@ -59,12 +71,8 @@ export async function simularCalculo(
 // usuario) - editaveis so por admin, via PATCH/POST /admin/produtos/:id
 // (backend ja valida role admin via requireRole, ver produtos.module.ts;
 // aqui e' so' a chamada, sem checagem de role duplicada no front).
-export interface EstadoEdicaoManual {
-  erro: string | null;
-  sucesso: string | null;
-}
-
-export const ESTADO_EDICAO_MANUAL_INICIAL: EstadoEdicaoManual = { erro: null, sucesso: null };
+// Tipo/estado inicial ficam em ./estado-edicao-manual.ts (não aqui - um
+// arquivo "use server" só pode exportar funções async).
 
 export async function atualizarPrecoFabricacao(
   produtoId: string,
@@ -93,6 +101,35 @@ export async function atualizarPrecoFabricacao(
 
   revalidatePath(`/produtos/${produtoId}`);
   return { erro: null, sucesso: "Preço de fabricação atualizado." };
+}
+
+// OS-novas-implementacoes.md Bloco 4 - mesmo endpoint de
+// atualizarPrecoFabricacao (PATCH /admin/produtos/:id aceita os dois
+// campos independentemente, ver AtualizarProdutoManualDto no backend),
+// formulário separado só pra não misturar dois conceitos numa mesma tela.
+export async function atualizarTipoAcondicionamento(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const valor = String(formData.get("tipoAcondicionamentoId") ?? "").trim();
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipoAcondicionamentoId: valor || null }),
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath(`/produtos/${produtoId}`);
+  return { erro: null, sucesso: "Tipo de acondicionamento atualizado." };
 }
 
 export async function enviarImagemProduto(

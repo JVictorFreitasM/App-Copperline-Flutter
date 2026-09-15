@@ -37,6 +37,15 @@ interface ItemCalculado extends ResultadoCalculoQuantidade {
   produtoId: string;
 }
 
+// Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - null quando
+// QUALQUER item tem produto sem peso cadastrado (nunca expor um total
+// parcial como se fosse completo). Liquido e bruto calculados de forma
+// independente - um pode faltar sem derrubar o outro.
+interface PesoTotalPedido {
+  pesoLiquidoTotalKg: number | null;
+  pesoBrutoTotalKg: number | null;
+}
+
 // Orquestra os pedaços já construídos em OS's anteriores (nunca reimplementa
 // nenhuma das regras): escopo de cliente por vendedor (OS-BACKEND-23,
 // VendedorEscopoService), cálculo por tipo de venda (OS-BACKEND-24,
@@ -81,7 +90,17 @@ export class CriarPedidoService {
         item.produtoId,
         item.metrosDesejados,
       );
-      itensCalculados.push({ produtoId: item.produtoId, ...calculo });
+      // ProdutoCalculoService devolve valorFinal (OS-novas-implementacoes.md
+      // Bloco 1, ja com desconto POR ITEM opcional aplicado - nao usado
+      // aqui, POST /pedidos aplica o desconto uma vez sobre o SUBTOTAL do
+      // pedido inteiro, ver mais abaixo) - mapeado pro shape interno
+      // ItemCalculado.valorTotal, que o resto deste service ja consome.
+      itensCalculados.push({
+        produtoId: item.produtoId,
+        quantidade: calculo.quantidade,
+        unidade: calculo.unidade,
+        valorTotal: calculo.valorFinal,
+      });
     }
 
     const subtotal = itensCalculados.reduce(
@@ -91,6 +110,7 @@ export class CriarPedidoService {
     const valorComDesconto = arredondarMoeda(
       subtotal * (1 - input.percentualDesconto / 100),
     );
+    const pesoTotal = await this.calcularPesoTotal(itensCalculados);
 
     // pedidoId:null - ainda nao criamos o Pedido local (so criamos DEPOIS
     // de decidir o caminho, ver comentario da classe). Se necessitar
@@ -114,6 +134,7 @@ export class CriarPedidoService {
         cliente.id,
         input.percentualDesconto,
         valorComDesconto,
+        pesoTotal,
         itensCalculados,
         resultadoErp,
         usuarioId,
@@ -132,6 +153,7 @@ export class CriarPedidoService {
       cliente.id,
       input.percentualDesconto,
       valorComDesconto,
+      pesoTotal,
       itensCalculados,
       avaliacao.solicitacao.id,
       usuarioId,
@@ -164,6 +186,43 @@ export class CriarPedidoService {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
     }
     return cliente;
+  }
+
+  // OS-novas-implementacoes.md Bloco 3 - soma peso por item
+  // (Produto.pesoLiquidoKg/pesoBrutoKg * quantidade calculada, NAO os
+  // metros pedidos - decisao confirmada com o usuario: peso e' da
+  // peca/unidade de venda, nao uma taxa por metro). null quando QUALQUER
+  // item tem produto sem peso cadastrado.
+  private async calcularPesoTotal(itens: ItemCalculado[]): Promise<PesoTotalPedido> {
+    const produtos = await this.prisma.produto.findMany({
+      where: { id: { in: itens.map((item) => item.produtoId) } },
+      select: { id: true, pesoLiquidoKg: true, pesoBrutoKg: true },
+    });
+    const pesoPorProduto = new Map(produtos.map((p) => [p.id, p]));
+
+    let somaLiquido = 0;
+    let somaBruto = 0;
+    let liquidoCompleto = true;
+    let brutoCompleto = true;
+
+    for (const item of itens) {
+      const produto = pesoPorProduto.get(item.produtoId);
+      if (produto?.pesoLiquidoKg != null) {
+        somaLiquido += Number(produto.pesoLiquidoKg) * item.quantidade;
+      } else {
+        liquidoCompleto = false;
+      }
+      if (produto?.pesoBrutoKg != null) {
+        somaBruto += Number(produto.pesoBrutoKg) * item.quantidade;
+      } else {
+        brutoCompleto = false;
+      }
+    }
+
+    return {
+      pesoLiquidoTotalKg: liquidoCompleto ? arredondarPeso(somaLiquido) : null,
+      pesoBrutoTotalKg: brutoCompleto ? arredondarPeso(somaBruto) : null,
+    };
   }
 
   // ANTES de qualquer escrita local, de proposito (ver comentario da
@@ -199,6 +258,7 @@ export class CriarPedidoService {
     clienteId: string,
     percentualDescontoSolicitado: number,
     valorTotal: number,
+    pesoTotal: PesoTotalPedido,
     itens: ItemCalculado[],
     resultadoErp: { idExterno: string; codigoIntegrador: string },
     usuarioId: string,
@@ -213,6 +273,8 @@ export class CriarPedidoService {
           vendedorId,
           percentualDescontoSolicitado,
           valorTotal,
+          pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
+          pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
           statusLocal: 'ENVIADO',
           incompleto: false,
           sincronizadoEm,
@@ -238,6 +300,7 @@ export class CriarPedidoService {
     clienteId: string,
     percentualDescontoSolicitado: number,
     valorTotal: number,
+    pesoTotal: PesoTotalPedido,
     itens: ItemCalculado[],
     solicitacaoDescontoId: string,
     usuarioId: string,
@@ -250,6 +313,8 @@ export class CriarPedidoService {
           vendedorId,
           percentualDescontoSolicitado,
           valorTotal,
+          pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
+          pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
           statusLocal: 'AGUARDANDO_APROVACAO',
           incompleto: false,
           sincronizadoEm,
@@ -296,4 +361,8 @@ async function criarItensPedido(
 
 function arredondarMoeda(valor: number): number {
   return Math.round(valor * 100) / 100;
+}
+
+function arredondarPeso(valor: number): number {
+  return Math.round(valor * 1000) / 1000;
 }

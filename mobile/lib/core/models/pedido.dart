@@ -107,6 +107,8 @@ class PedidoDetalhe extends PedidoResumo {
     required super.valorTotal,
     required super.cliente,
     required this.itens,
+    required this.pesoLiquidoTotalKg,
+    required this.pesoBrutoTotalKg,
   });
 
   factory PedidoDetalhe.fromJson(Map<String, dynamic> json) {
@@ -122,10 +124,17 @@ class PedidoDetalhe extends PedidoResumo {
           .cast<Map<String, dynamic>>()
           .map(PedidoItem.fromJson)
           .toList(),
+      pesoLiquidoTotalKg: json['pesoLiquidoTotalKg'] as String?,
+      pesoBrutoTotalKg: json['pesoBrutoTotalKg'] as String?,
     );
   }
 
   final List<PedidoItem> itens;
+  // OS-novas-implementacoes.md Bloco 3 - null quando algum item do pedido
+  // não tem peso cadastrado (mesmo critério "tudo ou nada" do backend,
+  // CriarPedidoService.calcularPesoTotal).
+  final String? pesoLiquidoTotalKg;
+  final String? pesoBrutoTotalKg;
 }
 
 class ConfigSituacao {

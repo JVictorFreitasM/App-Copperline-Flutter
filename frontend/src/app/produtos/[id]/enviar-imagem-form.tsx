@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
-import { enviarImagemProduto, ESTADO_EDICAO_MANUAL_INICIAL } from "./actions";
+import { enviarImagemProduto } from "./actions";
+import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-edicao-manual";
 
 // Admin-only (checagem real no backend) - web apenas, pedido do usuário
 // ("deixe um campo separado pra podermos upar imagem do produto - apenas

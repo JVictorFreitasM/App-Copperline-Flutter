@@ -6,6 +6,7 @@ import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { VendedoresModule } from '../vendedores/vendedores.module';
 import { AdminProdutosController } from './admin-produtos.controller';
 import { ProdutoCalculoService } from './produto-calculo.service';
 import { ProdutoImagemStorageService } from './produto-imagem-storage.service';
@@ -19,7 +20,7 @@ import { ProdutosService } from './produtos.service';
   // favoritos em ProdutosController (ver comentario la - ficaram aqui em
   // vez de num controller proprio pra garantir a ordem de match de rota
   // contra GET /produtos/:id, ver OS-BACKEND-19).
-  imports: [PrismaModule, NotificacoesModule, UsuariosModule, TabelasPrecoModule],
+  imports: [PrismaModule, NotificacoesModule, UsuariosModule, TabelasPrecoModule, VendedoresModule],
   controllers: [ProdutosController, AdminProdutosController],
   providers: [
     ProdutosService,

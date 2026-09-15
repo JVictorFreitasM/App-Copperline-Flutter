@@ -24,6 +24,15 @@ String formatarDataHora(String? valorIso) {
   return DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(data.toLocal());
 }
 
+// OS-novas-implementacoes.md Bloco 3 - peso total do pedido (Decimal do
+// Prisma chega como string, mesmo padrão de formatarMoeda acima).
+String formatarPeso(String? valorKg) {
+  if (valorKg == null) return '—';
+  final numero = double.tryParse(valorKg);
+  if (numero == null) return '—';
+  return '${NumberFormat.decimalPattern('pt_BR').format(numero)} kg';
+}
+
 // OS-MOBILE-34 (aba de documentos) - tamanho em bytes vindo da API vira
 // KB/MB legível.
 String formatarTamanhoArquivo(int bytes) {

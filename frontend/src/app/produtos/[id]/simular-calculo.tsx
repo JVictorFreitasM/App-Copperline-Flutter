@@ -44,6 +44,26 @@ export function SimularCalculo({ produtoId }: { produtoId: string }) {
             className="w-40 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
           />
         </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+          Código da tabela (opcional)
+          <input
+            type="text"
+            name="codigoTabela"
+            placeholder="ex: 110"
+            className="w-32 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+          Desconto % (opcional)
+          <input
+            type="number"
+            name="percentualDesconto"
+            step="0.01"
+            min="0"
+            max="100"
+            className="w-28 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+          />
+        </label>
         <PrimaryButton type="submit" disabled={pending}>
           {pending ? "Calculando..." : "Simular"}
         </PrimaryButton>
@@ -65,7 +85,16 @@ export function SimularCalculo({ produtoId }: { produtoId: string }) {
             {estado.resultado.quantidade} {rotuloUnidadeCalculo(estado.resultado.unidade)}
           </p>
           <p className="text-sm text-muted">
-            Valor total: {formatarMoeda(String(estado.resultado.valorTotal))}
+            Valor unitário: {formatarMoeda(String(estado.resultado.valorUnitario))}
+          </p>
+          <p className="text-sm text-muted">
+            Valor final: {formatarMoeda(String(estado.resultado.valorFinal))}
+          </p>
+          <p className="text-sm text-muted">
+            Margem de lucro:{" "}
+            {estado.resultado.margemLucro !== null
+              ? `${estado.resultado.margemLucro}%`
+              : "indisponível"}
           </p>
         </div>
       )}

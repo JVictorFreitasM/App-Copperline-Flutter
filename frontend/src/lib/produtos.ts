@@ -33,6 +33,13 @@ export interface ProdutoDetalheDto extends ProdutoResumoDto {
   // /admin/produtos/:id e POST /admin/produtos/:id/imagem, so' web).
   precoFabricacao: string | null;
   temImagem: boolean;
+  // OS-novas-implementacoes.md Bloco 4 - catalogo proprio (nao vem do
+  // Radar), editavel via PATCH /admin/produtos/:id.
+  tipoAcondicionamentoId: string | null;
+  // OS-novas-implementacoes.md Bloco 3 - vem do WK Radar, null quando o
+  // ERP nao informa peso pra este produto.
+  pesoLiquidoKg: string | null;
+  pesoBrutoKg: string | null;
 }
 
 // Enum TipoVendaProduto do backend (schema.prisma) - usado por
@@ -73,10 +80,16 @@ export function rotuloUnidadeCalculo(unidade: UnidadeCalculo): string {
 // o front NUNCA recalcula isso, só formata o que o backend devolveu
 // (critério de aceite da OS-WEB-22: "mesma fonte de verdade, sem duplicar
 // lógica no front").
+// valorFinal/margemLucro (OS-novas-implementacoes.md Bloco 1) -
+// margemLucro fica sempre null por enquanto (formula pendente de
+// confirmacao, ver OS-pendentes-claude-code.md) - front trata como
+// "indisponivel", nunca inventa um numero se vier null.
 export interface ResultadoCalculoQuantidadeDto {
   quantidade: number;
   unidade: UnidadeCalculo;
-  valorTotal: number;
+  valorUnitario: number;
+  valorFinal: number;
+  margemLucro: number | null;
 }
 
 // Valores possíveis vêm do enum TipoProduto do backend (schema.prisma) -

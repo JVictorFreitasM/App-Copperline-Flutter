@@ -30,6 +30,7 @@ import { CoberturasModule } from './coberturas/coberturas.module';
 import { MetasModule } from './metas/metas.module';
 import { OportunidadesModule } from './oportunidades/oportunidades.module';
 import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
+import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acondicionamento.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
     OportunidadesModule,
     CoberturasModule,
     TabelasPrecoModule,
+    TiposAcondicionamentoModule,
   ],
 })
 export class AppModule {}

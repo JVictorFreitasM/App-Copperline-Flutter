@@ -68,6 +68,48 @@ class PedidoDetalheScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                // OS-novas-implementacoes.md Bloco 3 - null quando algum item
+                // não tem peso cadastrado (ver PedidoDetalhe.pesoLiquidoTotalKg);
+                // card some inteiro nesse caso em vez de mostrar "—" enganoso.
+                if (pedido.pesoLiquidoTotalKg != null || pedido.pesoBrutoTotalKg != null) ...[
+                  const SizedBox(height: 16),
+                  AppCard(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Peso líquido', style: TextStyle(color: AppColors.muted)),
+                              Text(
+                                formatarPeso(pedido.pesoLiquidoTotalKg),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Peso bruto', style: TextStyle(color: AppColors.muted)),
+                              Text(
+                                formatarPeso(pedido.pesoBrutoTotalKg),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Text('Itens', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),

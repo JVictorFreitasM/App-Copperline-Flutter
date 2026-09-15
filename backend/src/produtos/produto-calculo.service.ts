@@ -8,11 +8,26 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import {
   calcularQuantidadePedido,
-  ComprimentoNaoConfiguradoError,
   QuantidadeNaoFechaEmUnidadeError,
-  TipoVendaNaoConfiguradoError,
 } from './domain/calculo-quantidade-pedido';
-import type { ResultadoCalculoQuantidade } from './domain/calculo-quantidade-pedido';
+import type { UnidadeCalculo } from './domain/calculo-quantidade-pedido';
+
+export interface OpcoesCalculo {
+  codigoTabela?: string;
+  percentualDesconto?: number;
+}
+
+// OS-novas-implementacoes.md Bloco 1 - valorFinal e' valorTotal (base) com
+// percentualDesconto aplicado (igual a valorTotal quando sem desconto).
+// margemLucro fica SEMPRE null por enquanto - formula pendente de
+// confirmacao (ver OS-pendentes-claude-code.md), nunca inventada.
+export interface ResultadoCalculoComPreco {
+  quantidade: number;
+  unidade: UnidadeCalculo;
+  valorUnitario: number;
+  valorFinal: number;
+  margemLucro: number | null;
+}
 
 // Orquestra a funcao de dominio (calcularQuantidadePedido, ver
 // domain/calculo-quantidade-pedido.ts) com Prisma - a funcao decide, este
@@ -28,45 +43,48 @@ export class ProdutoCalculoService {
   async calcular(
     produtoId: string,
     metrosDesejados: number,
-  ): Promise<ResultadoCalculoQuantidade> {
+    opcoes: OpcoesCalculo = {},
+  ): Promise<ResultadoCalculoComPreco> {
     const produto = await this.prisma.produto.findUnique({
       where: { id: produtoId },
+      include: { tipoAcondicionamento: true },
     });
     if (!produto) {
       throw new NotFoundException(`Produto '${produtoId}' não encontrado`);
     }
 
-    // Mesma fonte de preco usada na exibicao (pedido do usuario: "coloque
-    // o preço de venda vindo da tabela no preço do produto") - a tabela
-    // padrao, quando tem item pra este codigo, é o preço usado no
-    // calculo; sem ela, cai pro precoVenda cru sincronizado.
-    const precoTabela = produto.codigo
-      ? await this.precoProdutoService.obterPrecoPorCodigo(produto.codigo)
-      : null;
-    const precoVenda = precoTabela ? Number(precoTabela) : produto.precoVenda?.toNumber();
-
-    if (precoVenda === null || precoVenda === undefined) {
+    const precoVenda = await this.resolverPrecoVenda(produto, opcoes.codigoTabela);
+    if (precoVenda === null) {
       throw new UnprocessableEntityException(
-        `Produto '${produtoId}' sem preço de venda cadastrado - não é possível calcular o pedido`,
+        opcoes.codigoTabela
+          ? `Produto '${produtoId}' sem preço cadastrado na tabela '${opcoes.codigoTabela}'`
+          : `Produto '${produtoId}' sem preço de venda cadastrado - não é possível calcular o pedido`,
       );
     }
 
     try {
-      return calcularQuantidadePedido(
-        produto.tipoVenda,
-        produto.comprimentoMetros?.toNumber() ?? null,
-        precoVenda,
-        metrosDesejados,
-      );
+      // Produto sem tipo de acondicionamento associado (ou tipo cadastrado
+      // como retalho, tamanhoPadrao null) se comporta como retalho -
+      // decisao confirmada com o usuario, nao bloqueia produto ainda nao
+      // classificado.
+      const tamanhoPadrao = produto.tipoAcondicionamento?.tamanhoPadrao?.toNumber() ?? null;
+      const resultado = calcularQuantidadePedido(tamanhoPadrao, precoVenda, metrosDesejados);
+
+      const valorFinal = opcoes.percentualDesconto
+        ? arredondarMoeda(resultado.valorTotal * (1 - opcoes.percentualDesconto / 100))
+        : resultado.valorTotal;
+
+      return {
+        quantidade: resultado.quantidade,
+        unidade: resultado.unidade,
+        valorUnitario: precoVenda,
+        valorFinal,
+        // Formula de margem ainda nao confirmada com o time (varejo vs.
+        // markup sobre custo) - nunca inventar um numero aqui, ver
+        // OS-pendentes-claude-code.md.
+        margemLucro: null,
+      };
     } catch (error) {
-      if (
-        error instanceof TipoVendaNaoConfiguradoError ||
-        error instanceof ComprimentoNaoConfiguradoError
-      ) {
-        // Faltando configuracao no cadastro do produto - o cliente da API
-        // nao tem como corrigir isso sozinho (422, nao 400).
-        throw new UnprocessableEntityException(error.message);
-      }
       if (error instanceof QuantidadeNaoFechaEmUnidadeError) {
         // Valor pedido invalido pra este produto - o cliente da API pode
         // corrigir enviando outro valor (400).
@@ -75,4 +93,33 @@ export class ProdutoCalculoService {
       throw error;
     }
   }
+
+  // codigoTabela explicito (Bloco 1) NUNCA cai silenciosamente pro
+  // fallback global/precoVenda cru - o usuario pediu essa tabela
+  // especificamente, um preco de outra fonte seria enganoso. Sem
+  // codigoTabela, comportamento original: tabela selecionada globalmente,
+  // com fallback pro precoVenda cru sincronizado do Radar.
+  private async resolverPrecoVenda(
+    produto: { codigo: string | null; precoVenda: { toNumber(): number } | null },
+    codigoTabela?: string,
+  ): Promise<number | null> {
+    if (codigoTabela) {
+      if (!produto.codigo) return null;
+      const preco = await this.precoProdutoService.obterPrecoPorCodigoDeTabela(
+        codigoTabela,
+        produto.codigo,
+      );
+      return preco ? Number(preco) : null;
+    }
+
+    const precoTabela = produto.codigo
+      ? await this.precoProdutoService.obterPrecoPorCodigo(produto.codigo)
+      : null;
+    if (precoTabela) return Number(precoTabela);
+    return produto.precoVenda?.toNumber() ?? null;
+  }
+}
+
+function arredondarMoeda(valor: number): number {
+  return Math.round(valor * 100) / 100;
 }

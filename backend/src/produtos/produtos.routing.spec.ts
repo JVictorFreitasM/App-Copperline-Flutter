@@ -3,7 +3,10 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { FavoritosService } from '../notificacoes/favoritos.service';
+import { ClienteTabelaPrecoService } from '../tabelas-preco/cliente-tabela-preco.service';
+import { PrecoProdutoService } from '../tabelas-preco/preco-produto.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ProdutoCalculoService } from './produto-calculo.service';
 import { ProdutoManualService } from './produto-manual.service';
 import { ProdutosController } from './produtos.controller';
@@ -32,6 +35,9 @@ describe('ProdutosController - ordem de rotas estaticas vs :id', () => {
         { provide: ProdutosRupturaService, useValue: produtosRupturaService },
         { provide: ProdutoCalculoService, useValue: {} },
         { provide: ProdutoManualService, useValue: {} },
+        { provide: PrecoProdutoService, useValue: {} },
+        { provide: ClienteTabelaPrecoService, useValue: {} },
+        { provide: VendedorEscopoService, useValue: {} },
       ],
     }).compile();
 

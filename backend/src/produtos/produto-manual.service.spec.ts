@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ProdutoManualService } from './produto-manual.service';
 
 function produtoFake(overrides: Record<string, unknown> = {}) {
@@ -9,15 +9,28 @@ function produtoFake(overrides: Record<string, unknown> = {}) {
     imagemCaminho: null,
     imagemTipoMime: null,
     precoFabricacao: null,
+    tipoAcondicionamentoId: null,
     ...overrides,
   };
 }
 
-function prismaFake(produto: unknown) {
+function prismaFake(
+  produto: unknown,
+  overrides: { tipoAcondicionamento?: Record<string, unknown> | null } = {},
+) {
   return {
     produto: {
       findUnique: jest.fn().mockResolvedValue(produto),
       update: jest.fn().mockImplementation(({ data }) => ({ ...produtoFake(), ...data })),
+    },
+    tipoAcondicionamento: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'tipoAcondicionamento' in overrides
+            ? overrides.tipoAcondicionamento
+            : { id: 'tipo-1', nome: 'Caixa', ativo: true },
+        ),
     },
   };
 }
@@ -52,6 +65,55 @@ describe('ProdutoManualService.atualizar', () => {
       where: { id: 'p1' },
       data: { precoFabricacao: 42 },
     });
+  });
+
+  it('atualiza tipoAcondicionamentoId quando o tipo existe e esta ativo', async () => {
+    const prisma = prismaFake(produtoFake());
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    await service.atualizar('p1', { tipoAcondicionamentoId: 'tipo-1' });
+
+    expect(prisma.tipoAcondicionamento.findUnique).toHaveBeenCalledWith({
+      where: { id: 'tipo-1' },
+    });
+    expect(prisma.produto.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { tipoAcondicionamentoId: 'tipo-1' },
+    });
+  });
+
+  it('limpa a associacao quando tipoAcondicionamentoId e null explicito, sem validar contra o catalogo', async () => {
+    const prisma = prismaFake(produtoFake({ tipoAcondicionamentoId: 'tipo-1' }));
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    await service.atualizar('p1', { tipoAcondicionamentoId: null });
+
+    expect(prisma.tipoAcondicionamento.findUnique).not.toHaveBeenCalled();
+    expect(prisma.produto.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { tipoAcondicionamentoId: null },
+    });
+  });
+
+  it('lanca UnprocessableEntityException quando tipoAcondicionamentoId nao existe', async () => {
+    const prisma = prismaFake(produtoFake(), { tipoAcondicionamento: null });
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    await expect(
+      service.atualizar('p1', { tipoAcondicionamentoId: 'inexistente' }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.produto.update).not.toHaveBeenCalled();
+  });
+
+  it('lanca UnprocessableEntityException quando tipoAcondicionamentoId esta inativo', async () => {
+    const prisma = prismaFake(produtoFake(), {
+      tipoAcondicionamento: { id: 'tipo-1', nome: 'Caixa', ativo: false },
+    });
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    await expect(
+      service.atualizar('p1', { tipoAcondicionamentoId: 'tipo-1' }),
+    ).rejects.toThrow(UnprocessableEntityException);
   });
 });
 

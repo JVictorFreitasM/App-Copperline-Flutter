@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoImagemStorageService } from './produto-imagem-storage.service';
 import type { AtualizarProdutoManualDto } from './dto/atualizar-produto-manual.dto';
@@ -26,11 +26,36 @@ export class ProdutoManualService {
     dto: AtualizarProdutoManualDto,
   ): Promise<ProdutoDetalheDto> {
     const produto = await this.obterOuFalhar(produtoId);
+
+    // null explicito = "limpar a associacao" (nunca validado contra o
+    // catalogo - so um id de verdade precisa existir/estar ativo);
+    // undefined = campo nao enviado nesta chamada, PATCH parcial.
+    if (dto.tipoAcondicionamentoId) {
+      await this.validarTipoAcondicionamento(dto.tipoAcondicionamentoId);
+    }
+
     const atualizado = await this.prisma.produto.update({
       where: { id: produto.id },
-      data: { precoFabricacao: dto.precoFabricacao },
+      data: {
+        precoFabricacao: dto.precoFabricacao,
+        tipoAcondicionamentoId: dto.tipoAcondicionamentoId,
+      },
     });
     return paraProdutoDetalheDto(atualizado);
+  }
+
+  // 422 (nao 404) - o recurso que "nao existe" aqui e' um VALOR dentro do
+  // body, nao a URL, mesmo criterio ja usado pra erro de validacao de
+  // negocio no projeto.
+  private async validarTipoAcondicionamento(tipoAcondicionamentoId: string): Promise<void> {
+    const tipo = await this.prisma.tipoAcondicionamento.findUnique({
+      where: { id: tipoAcondicionamentoId },
+    });
+    if (!tipo || !tipo.ativo) {
+      throw new UnprocessableEntityException(
+        `Tipo de acondicionamento '${tipoAcondicionamentoId}' não encontrado ou inativo`,
+      );
+    }
   }
 
   async salvarImagem(
