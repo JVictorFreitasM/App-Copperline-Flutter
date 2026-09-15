@@ -22,6 +22,29 @@ export function formatarData(valorIso: string | null): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(data);
 }
 
+// OS-novas-implementacoes.md Bloco 3 - peso por produto/pedido (Decimal do
+// Prisma chega como string, mesmo padrão de formatarMoeda acima).
+export function formatarPeso(valorKg: string | null): string {
+  if (valorKg === null) {
+    return "—";
+  }
+  const numero = Number(valorKg);
+  if (Number.isNaN(numero)) {
+    return "—";
+  }
+  return `${new Intl.NumberFormat("pt-BR").format(numero)} kg`;
+}
+
+// Contato de cliente (ContatoCliente.telefoneDdd/telefoneNumero) - "—"
+// quando falta qualquer uma das duas partes (nunca mostra so DDD ou so
+// numero solto).
+export function formatarTelefone(ddd: string | null, numero: string | null): string {
+  if (!ddd || !numero) {
+    return "—";
+  }
+  return `(${ddd}) ${numero}`;
+}
+
 export function formatarDataHora(valorIso: string | null): string {
   if (valorIso === null) {
     return "—";

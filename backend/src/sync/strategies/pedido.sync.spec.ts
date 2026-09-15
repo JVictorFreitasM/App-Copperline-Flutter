@@ -29,10 +29,47 @@ describe('PedidoSyncStrategy.map', () => {
       numero: 'PED-1',
       situacao: 'FATURADO',
       dataHoraUltimaAlteracao: new Date('2026-08-18T10:00:00'),
+      dataEmissao: null,
+      ufEntrega: null,
+      idVendedorExterno: null,
       idClienteExterno: 'cliente-123',
       valorTotal: 150.5,
       itens: [],
     });
+  });
+
+  // OS-WEB (tela de listagem) - dataEmissao vem em DD/MM/YYYY (formato
+  // diferente de dataHoraUltimaAlteracao/dataHoraGravacao, que sao ISO) -
+  // confirmado empiricamente contra o ambiente real.
+  it('mapeia dataEmissao (formato DD/MM/YYYY) e ufEntrega (via idMunicipio)', () => {
+    const bruto: WkRadarPedido = {
+      id: '789',
+      dataEmissao: '31/01/2025',
+      localEntrega: { idMunicipio: '3112960' },
+      itens: [],
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.dataEmissao).toEqual(new Date(Date.UTC(2025, 0, 31)));
+    expect(mapeado.ufEntrega).toBe('MG');
+  });
+
+  it('ufEntrega fica null quando localEntrega/idMunicipio ausente ou codigo desconhecido', () => {
+    expect(strategy.map({ id: '1', itens: [] }).ufEntrega).toBeNull();
+    expect(
+      strategy.map({ id: '2', localEntrega: { idMunicipio: '9999999' }, itens: [] }).ufEntrega,
+    ).toBeNull();
+  });
+
+  it('mapeia idVendedorExterno a partir do PRIMEIRO vendedor da lista', () => {
+    const mapeado = strategy.map({
+      id: '1',
+      vendedores: [{ id: 'vend-radar-1' }, { id: 'vend-radar-2' }],
+      itens: [],
+    });
+
+    expect(mapeado.idVendedorExterno).toBe('vend-radar-1');
   });
 
   it('mapeia itens preservando a combinacao produto id + grade (nao so o id)', () => {
@@ -89,6 +126,7 @@ function prismaFake(pedidoExistente: { id: string; situacao: string | null } | n
   const tx = {
     cliente: { upsert: jest.fn().mockResolvedValue({ id: 'cliente-1', incompleto: false }) },
     produto: { upsert: jest.fn().mockResolvedValue({ id: 'produto-1', incompleto: false }) },
+    vendedor: { findUnique: jest.fn().mockResolvedValue(null) },
     pedido: {
       findUnique: jest.fn().mockResolvedValue(pedidoExistente),
       upsert: jest.fn().mockImplementation(({ create }) => ({
@@ -111,6 +149,9 @@ const MAPEADO_BASE = {
   numero: 'PED-1',
   situacao: 'FATURADO' as const,
   dataHoraUltimaAlteracao: new Date(),
+  dataEmissao: null,
+  ufEntrega: null,
+  idVendedorExterno: null,
   idClienteExterno: null,
   valorTotal: 150.5,
   itens: [],
@@ -160,5 +201,42 @@ describe('PedidoSyncStrategy.upsert (OS-BACKEND-19, alerta de mudanca de situaca
     await strategy.upsert({ ...MAPEADO_BASE, situacao: 'FATURADO' });
 
     expect(prisma.tx.eventoNotificacao.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('PedidoSyncStrategy.upsert - vendedorRadarId', () => {
+  const configServiceFake = { get: () => undefined } as never;
+
+  it('resolve vendedorRadarId por idExternoErp quando o vendedor ja foi sincronizado', async () => {
+    const prisma = prismaFake(null);
+    prisma.tx.vendedor.findUnique.mockResolvedValue({ id: 'vendedor-local-1' });
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, idVendedorExterno: 'vend-radar-1' });
+
+    expect(prisma.tx.vendedor.findUnique).toHaveBeenCalledWith({
+      where: { idExternoErp: 'vend-radar-1' },
+      select: { id: true },
+    });
+    expect(prisma.tx.pedido.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ vendedorRadarId: 'vendedor-local-1' }),
+      }),
+    );
+  });
+
+  it('NAO cria stub de vendedor quando ainda nao sincronizado - fica null', async () => {
+    const prisma = prismaFake(null);
+    prisma.tx.vendedor.findUnique.mockResolvedValue(null);
+    const strategy = new PedidoSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+    await strategy.upsert({ ...MAPEADO_BASE, idVendedorExterno: 'vend-radar-desconhecido' });
+
+    expect(prisma.tx.vendedor.upsert).toBeUndefined();
+    expect(prisma.tx.pedido.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ vendedorRadarId: null }),
+      }),
+    );
   });
 });

@@ -122,7 +122,7 @@ export class MobileSnapshotService {
       produtos: produtos.map((produto) =>
         paraProdutoResumoDto(produto, produto.codigo ? precosTabela.get(produto.codigo) : undefined),
       ),
-      pedidos: pedidos.map(paraPedidoResumoDto),
+      pedidos: pedidos.map((pedido) => paraPedidoResumoDto(pedido)),
       estoque,
     };
   }

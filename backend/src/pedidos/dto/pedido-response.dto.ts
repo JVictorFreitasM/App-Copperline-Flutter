@@ -1,13 +1,21 @@
 import type {
   Cliente,
+  ContatoCliente,
   Pedido,
   PedidoItem,
   Produto,
+  Usuario,
+  Vendedor,
 } from '../../../generated/prisma/client';
 
 export interface ClienteResumoPedidoDto {
   id: string;
   razaoSocial: string | null;
+}
+
+export interface VendedorResumoPedidoDto {
+  id: string;
+  nome: string | null;
 }
 
 // Resumo de listagem - sem os itens (arvore de pedido pode ser grande, ver
@@ -18,18 +26,70 @@ export interface PedidoResumoDto {
   numero: string | null;
   situacao: string | null;
   dataHoraUltimaAlteracao: Date | null;
+  // Tela de listagem web (layout de referencia) - "Data de Criacao" (Radar
+  // dataEmissao, ver pedido.sync.ts). Null pra pedido criado localmente
+  // (nao vem do Radar).
+  dataEmissao: Date | null;
+  // "Localizacao" (filtro) - UF derivada do endereco de entrega, so ~7%
+  // dos pedidos tem esse dado no Radar (ver Pedido.ufEntrega).
+  ufEntrega: string | null;
   valorTotal: string | null;
   incompleto: boolean;
   sincronizadoEm: Date;
   cliente: ClienteResumoPedidoDto | null;
+  // Vendedor DO PEDIDO sincronizado (Radar `vendedores[0]`), nao quem
+  // criou localmente - ver comentario em Pedido.vendedorRadarId
+  // (schema.prisma). Null quando o Radar nao informa ou o vendedor
+  // referenciado ainda nao foi sincronizado.
+  vendedor: VendedorResumoPedidoDto | null;
+  // true quando existe SolicitacaoDesconto PENDENTE pra este pedido -
+  // icone de exclamacao no layout de referencia (confirmado com o
+  // usuario: "aguardando aprovacao de desconto").
+  temSolicitacaoDescontoPendente: boolean;
+  // Mesmo bucket usado nos atalhos/filtro da listagem (ver
+  // ListarPedidosQueryDto.statusAprovacao) e agora tambem exibido na tela
+  // de detalhe ("Status da aprovacao", layout de referencia ref1.jpeg) -
+  // computado aqui em vez de expor statusLocal cru, pra centralizar a
+  // classificacao num so lugar (ver calcularStatusAprovacaoPedido abaixo).
+  statusAprovacaoBucket: StatusAprovacaoPedido;
+}
+
+export type StatusAprovacaoPedido = 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO';
+
+// Mesma semantica de whereStatusAprovacao em pedidos.service.ts, so que
+// classificando um registro ja carregado em vez de filtrar no banco - as
+// duas fica com a MESMA prioridade (AGUARDANDO_APROVACAO antes de
+// NAO_INTEGRADO) porque um pedido local recem-criado com desconto pendente
+// tem statusLocal=AGUARDANDO_APROVACAO E idExternoErp=null ao mesmo tempo -
+// o status mais especifico (aguardando decisao) e' o que importa mostrar.
+export function calcularStatusAprovacaoPedido(pedido: {
+  idExternoErp: string | null;
+  statusLocal: string | null;
+}): StatusAprovacaoPedido {
+  if (pedido.statusLocal === 'AGUARDANDO_APROVACAO') {
+    return 'AGUARDANDO_APROVACAO';
+  }
+  if (pedido.statusLocal === 'ENVIADO' || pedido.idExternoErp !== null) {
+    return 'ENVIADO';
+  }
+  return 'NAO_INTEGRADO';
 }
 
 export interface ProdutoResumoPedidoDto {
   id: string;
   nome: string | null;
   codigo: string | null;
+  // Peso da PECA (nao multiplicado pela quantidade) - mesmos campos usados
+  // pra calcular Pedido.pesoLiquidoTotalKg/pesoBrutoTotalKg (ver
+  // CriarPedidoService) - a tela de detalhe multiplica pela quantidade do
+  // item pra mostrar o peso daquela linha (layout de referencia ref1.jpeg).
+  pesoLiquidoKg: string | null;
+  pesoBrutoKg: string | null;
 }
 
+// Revisao por item (tela de detalhe do pedido, layout de referencia
+// ref1.jpeg) - ver comentario do enum StatusAprovacaoItemPedido no
+// schema.prisma pra distincao com SolicitacaoDesconto.
 export interface PedidoItemDto {
   id: string;
   numero: number;
@@ -41,10 +101,45 @@ export interface PedidoItemDto {
   valorTotal: string | null;
   situacao: string | null;
   produto: ProdutoResumoPedidoDto | null;
+  statusAprovacao: string;
+  decididoPor: { id: string; nome: string } | null;
+  decididoEm: Date | null;
 }
 
-export interface PedidoDetalheDto extends PedidoResumoDto {
+export interface ContatoClientePedidoDto {
+  id: string;
+  nome: string | null;
+  telefoneDdd: string | null;
+  telefoneNumero: string | null;
+}
+
+// Cliente mais completo que ClienteResumoPedidoDto (usado na listagem) -
+// so na tela de detalhe (layout de referencia ref1.jpeg), que mostra
+// endereco/contato/documento. `enderecos` fica com o mesmo shape solto do
+// GET /clientes/:id (ver ClienteDetalheDto em clientes/dto) - array de
+// WkRadarEndereco, sem tipagem forte aqui (json puro vindo do Prisma).
+export interface ClienteDetalhePedidoDto extends ClienteResumoPedidoDto {
+  nomeFantasia: string | null;
+  cpfCnpj: string | null;
+  codigoIntegrador: string | null;
+  enderecos: unknown;
+  contatos: ContatoClientePedidoDto[];
+}
+
+export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
+  cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
+  // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - null pra
+  // pedido sincronizado do ERP (nunca calculado nesse caminho) ou quando
+  // algum item tem produto sem peso cadastrado.
+  pesoLiquidoTotalKg: string | null;
+  pesoBrutoTotalKg: string | null;
+  // "Pagamento" (layout de referencia ref1.jpeg, bloco De/Por + %desconto)
+  // - so' existe pra pedido criado LOCALMENTE (POST /pedidos, ver
+  // CriarPedidoService) - pedido sincronizado do Radar nao tem esse valor
+  // no nosso banco (Radar nao expoe desconto/forma/condicao de pagamento
+  // mapeados, ver OS-pendentes-claude-code.md).
+  percentualDescontoSolicitado: string | null;
 }
 
 export function paraClienteResumoPedidoDto(
@@ -54,7 +149,8 @@ export function paraClienteResumoPedidoDto(
 }
 
 export function paraPedidoResumoDto(
-  pedido: Pedido & { cliente: Cliente | null },
+  pedido: Pedido & { cliente: Cliente | null; vendedorRadar?: Vendedor | null },
+  temSolicitacaoDescontoPendente = false,
 ): PedidoResumoDto {
   return {
     id: pedido.id,
@@ -62,38 +158,84 @@ export function paraPedidoResumoDto(
     numero: pedido.numero,
     situacao: pedido.situacao,
     dataHoraUltimaAlteracao: pedido.dataHoraUltimaAlteracao,
+    dataEmissao: pedido.dataEmissao,
+    ufEntrega: pedido.ufEntrega,
     valorTotal: pedido.valorTotal?.toString() ?? null,
     incompleto: pedido.incompleto,
     sincronizadoEm: pedido.sincronizadoEm,
     cliente: paraClienteResumoPedidoDto(pedido.cliente),
+    vendedor: pedido.vendedorRadar
+      ? { id: pedido.vendedorRadar.id, nome: pedido.vendedorRadar.nome }
+      : null,
+    temSolicitacaoDescontoPendente,
+    statusAprovacaoBucket: calcularStatusAprovacaoPedido(pedido),
+  };
+}
+
+export function paraClienteDetalhePedidoDto(
+  cliente: (Cliente & { contatos: ContatoCliente[] }) | null,
+): ClienteDetalhePedidoDto | null {
+  if (!cliente) return null;
+  return {
+    id: cliente.id,
+    razaoSocial: cliente.razaoSocial,
+    nomeFantasia: cliente.nomeFantasia,
+    cpfCnpj: cliente.cpfCnpj,
+    codigoIntegrador: cliente.codigoIntegrador,
+    enderecos: cliente.enderecos,
+    contatos: cliente.contatos.map((contato) => ({
+      id: contato.id,
+      nome: contato.nome,
+      telefoneDdd: contato.telefoneDdd,
+      telefoneNumero: contato.telefoneNumero,
+    })),
+  };
+}
+
+function paraPedidoItemDto(
+  item: PedidoItem & { produto: Produto | null; decididoPor: Usuario | null },
+): PedidoItemDto {
+  return {
+    id: item.id,
+    numero: item.numero,
+    idItemGrade1: item.idItemGrade1,
+    idItemGrade2: item.idItemGrade2,
+    idItemGrade3: item.idItemGrade3,
+    quantidadeVenda: item.quantidadeVenda?.toString() ?? null,
+    valorUnitario: item.valorUnitario?.toString() ?? null,
+    valorTotal: item.valorTotal?.toString() ?? null,
+    situacao: item.situacao,
+    produto: item.produto
+      ? {
+          id: item.produto.id,
+          nome: item.produto.nome,
+          codigo: item.produto.codigo,
+          pesoLiquidoKg: item.produto.pesoLiquidoKg?.toString() ?? null,
+          pesoBrutoKg: item.produto.pesoBrutoKg?.toString() ?? null,
+        }
+      : null,
+    statusAprovacao: item.statusAprovacao,
+    decididoPor: item.decididoPor
+      ? { id: item.decididoPor.id, nome: item.decididoPor.nome }
+      : null,
+    decididoEm: item.decididoEm,
   };
 }
 
 export function paraPedidoDetalheDto(
   pedido: Pedido & {
-    cliente: Cliente | null;
-    itens: (PedidoItem & { produto: Produto | null })[];
+    cliente: (Cliente & { contatos: ContatoCliente[] }) | null;
+    vendedorRadar?: Vendedor | null;
+    itens: (PedidoItem & { produto: Produto | null; decididoPor: Usuario | null })[];
   },
+  temSolicitacaoDescontoPendente = false,
 ): PedidoDetalheDto {
   return {
-    ...paraPedidoResumoDto(pedido),
-    itens: pedido.itens.map((item) => ({
-      id: item.id,
-      numero: item.numero,
-      idItemGrade1: item.idItemGrade1,
-      idItemGrade2: item.idItemGrade2,
-      idItemGrade3: item.idItemGrade3,
-      quantidadeVenda: item.quantidadeVenda?.toString() ?? null,
-      valorUnitario: item.valorUnitario?.toString() ?? null,
-      valorTotal: item.valorTotal?.toString() ?? null,
-      situacao: item.situacao,
-      produto: item.produto
-        ? {
-            id: item.produto.id,
-            nome: item.produto.nome,
-            codigo: item.produto.codigo,
-          }
-        : null,
-    })),
+    ...paraPedidoResumoDto(pedido, temSolicitacaoDescontoPendente),
+    cliente: paraClienteDetalhePedidoDto(pedido.cliente),
+    pesoLiquidoTotalKg: pedido.pesoLiquidoTotalKg?.toString() ?? null,
+    pesoBrutoTotalKg: pedido.pesoBrutoTotalKg?.toString() ?? null,
+    percentualDescontoSolicitado: pedido.percentualDescontoSolicitado?.toString() ?? null,
+    itens: pedido.itens.map(paraPedidoItemDto),
   };
 }

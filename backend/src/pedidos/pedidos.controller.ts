@@ -67,6 +67,17 @@ export class PedidosController {
     return this.relatorioPedidosService.obter(idpUser, usuario.id, query);
   }
 
+  // "/contadores" ANTES de "/:id" (mesmo motivo de "/relatorio" acima) -
+  // atalhos rapidos da listagem web (layout de referencia: "Não
+  // integrados (N)" / "Aguardando aprovação (N)").
+  @Get('contadores')
+  async contadores(
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<{ naoIntegrados: number; aguardandoAprovacao: number }> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.contarPorStatusAprovacao(escopo);
+  }
+
   @Get(':id')
   async buscarPorId(
     @Param('id') id: string,
@@ -85,6 +96,53 @@ export class PedidosController {
   ): Promise<PedidoHistoricoStatusDto[]> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.pedidosService.obterHistorico(id, escopo);
+  }
+
+  // Revisao por item (tela de detalhe do pedido, layout de referencia
+  // ref1.jpeg) - ver comentario do enum StatusAprovacaoItemPedido no
+  // schema.prisma. Verbos explicitos (aprovar/rejeitar/aprovar-tudo/
+  // rejeitar-tudo), mesmo padrao ja usado em SolicitacoesDescontoController
+  // (sem flag booleana escondendo o que a rota faz).
+  @Post(':id/itens/:itemId/aprovar')
+  async aprovarItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.aprovarItem(id, itemId, usuario.id, escopo);
+  }
+
+  @Post(':id/itens/:itemId/rejeitar')
+  async rejeitarItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.rejeitarItem(id, itemId, usuario.id, escopo);
+  }
+
+  @Post(':id/itens/aprovar-tudo')
+  async aprovarTodosItens(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.aprovarTodosItens(id, usuario.id, escopo);
+  }
+
+  @Post(':id/itens/rejeitar-tudo')
+  async rejeitarTodosItens(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.pedidosService.rejeitarTodosItens(id, usuario.id, escopo);
   }
 
   // OS-BACKEND-22-A - simulacao pura (nunca cria SolicitacaoDesconto nem
@@ -114,6 +172,17 @@ export class PedidosController {
   // OS-BACKEND-25 - reaproveita o mesmo escopo cliente<->vendedor de
   // GET /clientes (VendedorEscopoService, OS-BACKEND-23): so cria pedido
   // pra cliente dentro do escopo de quem esta autenticado.
+  //
+  // Por que NAO ha' requireRole(...) explicito aqui (achado da revisao de
+  // seguranca, OS-novas-implementacoes.md Bloco 2): a autorizacao de "pra
+  // qual cliente" um pedido pode ser criado ja e' resolvida pelo escopo
+  // (admin=TODOS, supervisor/gerente=EQUIPE, vendedor=PROPRIO -
+  // resolverEscopoClientes), aplicado dentro de
+  // CriarPedidoService.buscarClienteNoEscopo via
+  // construirWhereClientePorEscopo. Um guard de role adicional aqui seria
+  // redundante (e mais fraco: um guard so' checaria "e' vendedor?", nao
+  // "e' vendedor DESSE cliente especifico") - ver skill security-review,
+  // item 2. Cobertura dos 3 papeis em criar-pedido.service.spec.ts.
   @Post()
   async criar(
     @Body() dto: CriarPedidoDto,

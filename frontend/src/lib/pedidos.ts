@@ -8,16 +8,36 @@ export interface ClienteResumoPedidoDto {
   razaoSocial: string | null;
 }
 
+export interface VendedorResumoPedidoDto {
+  id: string;
+  nome: string | null;
+}
+
 export interface PedidoResumoDto {
   id: string;
-  idExternoErp: string;
+  idExternoErp: string | null;
   numero: string | null;
   situacao: string | null;
   dataHoraUltimaAlteracao: string | null;
+  // Tela de listagem (layout de referência) - "Data de Criação", vem do
+  // Radar (dataEmissao). Null pra pedido criado localmente.
+  dataEmissao: string | null;
+  // "Localização" (filtro) - UF do endereço de entrega, só ~7% dos
+  // pedidos tem esse dado no Radar.
+  ufEntrega: string | null;
   valorTotal: string | null;
   incompleto: boolean;
   sincronizadoEm: string;
   cliente: ClienteResumoPedidoDto | null;
+  // Vendedor DO PEDIDO sincronizado (Radar), não quem criou localmente.
+  vendedor: VendedorResumoPedidoDto | null;
+  // Ícone de exclamação no layout de referência - solicitação de desconto
+  // aguardando aprovação (confirmado com o usuário).
+  temSolicitacaoDescontoPendente: boolean;
+  // Mesmo bucket dos atalhos/filtro da listagem, tambem exibido como
+  // "Status da aprovação" na tela de detalhe (ref1.jpeg) - ver rótulos em
+  // OPCOES_STATUS_APROVACAO abaixo.
+  statusAprovacaoBucket: "NAO_INTEGRADO" | "AGUARDANDO_APROVACAO" | "ENVIADO";
 }
 
 // Valores possíveis vêm do enum TipoSituacaoPedido do backend
@@ -53,12 +73,41 @@ export const OPCOES_SITUACAO_PEDIDO = Object.entries(CONFIG_SITUACAO).map(
   ([valor, { rotulo }]) => ({ valor, rotulo }),
 );
 
+// "Status de aprovação" (layout de referência) - bucket derivado do fluxo
+// local de criação (ver backend/src/pedidos/dto/listar-pedidos-query.dto.ts
+// pra semântica exata de cada valor). NAO_INTEGRADO é rotulado "Orçamento"
+// no dropdown e "Não integrados" no atalho rápido (mesmo bucket, dois
+// rótulos - ver page.tsx).
+export const OPCOES_STATUS_APROVACAO = [
+  { valor: "NAO_INTEGRADO", rotulo: "Orçamento" },
+  { valor: "AGUARDANDO_APROVACAO", rotulo: "Aguardando aprovação" },
+  { valor: "ENVIADO", rotulo: "Enviado" },
+] as const;
+
+export function rotuloStatusAprovacaoPedido(
+  bucket: PedidoResumoDto["statusAprovacaoBucket"],
+): string {
+  return OPCOES_STATUS_APROVACAO.find((opcao) => opcao.valor === bucket)?.rotulo ?? bucket;
+}
+
+export const UFS_BRASIL = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+] as const;
+
 export interface ProdutoResumoPedidoDto {
   id: string;
   nome: string | null;
   codigo: string | null;
+  pesoLiquidoKg: string | null;
+  pesoBrutoKg: string | null;
 }
 
+// Revisao por item (tela de detalhe do pedido, layout de referencia
+// ref1.jpeg) - distinto de SolicitacaoDesconto (que decide o pedido
+// INTEIRO de uma vez, ver /aprovacoes): aqui cada item tem seu proprio
+// status, decidido pelos botoes X/check da tabela ou por "Aprovar tudo"/
+// "Reprovar tudo" no topo.
 export interface PedidoItemDto {
   id: string;
   numero: number;
@@ -70,8 +119,45 @@ export interface PedidoItemDto {
   valorTotal: string | null;
   situacao: string | null;
   produto: ProdutoResumoPedidoDto | null;
+  statusAprovacao: "PENDENTE" | "APROVADO" | "REJEITADO";
+  decididoPor: { id: string; nome: string } | null;
+  decididoEm: string | null;
 }
 
-export interface PedidoDetalheDto extends PedidoResumoDto {
+export interface ContatoClientePedidoDto {
+  id: string;
+  nome: string | null;
+  telefoneDdd: string | null;
+  telefoneNumero: string | null;
+}
+
+// Endereco cru vindo do WK Radar (ver WkRadarEndereco no backend) - so os
+// campos que a tela de detalhe usa; idMunicipio nao vira nome de cidade
+// (sem catalogo de municipios sincronizado, so UF via
+// resolverUfEntrega no backend).
+export interface EnderecoClientePedidoDto {
+  cep?: string | null;
+  nomeEndereco?: string | null;
+  numero?: number | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  uf?: string | null;
+}
+
+export interface ClienteDetalhePedidoDto {
+  id: string;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  cpfCnpj: string | null;
+  codigoIntegrador: string | null;
+  enderecos: EnderecoClientePedidoDto[];
+  contatos: ContatoClientePedidoDto[];
+}
+
+export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
+  cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
+  pesoLiquidoTotalKg: string | null;
+  pesoBrutoTotalKg: string | null;
+  percentualDescontoSolicitado: string | null;
 }

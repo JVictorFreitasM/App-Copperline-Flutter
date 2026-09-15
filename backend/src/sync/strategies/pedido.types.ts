@@ -45,13 +45,35 @@ export interface WkRadarPedidoTotal {
   valorTotal?: number | null;
 }
 
+// Endereco de entrega (localEntrega) - so idMunicipio interessa aqui (UF
+// derivada do codigo IBGE, ver ibgeCodigoParaUf em pedido.sync.ts); o
+// resto do endereco (logradouro/bairro/cep/contato) fica fora, sem uso no
+// sistema hoje. So preenchido em ~7% dos pedidos no ambiente real
+// (confirmado empiricamente).
+export interface WkRadarLocalEntrega {
+  idMunicipio?: string | null;
+}
+
+export interface WkRadarVendedorPedido {
+  id?: string | null;
+}
+
 export interface WkRadarPedido {
   id: string;
   codigoIntegrador?: string | null;
   numero?: string | null;
   situacao?: SituacaoPedidoWkRadar | null;
   dataHoraUltimaAlteracao?: string | null;
+  // Formato DD/MM/YYYY (confirmado empiricamente, diferente do padrao
+  // ISO de dataHoraUltimaAlteracao/dataHoraGravacao) - parse dedicado em
+  // pedido.sync.ts.
+  dataEmissao?: string | null;
   idCliente?: string | null;
+  localEntrega?: WkRadarLocalEntrega | null;
+  // So o PRIMEIRO vendedor e' usado (confirmado empiricamente: nenhum
+  // pedido na amostra real teve mais de 1) - coluna "Vendedor" da
+  // listagem, ver Pedido.vendedorRadarId.
+  vendedores?: WkRadarVendedorPedido[] | null;
   total?: WkRadarPedidoTotal | null;
   itens?: WkRadarPedidoItem[] | null;
 }
@@ -74,6 +96,9 @@ export interface PedidoMapeado {
   numero: string | null;
   situacao: string | null;
   dataHoraUltimaAlteracao: Date | null;
+  dataEmissao: Date | null;
+  ufEntrega: string | null;
+  idVendedorExterno: string | null;
   idClienteExterno: string | null;
   valorTotal: number | null;
   itens: PedidoItemMapeado[];

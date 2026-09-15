@@ -205,3 +205,30 @@ export function IconeChevronDireita() {
     </svg>
   );
 }
+
+// Ícone de alerta (triângulo com exclamação) - layout de referência da
+// tela de pedidos (ref.jpeg): sinaliza pedido com solicitação de desconto
+// aguardando aprovação (confirmado com o usuário). Herda a cor do texto
+// via currentColor, como os demais - envolver num elemento com a cor
+// desejada (ex: `text-ink`) pra estilizar.
+// Botao "recusar item"/"Reprovar tudo" na tela de detalhe do pedido
+// (layout de referencia ref1.jpeg) - par do IconeCheck acima.
+export function IconeX() {
+  return (
+    <svg {...PROPS_BASE} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m9 9 6 6" />
+      <path d="m15 9-6 6" />
+    </svg>
+  );
+}
+
+export function IconeAlerta() {
+  return (
+    <svg {...PROPS_BASE} width={16} height={16} aria-hidden="true">
+      <path d="M12 3.5 21.5 20h-19Z" />
+      <path d="M12 10v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}

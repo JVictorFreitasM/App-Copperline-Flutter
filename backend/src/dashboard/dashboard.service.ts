@@ -86,7 +86,7 @@ export class DashboardService {
       pedidosEmAberto,
       valorFaturadoRecente: (somaFaturado._sum.valorTotal ?? 0).toString(),
       periodoValorFaturadoDias: PERIODO_VALOR_FATURADO_DIAS,
-      pedidosRecentes: pedidosRecentes.map(paraPedidoResumoDto),
+      pedidosRecentes: pedidosRecentes.map((pedido) => paraPedidoResumoDto(pedido)),
       notasFiscaisRecentes: notasFiscaisRecentes.map(paraNotaFiscalDto),
     };
   }

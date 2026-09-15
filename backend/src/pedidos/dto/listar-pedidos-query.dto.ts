@@ -4,6 +4,21 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 const SITUACOES_VALIDAS = Object.values(TipoSituacaoPedido);
 
+// Bucket derivado (nao e' um campo unico do banco) do fluxo local de
+// criacao (CriarPedidoService) - ver PedidosService.listar pro where
+// exato de cada valor. Rotulo na tela (layout de referencia,
+// "Status de aprovacao"): NAO_INTEGRADO = "Orcamento"/"Nao integrados"
+// (idExternoErp ainda null - pedido so existe aqui, nunca confirmado no
+// Radar); AGUARDANDO_APROVACAO = statusLocal AGUARDANDO_APROVACAO
+// (aguardando decisao de desconto antes de poder ser enviado); ENVIADO =
+// tudo que ja tem confirmacao do Radar (idExternoErp preenchido) OU foi
+// marcado ENVIADO localmente.
+const STATUS_APROVACAO_VALIDOS = [
+  'NAO_INTEGRADO',
+  'AGUARDANDO_APROVACAO',
+  'ENVIADO',
+] as const;
+
 export class ListarPedidosQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
@@ -18,6 +33,8 @@ export class ListarPedidosQueryDto extends PaginationQueryDto {
   @IsString()
   clienteNome?: string;
 
+  // "Status de entrega" no layout de referencia - mesmo campo Pedido.situacao
+  // ja sincronizado do Radar, so renomeado na UI (ver frontend/lib/pedidos.ts).
   @IsOptional()
   @IsIn(SITUACOES_VALIDAS)
   situacao?: (typeof SITUACOES_VALIDAS)[number];
@@ -32,4 +49,26 @@ export class ListarPedidosQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsDateString()
   dataFinal?: string;
+
+  // "Equipe" no layout de referencia - filtra por um vendedor especifico
+  // dentro do escopo do usuario logado (a checagem de que o vendedorId
+  // pedido esta DENTRO do escopo acontece naturalmente no AND com
+  // construirWherePedidoPorEscopo, ver PedidosService.listar - um
+  // vendedorId fora do escopo simplesmente nao bate com nenhum pedido, sem
+  // checagem especial).
+  @IsOptional()
+  @IsString()
+  vendedorId?: string;
+
+  @IsOptional()
+  @IsIn(STATUS_APROVACAO_VALIDOS)
+  statusAprovacao?: (typeof STATUS_APROVACAO_VALIDOS)[number];
+
+  // "Localizacao" no layout de referencia - UF do endereco de entrega
+  // (Pedido.ufEntrega, derivado do idMunicipio do Radar - ver
+  // pedido.sync.ts). So ~7% dos pedidos tem esse dado (localEntrega raro
+  // no Radar) - filtro deliberadamente estreito, documentado.
+  @IsOptional()
+  @IsString()
+  ufEntrega?: string;
 }

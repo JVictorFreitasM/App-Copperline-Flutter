@@ -11,12 +11,16 @@ function prismaFake(overrides: {
   count?: number;
   findFirst?: unknown;
   historico?: unknown[];
+  updateManyCount?: number;
 }) {
   return {
     pedido: {
       findMany: jest.fn().mockResolvedValue(overrides.findMany ?? []),
       count: jest.fn().mockResolvedValue(overrides.count ?? 0),
       findFirst: jest.fn().mockResolvedValue(overrides.findFirst ?? null),
+    },
+    pedidoItem: {
+      updateMany: jest.fn().mockResolvedValue({ count: overrides.updateManyCount ?? 1 }),
     },
     pedidoHistoricoStatus: {
       findMany: jest.fn().mockResolvedValue(overrides.historico ?? []),
@@ -37,6 +41,8 @@ describe('PedidosService.listar', () => {
       incompleto: false,
       sincronizadoEm: new Date('2026-01-01'),
       cliente: { id: 'cli-1', razaoSocial: 'Cliente A' },
+      vendedorRadar: null,
+      solicitacoesDesconto: [],
     };
     const prisma = prismaFake({ findMany: [pedidoBruto], count: 1 });
     const service = new PedidosService(prisma as never);
@@ -52,6 +58,35 @@ describe('PedidosService.listar', () => {
     ).toBeUndefined();
   });
 
+  it('marca temSolicitacaoDescontoPendente quando existe solicitacao PENDENTE vinculada (icone de exclamacao)', async () => {
+    const pedidoBruto = {
+      id: '1',
+      idExternoErp: 'ext-1',
+      numero: 'PED-1',
+      situacao: 'FATURADO',
+      dataHoraUltimaAlteracao: new Date('2026-01-01'),
+      valorTotal: { toString: () => '150.00' },
+      incompleto: false,
+      sincronizadoEm: new Date('2026-01-01'),
+      cliente: { id: 'cli-1', razaoSocial: 'Cliente A' },
+      vendedorRadar: null,
+      solicitacoesDesconto: [{ id: 'sol-1' }],
+    };
+    const prisma = prismaFake({ findMany: [pedidoBruto], count: 1 });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    expect(resultado.data[0].temSolicitacaoDescontoPendente).toBe(true);
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          solicitacoesDesconto: { where: { status: 'PENDENTE' }, take: 1 },
+        }),
+      }),
+    );
+  });
+
   it('filtra por clienteId e situacao quando informados', async () => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);
@@ -63,7 +98,7 @@ describe('PedidosService.listar', () => {
 
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { clienteId: 'cli-1', situacao: 'FATURADO' },
+        where: { AND: [{}, { clienteId: 'cli-1' }, { situacao: 'FATURADO' }] },
       }),
     );
   });
@@ -77,12 +112,17 @@ describe('PedidosService.listar', () => {
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          cliente: {
-            OR: [
-              { razaoSocial: { contains: 'Acme', mode: 'insensitive' } },
-              { nomeFantasia: { contains: 'Acme', mode: 'insensitive' } },
-            ],
-          },
+          AND: [
+            {},
+            {
+              cliente: {
+                OR: [
+                  { razaoSocial: { contains: 'Acme', mode: 'insensitive' } },
+                  { nomeFantasia: { contains: 'Acme', mode: 'insensitive' } },
+                ],
+              },
+            },
+          ],
         },
       }),
     );
@@ -100,10 +140,15 @@ describe('PedidosService.listar', () => {
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          dataHoraUltimaAlteracao: {
-            gte: new Date('2026-01-01'),
-            lte: new Date('2026-01-31T23:59:59.999Z'),
-          },
+          AND: [
+            {},
+            {
+              dataHoraUltimaAlteracao: {
+                gte: new Date('2026-01-01'),
+                lte: new Date('2026-01-31T23:59:59.999Z'),
+              },
+            },
+          ],
         },
       }),
     );
@@ -117,8 +162,82 @@ describe('PedidosService.listar', () => {
 
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { cliente: { vendedores: { some: { vendedorId: 'vend-1' } } } },
+        where: {
+          AND: [{ cliente: { vendedores: { some: { vendedorId: 'vend-1' } } } }],
+        },
       }),
+    );
+  });
+
+  // Achado desta rodada (IDOR): antes, escopo (EQUIPE/PROPRIO) e
+  // clienteNome usavam a MESMA chave `cliente` num spread de objeto - a
+  // segunda sobrescrevia a primeira, deixando um vendedor comum buscar por
+  // nome de cliente SEM nenhuma restricao de carteira. `AND: [...]` (ver
+  // construirWhereListagem) corrige isso - os dois where.cliente ficam em
+  // itens separados do array, nunca se sobrescrevem.
+  it('SEGURANCA: escopo PROPRIO + clienteNome combinam via AND, sem a restricao de carteira ser descartada', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar(
+      { page: 1, limit: 20, clienteNome: 'Acme' },
+      ESCOPO_PROPRIO,
+    );
+
+    const { where } = prisma.pedido.findMany.mock.calls[0][0] as {
+      where: { AND: Record<string, unknown>[] };
+    };
+    expect(where.AND).toContainEqual({
+      cliente: { vendedores: { some: { vendedorId: 'vend-1' } } },
+    });
+    expect(where.AND).toContainEqual({
+      cliente: {
+        OR: [
+          { razaoSocial: { contains: 'Acme', mode: 'insensitive' } },
+          { nomeFantasia: { contains: 'Acme', mode: 'insensitive' } },
+        ],
+      },
+    });
+  });
+
+  it('filtra por vendedorId (Equipe) - fica dentro do AND, escopo continua se aplicando junto', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20, vendedorId: 'vend-2' }, ESCOPO_TODOS);
+
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [{}, { cliente: { vendedores: { some: { vendedorId: 'vend-2' } } } }],
+        },
+      }),
+    );
+  });
+
+  it.each([
+    ['NAO_INTEGRADO', { idExternoErp: null }],
+    ['AGUARDANDO_APROVACAO', { statusLocal: 'AGUARDANDO_APROVACAO' }],
+    ['ENVIADO', { OR: [{ statusLocal: 'ENVIADO' }, { idExternoErp: { not: null } }] }],
+  ] as const)('filtra por statusAprovacao=%s', async (valor, condicaoEsperada) => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20, statusAprovacao: valor }, ESCOPO_TODOS);
+
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { AND: [{}, condicaoEsperada] } }),
+    );
+  });
+
+  it('filtra por ufEntrega (Localizacao), normalizando pra maiusculo', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20, ufEntrega: 'mg' }, ESCOPO_TODOS);
+
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { AND: [{}, { ufEntrega: 'MG' }] } }),
     );
   });
 
@@ -131,6 +250,38 @@ describe('PedidosService.listar', () => {
     expect(resultado.data).toEqual([]);
     expect(resultado.meta.total).toBe(0);
     expect(prisma.pedido.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('PedidosService.contarPorStatusAprovacao', () => {
+  function prismaContadoresFake(naoIntegrados: number, aguardandoAprovacao: number) {
+    const count = jest
+      .fn()
+      .mockResolvedValueOnce(naoIntegrados)
+      .mockResolvedValueOnce(aguardandoAprovacao);
+    return {
+      pedido: { count },
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    };
+  }
+
+  it('retorna os dois contadores dos atalhos rapidos da listagem', async () => {
+    const prisma = prismaContadoresFake(68, 5599);
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.contarPorStatusAprovacao(ESCOPO_TODOS);
+
+    expect(resultado).toEqual({ naoIntegrados: 68, aguardandoAprovacao: 5599 });
+  });
+
+  it('escopo NENHUM retorna zero pros dois sem consultar o banco', async () => {
+    const prisma = prismaContadoresFake(999, 999);
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.contarPorStatusAprovacao(ESCOPO_NENHUM);
+
+    expect(resultado).toEqual({ naoIntegrados: 0, aguardandoAprovacao: 0 });
+    expect(prisma.pedido.count).not.toHaveBeenCalled();
   });
 });
 
@@ -196,6 +347,9 @@ describe('PedidosService.buscarPorId', () => {
             valorTotal: { toString: () => '20' },
             situacao: 'PENDENTE',
             produto: { id: 'prod-1', nome: 'Produto A', codigo: 'P1' },
+            statusAprovacao: 'PENDENTE',
+            decididoPor: null,
+            decididoEm: null,
           },
         ],
       },
@@ -215,9 +369,119 @@ describe('PedidosService.buscarPorId', () => {
         valorUnitario: '10',
         valorTotal: '20',
         situacao: 'PENDENTE',
-        produto: { id: 'prod-1', nome: 'Produto A', codigo: 'P1' },
+        produto: {
+          id: 'prod-1',
+          nome: 'Produto A',
+          codigo: 'P1',
+          pesoLiquidoKg: null,
+          pesoBrutoKg: null,
+        },
+        statusAprovacao: 'PENDENTE',
+        decididoPor: null,
+        decididoEm: null,
       },
     ]);
+  });
+});
+
+const PEDIDO_DETALHE_BASE = {
+  id: '1',
+  idExternoErp: 'ext-1',
+  numero: 'PED-1',
+  situacao: 'PENDENTE',
+  dataHoraUltimaAlteracao: null,
+  valorTotal: null,
+  incompleto: false,
+  sincronizadoEm: new Date('2026-01-01'),
+  cliente: null,
+  itens: [],
+};
+
+describe('PedidosService.aprovarItem/rejeitarItem (revisao por item)', () => {
+  it('lança NotFoundException quando o pedido nao esta no escopo, sem tocar no item', async () => {
+    const prisma = prismaFake({ findFirst: null });
+    const service = new PedidosService(prisma as never);
+
+    await expect(
+      service.aprovarItem('pedido-1', 'item-1', 'usuario-1', ESCOPO_PROPRIO),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.pedidoItem.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('lança NotFoundException quando o item nao pertence ao pedido (updateMany atinge 0 linhas)', async () => {
+    const prisma = prismaFake({ findFirst: { id: '1' }, updateManyCount: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await expect(
+      service.aprovarItem('1', 'item-de-outro-pedido', 'usuario-1', ESCOPO_TODOS),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('aprova um item especifico e devolve o pedido atualizado', async () => {
+    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.aprovarItem('1', 'item-1', 'usuario-1', ESCOPO_TODOS);
+
+    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'item-1', pedidoId: '1' },
+      data: expect.objectContaining({
+        statusAprovacao: 'APROVADO',
+        decididoPorId: 'usuario-1',
+      }),
+    });
+    expect(resultado.id).toBe('1');
+  });
+
+  it('rejeita um item especifico', async () => {
+    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
+    const service = new PedidosService(prisma as never);
+
+    await service.rejeitarItem('1', 'item-1', 'usuario-1', ESCOPO_TODOS);
+
+    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
+      where: { id: 'item-1', pedidoId: '1' },
+      data: expect.objectContaining({
+        statusAprovacao: 'REJEITADO',
+        decididoPorId: 'usuario-1',
+      }),
+    });
+  });
+});
+
+describe('PedidosService.aprovarTodosItens/rejeitarTodosItens (Aprovar tudo/Reprovar tudo)', () => {
+  it('lança NotFoundException quando o pedido nao esta no escopo', async () => {
+    const prisma = prismaFake({ findFirst: null });
+    const service = new PedidosService(prisma as never);
+
+    await expect(
+      service.aprovarTodosItens('pedido-1', 'usuario-1', ESCOPO_PROPRIO),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.pedidoItem.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('aprova todos os itens do pedido de uma vez, sem filtrar por id de item', async () => {
+    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
+    const service = new PedidosService(prisma as never);
+
+    await service.aprovarTodosItens('1', 'usuario-1', ESCOPO_TODOS);
+
+    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
+      where: { pedidoId: '1' },
+      data: expect.objectContaining({ statusAprovacao: 'APROVADO' }),
+    });
+  });
+
+  it('rejeita todos os itens do pedido de uma vez', async () => {
+    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
+    const service = new PedidosService(prisma as never);
+
+    await service.rejeitarTodosItens('1', 'usuario-1', ESCOPO_TODOS);
+
+    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
+      where: { pedidoId: '1' },
+      data: expect.objectContaining({ statusAprovacao: 'REJEITADO' }),
+    });
   });
 });
 

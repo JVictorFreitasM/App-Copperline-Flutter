@@ -33,7 +33,10 @@ const CAMPOS_PEDIDO = [
   'numero',
   'situacao',
   'dataHoraUltimaAlteracao',
+  'dataEmissao',
   'idCliente',
+  'localEntrega.idMunicipio',
+  'vendedores.id',
   'total.valorTotal',
   'itens.numero',
   'itens.produtoServico',
@@ -42,6 +45,18 @@ const CAMPOS_PEDIDO = [
   'itens.valorTotal',
   'itens.situacao',
 ];
+
+// 2 primeiros digitos do codigo IBGE de municipio (7 digitos) identificam
+// a UF - tabela estatica oficial do IBGE, sem necessidade de sincronizar
+// um catalogo de municipios so pra resolver isso (ver pedido.types.ts,
+// WkRadarLocalEntrega).
+const IBGE_UF_POR_PREFIXO: Record<string, string> = {
+  '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA', '16': 'AP', '17': 'TO',
+  '21': 'MA', '22': 'PI', '23': 'CE', '24': 'RN', '25': 'PB', '26': 'PE', '27': 'AL', '28': 'SE', '29': 'BA',
+  '31': 'MG', '32': 'ES', '33': 'RJ', '35': 'SP',
+  '41': 'PR', '42': 'SC', '43': 'RS',
+  '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF',
+};
 
 const MAPA_SITUACAO: Record<SituacaoPedidoWkRadar, TipoSituacaoPedido> = {
   EmAnalise: 'EM_ANALISE',
@@ -138,6 +153,9 @@ export class PedidoSyncStrategy implements SyncStrategy<
       dataHoraUltimaAlteracao: bruto.dataHoraUltimaAlteracao
         ? new Date(bruto.dataHoraUltimaAlteracao)
         : null,
+      dataEmissao: parseDataBrWkRadar(bruto.dataEmissao),
+      ufEntrega: resolverUfEntrega(bruto.localEntrega?.idMunicipio),
+      idVendedorExterno: bruto.vendedores?.[0]?.id ?? null,
       idClienteExterno: bruto.idCliente ?? null,
       valorTotal: bruto.total?.valorTotal ?? null,
       itens: (bruto.itens ?? []).map((item) => ({
@@ -161,6 +179,9 @@ export class PedidoSyncStrategy implements SyncStrategy<
       const clienteId = mapeado.idClienteExterno
         ? await this.resolverOuCriarClienteStub(tx, mapeado.idClienteExterno)
         : null;
+      const vendedorRadarId = mapeado.idVendedorExterno
+        ? await this.resolverVendedorRadar(tx, mapeado.idVendedorExterno)
+        : null;
 
       // Buscado ANTES do upsert - unico jeito de comparar "situacao
       // anterior x nova" (o upsert em si nao devolve o valor de antes).
@@ -183,6 +204,9 @@ export class PedidoSyncStrategy implements SyncStrategy<
           numero: mapeado.numero,
           situacao: mapeado.situacao as TipoSituacaoPedido | null,
           dataHoraUltimaAlteracao: mapeado.dataHoraUltimaAlteracao,
+          dataEmissao: mapeado.dataEmissao,
+          ufEntrega: mapeado.ufEntrega,
+          vendedorRadarId,
           clienteId,
           valorTotal: mapeado.valorTotal,
           incompleto: false,
@@ -193,6 +217,9 @@ export class PedidoSyncStrategy implements SyncStrategy<
           numero: mapeado.numero,
           situacao: mapeado.situacao as TipoSituacaoPedido | null,
           dataHoraUltimaAlteracao: mapeado.dataHoraUltimaAlteracao,
+          dataEmissao: mapeado.dataEmissao,
+          ufEntrega: mapeado.ufEntrega,
+          vendedorRadarId,
           clienteId,
           valorTotal: mapeado.valorTotal,
           incompleto: false,
@@ -281,6 +308,24 @@ export class PedidoSyncStrategy implements SyncStrategy<
     return cliente.id;
   }
 
+  // Diferente de resolverOuCriarClienteStub/resolverOuCriarProdutoStub -
+  // NUNCA cria stub aqui. Vendedor tem campos de autenticacao vinculados
+  // (ver vendedor.sync.ts, correspondencia por e-mail contra Usuario) que
+  // um stub simples nao teria como preencher direito; melhor deixar
+  // vendedorRadarId null ate o vendedor de verdade ser sincronizado (roda
+  // toda noite, ver VendedorSyncStrategy) do que criar um registro
+  // incompleto que colidiria com o upsert real depois.
+  private async resolverVendedorRadar(
+    tx: PrismaTx,
+    idExternoErp: string,
+  ): Promise<string | null> {
+    const vendedor = await tx.vendedor.findUnique({
+      where: { idExternoErp },
+      select: { id: true },
+    });
+    return vendedor?.id ?? null;
+  }
+
   // Mesma logica de resolverOuCriarClienteStub, para produto (referenciado
   // por item de pedido via produtoServico.id).
   private async resolverOuCriarProdutoStub(
@@ -312,4 +357,20 @@ type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
 // "2026-08-17T00:00:00") - confirmado contra o ambiente de testes.
 function formatarDataWkRadar(data: Date): string {
   return data.toISOString().replace(/\.\d{3}Z$/, '');
+}
+
+// dataEmissao/dataEntrega do pedido vem em DD/MM/YYYY (confirmado
+// empiricamente) - diferente do formato ISO de dataHoraUltimaAlteracao/
+// dataHoraGravacao. Fail-safe: formato inesperado vira null, nunca lanca.
+function parseDataBrWkRadar(valor: string | null | undefined): Date | null {
+  if (!valor) return null;
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor);
+  if (!match) return null;
+  const [, dia, mes, ano] = match;
+  return new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+}
+
+function resolverUfEntrega(idMunicipio: string | null | undefined): string | null {
+  if (!idMunicipio || idMunicipio.length !== 7) return null;
+  return IBGE_UF_POR_PREFIXO[idMunicipio.slice(0, 2)] ?? null;
 }
