@@ -9,6 +9,7 @@ import '../widgets/app_card.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/pagination_bar.dart';
+import 'criar_pedido_screen.dart';
 import 'pedido_detalhe_screen.dart';
 
 /// Listagem de pedidos (mobile, equivalente à OS-WEB-13) - consome
@@ -53,7 +54,20 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
     final resultadoAsync = ref.watch(pedidosProvider(params));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pedidos')),
+      appBar: AppBar(
+        title: const Text('Pedidos'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: 'Novo pedido',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CriarPedidoScreen()),
+              );
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),

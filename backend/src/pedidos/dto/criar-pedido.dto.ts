@@ -28,6 +28,16 @@ export class CriarPedidoDto {
   @Max(100)
   percentualDesconto!: number;
 
+  // Escolhidos pelo vendedor na criacao (catalogos sincronizados, ver
+  // GET /formas-pagamento e GET /condicoes-pagamento) - persistidos no
+  // pedido independente do envio ao ERP acontecer na hora ou nao (ver
+  // comentario em Pedido.formaPagamentoId, schema.prisma).
+  @IsUUID()
+  formaPagamentoId!: string;
+
+  @IsUUID()
+  condicaoPagamentoId!: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

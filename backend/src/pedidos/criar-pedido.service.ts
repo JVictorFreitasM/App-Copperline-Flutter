@@ -3,16 +3,19 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoCalculoService } from '../produtos/produto-calculo.service';
 import type { ResultadoCalculoQuantidade } from '../produtos/domain/calculo-quantidade-pedido';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
+import { ConfiguracaoTabelaPrecoService } from '../tabelas-preco/configuracao-tabela-preco.service';
 import {
   construirWhereClientePorEscopo,
   type EscopoClientes,
 } from '../vendedores/vendedor-escopo.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
+import type { PedidoErpParcelaInput } from './pedido-erp-client.service';
 
 export interface CriarPedidoItemInput {
   produtoId: string;
@@ -22,6 +25,8 @@ export interface CriarPedidoItemInput {
 export interface CriarPedidoInput {
   clienteId: string;
   percentualDesconto: number;
+  formaPagamentoId: string;
+  condicaoPagamentoId: string;
   itens: CriarPedidoItemInput[];
 }
 
@@ -46,6 +51,12 @@ interface PesoTotalPedido {
   pesoBrutoTotalKg: number | null;
 }
 
+interface DadosProduto {
+  idExternoErp: string;
+  pesoLiquidoKg: number | null;
+  pesoBrutoKg: number | null;
+}
+
 // Orquestra os pedaços já construídos em OS's anteriores (nunca reimplementa
 // nenhuma das regras): escopo de cliente por vendedor (OS-BACKEND-23,
 // VendedorEscopoService), cálculo por tipo de venda (OS-BACKEND-24,
@@ -66,6 +77,7 @@ export class CriarPedidoService {
     private readonly produtoCalculoService: ProdutoCalculoService,
     private readonly solicitacoesDescontoService: SolicitacoesDescontoService,
     private readonly pedidoErpClientService: PedidoErpClientService,
+    private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
   ) {}
 
   async criar(
@@ -83,6 +95,10 @@ export class CriarPedidoService {
     }
 
     const cliente = await this.buscarClienteNoEscopo(input.clienteId, escopo);
+    const formaPagamento = await this.buscarFormaPagamento(input.formaPagamentoId);
+    const condicaoPagamento = await this.buscarCondicaoPagamento(
+      input.condicaoPagamentoId,
+    );
 
     const itensCalculados: ItemCalculado[] = [];
     for (const item of input.itens) {
@@ -110,7 +126,8 @@ export class CriarPedidoService {
     const valorComDesconto = arredondarMoeda(
       subtotal * (1 - input.percentualDesconto / 100),
     );
-    const pesoTotal = await this.calcularPesoTotal(itensCalculados);
+    const produtosPorId = await this.buscarDadosProdutos(itensCalculados);
+    const pesoTotal = calcularPesoTotal(itensCalculados, produtosPorId);
 
     // pedidoId:null - ainda nao criamos o Pedido local (so criamos DEPOIS
     // de decidir o caminho, ver comentario da classe). Se necessitar
@@ -124,10 +141,14 @@ export class CriarPedidoService {
 
     if (!avaliacao.necessitaAprovacao) {
       const resultadoErp = await this.enviarAoErp(
-        vendedor.id,
-        cliente.id,
+        cliente,
+        vendedor,
         input.percentualDesconto,
+        valorComDesconto,
         itensCalculados,
+        produtosPorId,
+        formaPagamento,
+        condicaoPagamento,
       );
       const pedido = await this.persistirPedidoEnviado(
         vendedor.id,
@@ -138,6 +159,8 @@ export class CriarPedidoService {
         itensCalculados,
         resultadoErp,
         usuarioId,
+        formaPagamento.id,
+        condicaoPagamento.id,
       );
       return {
         status: 'ENVIADO',
@@ -157,6 +180,8 @@ export class CriarPedidoService {
       itensCalculados,
       avaliacao.solicitacao.id,
       usuarioId,
+      formaPagamento.id,
+      condicaoPagamento.id,
     );
     return {
       status: 'AGUARDANDO_APROVACAO',
@@ -188,61 +213,116 @@ export class CriarPedidoService {
     return cliente;
   }
 
-  // OS-novas-implementacoes.md Bloco 3 - soma peso por item
-  // (Produto.pesoLiquidoKg/pesoBrutoKg * quantidade calculada, NAO os
-  // metros pedidos - decisao confirmada com o usuario: peso e' da
-  // peca/unidade de venda, nao uma taxa por metro). null quando QUALQUER
-  // item tem produto sem peso cadastrado.
-  private async calcularPesoTotal(itens: ItemCalculado[]): Promise<PesoTotalPedido> {
+  // So as ativas (mesmo criterio de PagamentoService.listarFormasPagamento)
+  // - nunca deixa criar pedido com uma forma que o Radar ja desativou.
+  private async buscarFormaPagamento(formaPagamentoId: string) {
+    const forma = await this.prisma.formaPagamento.findUnique({
+      where: { id: formaPagamentoId },
+    });
+    if (!forma || forma.inativa) {
+      throw new NotFoundException(
+        `Forma de pagamento '${formaPagamentoId}' não encontrada ou inativa`,
+      );
+    }
+    return forma;
+  }
+
+  // So as vigentes (mesmo criterio de PagamentoService.listarCondicoesPagamento).
+  private async buscarCondicaoPagamento(condicaoPagamentoId: string) {
+    const condicao = await this.prisma.condicaoPagamento.findUnique({
+      where: { id: condicaoPagamentoId },
+    });
+    const hoje = new Date();
+    if (!condicao || (condicao.validade && condicao.validade < hoje)) {
+      throw new NotFoundException(
+        `Condição de pagamento '${condicaoPagamentoId}' não encontrada ou expirada`,
+      );
+    }
+    return condicao;
+  }
+
+  private async buscarDadosProdutos(
+    itens: ItemCalculado[],
+  ): Promise<Map<string, DadosProduto>> {
     const produtos = await this.prisma.produto.findMany({
       where: { id: { in: itens.map((item) => item.produtoId) } },
-      select: { id: true, pesoLiquidoKg: true, pesoBrutoKg: true },
+      select: { id: true, idExternoErp: true, pesoLiquidoKg: true, pesoBrutoKg: true },
     });
-    const pesoPorProduto = new Map(produtos.map((p) => [p.id, p]));
-
-    let somaLiquido = 0;
-    let somaBruto = 0;
-    let liquidoCompleto = true;
-    let brutoCompleto = true;
-
-    for (const item of itens) {
-      const produto = pesoPorProduto.get(item.produtoId);
-      if (produto?.pesoLiquidoKg != null) {
-        somaLiquido += Number(produto.pesoLiquidoKg) * item.quantidade;
-      } else {
-        liquidoCompleto = false;
-      }
-      if (produto?.pesoBrutoKg != null) {
-        somaBruto += Number(produto.pesoBrutoKg) * item.quantidade;
-      } else {
-        brutoCompleto = false;
-      }
-    }
-
-    return {
-      pesoLiquidoTotalKg: liquidoCompleto ? arredondarPeso(somaLiquido) : null,
-      pesoBrutoTotalKg: brutoCompleto ? arredondarPeso(somaBruto) : null,
-    };
+    return new Map(
+      produtos.map((produto) => [
+        produto.id,
+        {
+          idExternoErp: produto.idExternoErp,
+          pesoLiquidoKg:
+            produto.pesoLiquidoKg != null ? Number(produto.pesoLiquidoKg) : null,
+          pesoBrutoKg: produto.pesoBrutoKg != null ? Number(produto.pesoBrutoKg) : null,
+        },
+      ]),
+    );
   }
 
   // ANTES de qualquer escrita local, de proposito (ver comentario da
   // classe) - se o Radar falhar, nada foi persistido ainda.
   private async enviarAoErp(
-    vendedorId: string,
-    clienteId: string,
+    cliente: { idExternoErp: string },
+    vendedor: { idExternoErp: string },
     percentualDesconto: number,
+    valorComDesconto: number,
     itens: ItemCalculado[],
+    produtosPorId: Map<string, DadosProduto>,
+    formaPagamento: { idExternoErp: string },
+    condicaoPagamento: { idExternoErp: string; parcelas: unknown },
   ) {
+    // Tabela GLOBAL selecionada (mesma fonte que ProdutoCalculoService usa
+    // hoje pra resolver preco quando nenhum codigoTabela explicito e'
+    // passado - CriarPedidoService nunca passa um, ver chamada acima).
+    // Sem ela configurada, nao ha idTabelaPreco pra reportar ao Radar -
+    // falha aqui, nunca inventa/omite silenciosamente.
+    const codigoTabela = await this.configuracaoTabelaPrecoService.obterCodigoSelecionado();
+    if (!codigoTabela) {
+      throw new UnprocessableEntityException(
+        'Nenhuma tabela de preço selecionada globalmente - configure via PATCH /admin/tabelas-preco/configuracao antes de criar um pedido.',
+      );
+    }
+    const tabela = await this.prisma.tabelaPreco.findUnique({
+      where: { codigo: codigoTabela },
+      select: { idExternoErp: true },
+    });
+    if (!tabela) {
+      throw new UnprocessableEntityException(
+        `Tabela de preço '${codigoTabela}' selecionada ainda não foi sincronizada.`,
+      );
+    }
+
+    const itensErp = itens.map((item) => {
+      const produto = produtosPorId.get(item.produtoId);
+      if (!produto) {
+        throw new UnprocessableEntityException(
+          `Produto '${item.produtoId}' não encontrado ao montar o envio ao ERP`,
+        );
+      }
+      return {
+        produtoIdExterno: produto.idExternoErp,
+        idTabelaPreco: tabela.idExternoErp,
+        quantidade: item.quantidade,
+        valorUnitario: item.valorTotal / item.quantidade,
+      };
+    });
+
+    const parcelas = calcularParcelas(
+      condicaoPagamento.parcelas,
+      valorComDesconto,
+      formaPagamento.idExternoErp,
+    );
+
     try {
       return await this.pedidoErpClientService.criar({
-        clienteId,
-        vendedorId,
+        clienteIdExterno: cliente.idExternoErp,
+        vendedorIdExterno: vendedor.idExternoErp,
+        idCondicaoPagamento: condicaoPagamento.idExternoErp,
         percentualDesconto,
-        itens: itens.map((item) => ({
-          produtoId: item.produtoId,
-          quantidade: item.quantidade,
-          valorUnitario: item.valorTotal / item.quantidade,
-        })),
+        itens: itensErp,
+        parcelas,
       });
     } catch (error) {
       throw new ServiceUnavailableException(
@@ -262,6 +342,8 @@ export class CriarPedidoService {
     itens: ItemCalculado[],
     resultadoErp: { idExterno: string; codigoIntegrador: string },
     usuarioId: string,
+    formaPagamentoId: string,
+    condicaoPagamentoId: string,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -275,6 +357,8 @@ export class CriarPedidoService {
           valorTotal,
           pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
           pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
+          formaPagamentoId,
+          condicaoPagamentoId,
           statusLocal: 'ENVIADO',
           incompleto: false,
           sincronizadoEm,
@@ -304,6 +388,8 @@ export class CriarPedidoService {
     itens: ItemCalculado[],
     solicitacaoDescontoId: string,
     usuarioId: string,
+    formaPagamentoId: string,
+    condicaoPagamentoId: string,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -315,6 +401,8 @@ export class CriarPedidoService {
           valorTotal,
           pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
           pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
+          formaPagamentoId,
+          condicaoPagamentoId,
           statusLocal: 'AGUARDANDO_APROVACAO',
           incompleto: false,
           sincronizadoEm,
@@ -357,6 +445,66 @@ async function criarItensPedido(
       sincronizadoEm,
     })),
   });
+}
+
+// OS-novas-implementacoes.md Bloco 3 - soma peso por item
+// (Produto.pesoLiquidoKg/pesoBrutoKg * quantidade calculada, NAO os
+// metros pedidos - decisao confirmada com o usuario: peso e' da
+// peca/unidade de venda, nao uma taxa por metro). null quando QUALQUER
+// item tem produto sem peso cadastrado.
+function calcularPesoTotal(
+  itens: ItemCalculado[],
+  produtosPorId: Map<string, DadosProduto>,
+): PesoTotalPedido {
+  let somaLiquido = 0;
+  let somaBruto = 0;
+  let liquidoCompleto = true;
+  let brutoCompleto = true;
+
+  for (const item of itens) {
+    const produto = produtosPorId.get(item.produtoId);
+    if (produto?.pesoLiquidoKg != null) {
+      somaLiquido += produto.pesoLiquidoKg * item.quantidade;
+    } else {
+      liquidoCompleto = false;
+    }
+    if (produto?.pesoBrutoKg != null) {
+      somaBruto += produto.pesoBrutoKg * item.quantidade;
+    } else {
+      brutoCompleto = false;
+    }
+  }
+
+  return {
+    pesoLiquidoTotalKg: liquidoCompleto ? arredondarPeso(somaLiquido) : null,
+    pesoBrutoTotalKg: brutoCompleto ? arredondarPeso(somaBruto) : null,
+  };
+}
+
+// Parcelas do envio ao ERP derivadas do TEMPLATE ja sincronizado da
+// condicao de pagamento escolhida (CondicaoPagamento.parcelas, ver
+// condicao-pagamento.sync.ts) - nunca inventadas aqui: cada parcela do
+// template vira uma parcela real, com valor = percentual do template
+// sobre o valor COM desconto do pedido, vencendo `prazo` dias a partir de
+// hoje.
+function calcularParcelas(
+  parcelasTemplate: unknown,
+  valorComDesconto: number,
+  idFormaPagamentoExterno: string,
+): PedidoErpParcelaInput[] {
+  const template = (parcelasTemplate ?? []) as { percentual: number; prazo: number }[];
+  const hoje = new Date();
+  return template.map((parcela) => ({
+    idFormaPagamento: idFormaPagamentoExterno,
+    dataVencimento: adicionarDias(hoje, parcela.prazo),
+    valor: arredondarMoeda(valorComDesconto * (parcela.percentual / 100)),
+  }));
+}
+
+function adicionarDias(data: Date, dias: number): Date {
+  const resultado = new Date(data);
+  resultado.setUTCDate(resultado.getUTCDate() + dias);
+  return resultado;
 }
 
 function arredondarMoeda(valor: number): number {

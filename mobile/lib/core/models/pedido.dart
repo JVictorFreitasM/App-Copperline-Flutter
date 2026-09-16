@@ -137,6 +137,30 @@ class PedidoDetalhe extends PedidoResumo {
   final String? pesoBrutoTotalKg;
 }
 
+/// Mesmo shape de `backend/src/produtos/produto-calculo.service.ts`
+/// (ResultadoCalculoComPreco) - resposta de `POST /produtos/:id/calcular`,
+/// usada na criação de pedido (OS-MOBILE, criar_pedido_screen.dart) pra
+/// mostrar quantidade/valor calculados ANTES de enviar o pedido inteiro.
+class ResultadoCalculoQuantidade {
+  const ResultadoCalculoQuantidade({
+    required this.quantidade,
+    required this.unidade,
+    required this.valorFinal,
+  });
+
+  factory ResultadoCalculoQuantidade.fromJson(Map<String, dynamic> json) {
+    return ResultadoCalculoQuantidade(
+      quantidade: (json['quantidade'] as num).toDouble(),
+      unidade: json['unidade'] as String,
+      valorFinal: (json['valorFinal'] as num).toDouble(),
+    );
+  }
+
+  final double quantidade;
+  final String unidade;
+  final double valorFinal;
+}
+
 class ConfigSituacao {
   const ConfigSituacao({required this.rotulo, required this.enfase});
   final String rotulo;

@@ -73,6 +73,8 @@ export async function calcularItem(
 interface CriarPedidoInput {
   clienteId: string;
   percentualDesconto: number;
+  formaPagamentoId: string;
+  condicaoPagamentoId: string;
   itens: { produtoId: string; metrosDesejados: number }[];
 }
 

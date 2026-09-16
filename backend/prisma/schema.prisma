@@ -486,9 +486,21 @@ model Pedido {
   pesoLiquidoTotalKg Decimal? @map("peso_liquido_total_kg") @db.Decimal(14, 3)
   pesoBrutoTotalKg   Decimal? @map("peso_bruto_total_kg") @db.Decimal(14, 3)
 
+  // Escolha do vendedor na criacao (POST /pedidos, CriarPedidoService) -
+  // persistida independente do pedido ter sido enviado ao ERP na hora
+  // (statusLocal ENVIADO) ou ficado AGUARDANDO_APROVACAO: sem isso, a
+  // escolha se perderia pro caso de aprovacao posterior (fluxo de "enviar
+  // ao ERP depois de aprovado" ainda nao implementado - ver
+  // OS-pendentes-claude-code.md). Nullable pra pedido sincronizado do ERP
+  // (nunca passa por aqui).
+  formaPagamentoId    String? @map("forma_pagamento_id")
+  condicaoPagamentoId String? @map("condicao_pagamento_id")
+
   cliente              Cliente?                @relation(fields: [clienteId], references: [id])
   vendedor             Vendedor?               @relation(fields: [vendedorId], references: [id])
   vendedorRadar        Vendedor?               @relation("PedidoVendedorRadar", fields: [vendedorRadarId], references: [id])
+  formaPagamento       FormaPagamento?         @relation(fields: [formaPagamentoId], references: [id])
+  condicaoPagamento    CondicaoPagamento?      @relation(fields: [condicaoPagamentoId], references: [id])
   itens                PedidoItem[]
   notasFiscais         NotaFiscalPedido[]
   solicitacoesDesconto SolicitacaoDesconto[]
@@ -1219,4 +1231,61 @@ model Documento {
 
   @@index([categoria])
   @@map("documentos")
+}
+
+// Sincronizado do WK Radar (GET /empresarial/v1/forma-pagamento) - so
+// leitura. Catalogo pequeno e estavel (~17 registros) - sem filtro de
+// "alterado desde" no endpoint, mesmo padrao de Vendedor: full refresh
+// diario, busca Situacao=Todos e guarda o proprio flag `inativa` (nao
+// filtra Situacao=Ativos na sync) - assim uma forma que for desativada no
+// Radar reflete aqui no proximo refresh, em vez de ficar "presa" com o
+// ultimo valor sincronizado antes de virar inativa. Quem le decide
+// mostrar so as ativas (decisao confirmada com o usuario: pedido so pode
+// escolher forma de pagamento valida). Preparacao pro envio de pedido ao
+// ERP (POST /comercial/v1/pedido, faturamento.parcelas[].idFormaPagamento)
+// - ver OS-pendentes-claude-code.md.
+model FormaPagamento {
+  id             String   @id @default(uuid())
+  idExternoErp   String   @unique @map("id_externo_erp")
+  codigo         String?
+  descricao      String?
+  inativa        Boolean  @default(false)
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  pedidos Pedido[]
+
+  @@map("formas_pagamento")
+}
+
+// Sincronizado do WK Radar (GET /empresarial/v1/condicao-pagamento,
+// Modulos=ComercialECF - so a condicao usavel em venda, nao Compras) - so
+// leitura, mesmo padrao de agendamento de FormaPagamento (sem cursor de
+// alteracao, full refresh diario). O endpoint NAO tem filtro de
+// "ativa"/"inativa" (diferente de FormaPagamento) - `validade` e' o unico
+// sinal de vigencia (null = sem data de expiracao, sempre valida; alguma
+// data = deixa de valer apos ela). Por isso sincroniza TUDO que o Radar
+// retornar (nao filtra na sync) e quem le (CondicaoPagamentoService)
+// decide o que mostrar como "ativa" comparando `validade` com a data
+// atual - mesmo criterio de nao filtrar dado bruto demais cedo, decisao
+// fica no service de leitura.
+model CondicaoPagamento {
+  id             String   @id @default(uuid())
+  idExternoErp   String   @unique @map("id_externo_erp")
+  codigo         String?
+  nome           String?
+  aVista         Boolean  @default(false) @map("a_vista")
+  comEntrada     Boolean  @default(false) @map("com_entrada")
+  antecipada     Boolean  @default(false)
+  // Ate quando esta condicao pode ser usada - null = sem expiracao.
+  validade       DateTime?
+  // Parcelas nao tem identidade propria no WK Radar (so
+  // percentual/prazo/idTipoVencimento) - mesmo criterio ja usado em
+  // Cliente.enderecos: sem identidade propria pra preservar, JSONB e
+  // suficiente.
+  parcelas       Json     @default("[]")
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  pedidos Pedido[]
+
+  @@map("condicoes_pagamento")
 }

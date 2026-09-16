@@ -31,6 +31,7 @@ import { MetasModule } from './metas/metas.module';
 import { OportunidadesModule } from './oportunidades/oportunidades.module';
 import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
 import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acondicionamento.module';
+import { PagamentoModule } from './pagamento/pagamento.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acon
     CoberturasModule,
     TabelasPrecoModule,
     TiposAcondicionamentoModule,
+    PagamentoModule,
   ],
 })
 export class AppModule {}

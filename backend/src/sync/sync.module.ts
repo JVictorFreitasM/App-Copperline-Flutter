@@ -6,6 +6,8 @@ import { EstoqueSvcClientModule } from '../estoque-svc-client/estoque-svc-client
 import { PrismaModule } from '../prisma/prisma.module';
 import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { ClienteSyncStrategy } from './strategies/cliente.sync';
+import { CondicaoPagamentoSyncStrategy } from './strategies/condicao-pagamento.sync';
+import { FormaPagamentoSyncStrategy } from './strategies/forma-pagamento.sync';
 import { NotaFiscalSyncStrategy } from './strategies/nota-fiscal.sync';
 import { PedidoSyncStrategy } from './strategies/pedido.sync';
 import { ProdutoSyncStrategy } from './strategies/produto.sync';
@@ -36,6 +38,8 @@ import { SyncService } from './sync.service';
     SaldoEstoqueSyncStrategy,
     VendedorSyncStrategy,
     TabelaPrecoSyncStrategy,
+    FormaPagamentoSyncStrategy,
+    CondicaoPagamentoSyncStrategy,
     {
       // Lista de strategies disponiveis para o SyncService/SyncScheduler -
       // adicionar uma nova entidade e so incluir a strategy aqui, sem
@@ -54,7 +58,19 @@ import { SyncService } from './sync.service';
         saldoEstoque: SaldoEstoqueSyncStrategy,
         vendedor: VendedorSyncStrategy,
         tabelaPreco: TabelaPrecoSyncStrategy,
-      ) => [cliente, produto, pedido, notaFiscal, saldoEstoque, vendedor, tabelaPreco],
+        formaPagamento: FormaPagamentoSyncStrategy,
+        condicaoPagamento: CondicaoPagamentoSyncStrategy,
+      ) => [
+        cliente,
+        produto,
+        pedido,
+        notaFiscal,
+        saldoEstoque,
+        vendedor,
+        tabelaPreco,
+        formaPagamento,
+        condicaoPagamento,
+      ],
       inject: [
         ClienteSyncStrategy,
         ProdutoSyncStrategy,
@@ -63,6 +79,8 @@ import { SyncService } from './sync.service';
         SaldoEstoqueSyncStrategy,
         VendedorSyncStrategy,
         TabelaPrecoSyncStrategy,
+        FormaPagamentoSyncStrategy,
+        CondicaoPagamentoSyncStrategy,
       ],
     },
     SyncService,

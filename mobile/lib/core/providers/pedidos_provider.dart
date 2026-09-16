@@ -58,3 +58,48 @@ final pedidoDetalheProvider = FutureProvider.family<PedidoDetalhe, String>((ref,
   final json = await apiClient.getJson('/pedidos/${Uri.encodeComponent(id)}');
   return PedidoDetalhe.fromJson(json);
 });
+
+// Criação de pedido (OS-BACKEND-25, criar_pedido_screen.dart) - dois
+// endpoints reaproveitados, sem nenhum novo no backend: cálculo por item
+// (POST /produtos/:id/calcular, mesmo usado na simulação da tela de
+// produto) e criação em si (POST /pedidos, já existia pro web).
+final criarPedidoServiceProvider = Provider<CriarPedidoService>((ref) {
+  return CriarPedidoService(ref.watch(apiClientProvider));
+});
+
+class CriarPedidoService {
+  CriarPedidoService(this._apiClient);
+
+  final ApiClient _apiClient;
+
+  Future<ResultadoCalculoQuantidade> calcular({
+    required String produtoId,
+    required double metrosDesejados,
+  }) async {
+    final json = await _apiClient.postJson(
+      '/produtos/${Uri.encodeComponent(produtoId)}/calcular',
+      {'metrosDesejados': metrosDesejados},
+    );
+    return ResultadoCalculoQuantidade.fromJson(json);
+  }
+
+  // Resposta (CriarPedidoResultadoDto) só é usada pelo `id` do pedido
+  // criado, pra navegar direto pro detalhe (mesmo padrão do web,
+  // `criar-pedido-form.tsx`) - sem model próprio pra isso.
+  Future<String> criar({
+    required String clienteId,
+    required double percentualDesconto,
+    required String formaPagamentoId,
+    required String condicaoPagamentoId,
+    required List<Map<String, dynamic>> itens,
+  }) async {
+    final json = await _apiClient.postJson('/pedidos', {
+      'clienteId': clienteId,
+      'percentualDesconto': percentualDesconto,
+      'formaPagamentoId': formaPagamentoId,
+      'condicaoPagamentoId': condicaoPagamentoId,
+      'itens': itens,
+    });
+    return json['pedidoId'] as String;
+  }
+}

@@ -175,6 +175,8 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
         payload: {
           clienteId: '11111111-1111-4111-8111-111111111111',
           percentualDesconto: 10,
+          formaPagamentoId: '33333333-3333-4333-8333-333333333333',
+          condicaoPagamentoId: '44444444-4444-4444-8444-444444444444',
           itens: [{ produtoId: '22222222-2222-4222-8222-222222222222', metrosDesejados: 90 }],
         },
       }),

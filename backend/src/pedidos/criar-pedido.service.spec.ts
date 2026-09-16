@@ -4,10 +4,32 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 
 const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
 
+const PRODUTO_PADRAO = {
+  id: 'produto-1',
+  idExternoErp: 'produto-externo-1',
+  pesoLiquidoKg: null,
+  pesoBrutoKg: null,
+};
+const FORMA_PAGAMENTO_PADRAO = {
+  id: 'forma-1',
+  idExternoErp: 'forma-externo-1',
+  inativa: false,
+};
+const CONDICAO_PAGAMENTO_PADRAO = {
+  id: 'condicao-1',
+  idExternoErp: 'condicao-externo-1',
+  validade: null,
+  parcelas: [{ percentual: 100, prazo: 30 }],
+};
+const TABELA_PRECO_PADRAO = { idExternoErp: 'tabela-externo-1' };
+
 function prismaFake(overrides: {
   vendedor?: Record<string, unknown> | null;
   cliente?: Record<string, unknown> | null;
   produtos?: Record<string, unknown>[];
+  formaPagamento?: Record<string, unknown> | null;
+  condicaoPagamento?: Record<string, unknown> | null;
+  tabelaPreco?: Record<string, unknown> | null;
 } = {}) {
   const pedidoCreate = jest
     .fn()
@@ -32,21 +54,43 @@ function prismaFake(overrides: {
       findFirst: jest
         .fn()
         .mockResolvedValue(
-          'vendedor' in overrides ? overrides.vendedor : { id: 'vendedor-1' },
+          'vendedor' in overrides ? overrides.vendedor : { id: 'vendedor-1', idExternoErp: 'vendedor-externo-1' },
         ),
     },
     cliente: {
       findFirst: jest
         .fn()
         .mockResolvedValue(
-          'cliente' in overrides ? overrides.cliente : { id: 'cliente-1' },
+          'cliente' in overrides ? overrides.cliente : { id: 'cliente-1', idExternoErp: 'cliente-externo-1' },
         ),
     },
-    // Sem peso cadastrado por padrao (pesoLiquidoTotalKg/pesoBrutoTotalKg
-    // ficam null) - testes especificos de peso sobrescrevem via
-    // overrides.produtos.
+    // Um produto "generico" por padrao (sem peso, com idExternoErp) - so
+    // pra nao quebrar a resolucao de itens do ERP em testes que nao
+    // exercitam peso especificamente. Testes de peso (bloco abaixo)
+    // sobrescrevem via overrides.produtos.
     produto: {
-      findMany: jest.fn().mockResolvedValue(overrides.produtos ?? []),
+      findMany: jest.fn().mockResolvedValue(overrides.produtos ?? [PRODUTO_PADRAO]),
+    },
+    formaPagamento: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'formaPagamento' in overrides ? overrides.formaPagamento : FORMA_PAGAMENTO_PADRAO,
+        ),
+    },
+    condicaoPagamento: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'condicaoPagamento' in overrides ? overrides.condicaoPagamento : CONDICAO_PAGAMENTO_PADRAO,
+        ),
+    },
+    tabelaPreco: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'tabelaPreco' in overrides ? overrides.tabelaPreco : TABELA_PRECO_PADRAO,
+        ),
     },
     $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
     _tx: tx,
@@ -54,10 +98,10 @@ function prismaFake(overrides: {
 }
 
 function produtoCalculoServiceFake(
-  resultado: { quantidade: number; unidade: string; valorTotal: number } = {
+  resultado: { quantidade: number; unidade: string; valorFinal: number } = {
     quantidade: 3,
     unidade: 'PECA',
-    valorTotal: 90,
+    valorFinal: 90,
   },
 ) {
   return { calcular: jest.fn().mockResolvedValue(resultado) };
@@ -89,21 +133,41 @@ function pedidoErpClientServiceFake(
   return { criar };
 }
 
+function configuracaoTabelaPrecoServiceFake(codigo: string | null = '110') {
+  return { obterCodigoSelecionado: jest.fn().mockResolvedValue(codigo) };
+}
+
+// Helper - monta os 5 argumentos do construtor com fakes padrao, so
+// sobrescrevendo o que o teste precisa (a maioria dos testes so mexe nos
+// 2-3 primeiros).
+function criarService(
+  prisma: ReturnType<typeof prismaFake>,
+  produtoCalculoService = produtoCalculoServiceFake(),
+  solicitacoesDescontoService = solicitacoesDescontoServiceFake(),
+  pedidoErpClientService = pedidoErpClientServiceFake(),
+  configuracaoTabelaPrecoService = configuracaoTabelaPrecoServiceFake(),
+) {
+  return new CriarPedidoService(
+    prisma as never,
+    produtoCalculoService as never,
+    solicitacoesDescontoService as never,
+    pedidoErpClientService as never,
+    configuracaoTabelaPrecoService as never,
+  );
+}
+
 const INPUT_BASE = {
   clienteId: 'cliente-1',
   percentualDesconto: 10,
+  formaPagamentoId: 'forma-1',
+  condicaoPagamentoId: 'condicao-1',
   itens: [{ produtoId: 'produto-1', metrosDesejados: 90 }],
 };
 
 describe('CriarPedidoService.criar', () => {
   it('lanca ForbiddenException quando o usuario autenticado nao e um vendedor cadastrado', async () => {
     const prisma = prismaFake({ vendedor: null });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
       ForbiddenException,
@@ -112,12 +176,7 @@ describe('CriarPedidoService.criar', () => {
 
   it('lanca NotFoundException quando o cliente nao existe ou esta fora do escopo', async () => {
     const prisma = prismaFake({ cliente: null });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
       NotFoundException,
@@ -126,17 +185,32 @@ describe('CriarPedidoService.criar', () => {
 
   it('lanca NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {
     const prisma = prismaFake();
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await expect(
       service.criar(INPUT_BASE, 'u1', { tipo: 'NENHUM' }),
     ).rejects.toThrow(NotFoundException);
     expect(prisma.cliente.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('lanca NotFoundException quando a forma de pagamento nao existe ou esta inativa', async () => {
+    const prisma = prismaFake({ formaPagamento: { ...FORMA_PAGAMENTO_PADRAO, inativa: true } });
+    const service = criarService(prisma);
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('lanca NotFoundException quando a condicao de pagamento nao existe ou ja expirou', async () => {
+    const prisma = prismaFake({
+      condicaoPagamento: { ...CONDICAO_PAGAMENTO_PADRAO, validade: new Date('2020-01-01') },
+    });
+    const service = criarService(prisma);
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   // OS-novas-implementacoes.md Bloco 2 - "verificacao de necessidade de
@@ -147,12 +221,7 @@ describe('CriarPedidoService.criar', () => {
   // pedidos.controller.ts).
   it('VENDEDOR comum (escopo PROPRIO) so cria pedido pra cliente da propria carteira', async () => {
     const prisma = prismaFake();
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u1', { tipo: 'PROPRIO', vendedorId: 'vend-1' });
 
@@ -168,12 +237,7 @@ describe('CriarPedidoService.criar', () => {
 
   it('VENDEDOR comum (escopo PROPRIO) recebe 404 pra cliente fora da propria carteira', async () => {
     const prisma = prismaFake({ cliente: null });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await expect(
       service.criar(INPUT_BASE, 'u1', { tipo: 'PROPRIO', vendedorId: 'vend-1' }),
@@ -182,12 +246,7 @@ describe('CriarPedidoService.criar', () => {
 
   it('SUPERVISOR/GERENTE (escopo EQUIPE) so cria pedido pra cliente atendido por alguem da equipe', async () => {
     const prisma = prismaFake();
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u-sup', {
       tipo: 'EQUIPE',
@@ -206,12 +265,7 @@ describe('CriarPedidoService.criar', () => {
 
   it('ADMIN (escopo TODOS) cria pedido pra qualquer cliente', async () => {
     const prisma = prismaFake();
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u-admin', ESCOPO_TODOS);
 
@@ -225,7 +279,7 @@ describe('CriarPedidoService.criar', () => {
     const produtoCalculoService = produtoCalculoServiceFake({
       quantidade: 3,
       unidade: 'PECA',
-      valorTotal: 90,
+      valorFinal: 90,
     });
     const solicitacoesDescontoService = solicitacoesDescontoServiceFake({
       necessitaAprovacao: false,
@@ -233,11 +287,11 @@ describe('CriarPedidoService.criar', () => {
     const pedidoErpClientService = pedidoErpClientServiceFake({
       resolve: { idExterno: 'erp-123', codigoIntegrador: 'pedido-1' },
     });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoService as never,
-      solicitacoesDescontoService as never,
-      pedidoErpClientService as never,
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
     );
 
     const resultado = await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
@@ -250,6 +304,8 @@ describe('CriarPedidoService.criar', () => {
         data: expect.objectContaining({
           idExternoErp: 'erp-123',
           statusLocal: 'ENVIADO',
+          formaPagamentoId: 'forma-1',
+          condicaoPagamentoId: 'condicao-1',
         }),
       }),
     );
@@ -263,6 +319,61 @@ describe('CriarPedidoService.criar', () => {
     });
   });
 
+  it('monta o payload do ERP com os IDs externos resolvidos e parcelas derivadas da condicao de pagamento', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake({
+      quantidade: 3,
+      unidade: 'PECA',
+      valorFinal: 90,
+    });
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientService,
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(pedidoErpClientService.criar).toHaveBeenCalledWith({
+      clienteIdExterno: 'cliente-externo-1',
+      vendedorIdExterno: 'vendedor-externo-1',
+      idCondicaoPagamento: 'condicao-externo-1',
+      percentualDesconto: 10,
+      itens: [
+        {
+          produtoIdExterno: 'produto-externo-1',
+          idTabelaPreco: 'tabela-externo-1',
+          quantidade: 3,
+          valorUnitario: 30,
+        },
+      ],
+      parcelas: [
+        expect.objectContaining({
+          idFormaPagamento: 'forma-externo-1',
+          valor: 81, // 90 * (1 - 10%) = 81, 1 parcela de 100%
+        }),
+      ],
+    });
+  });
+
+  it('sem tabela de preco selecionada: falha antes de chamar o ERP', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoServiceFake(),
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientServiceFake(),
+      configuracaoTabelaPrecoServiceFake(null),
+    );
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      /Nenhuma tabela de preço selecionada/,
+    );
+    expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
+  });
+
   it('acima do limite: NAO chama o ERP e persiste o pedido com status AGUARDANDO_APROVACAO (criterio de aceite)', async () => {
     const prisma = prismaFake();
     const produtoCalculoService = produtoCalculoServiceFake();
@@ -271,11 +382,11 @@ describe('CriarPedidoService.criar', () => {
       solicitacao: { id: 'solicitacao-1' },
     });
     const pedidoErpClientService = pedidoErpClientServiceFake();
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoService as never,
-      solicitacoesDescontoService as never,
-      pedidoErpClientService as never,
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
     );
 
     const resultado = await service.criar(
@@ -290,7 +401,11 @@ describe('CriarPedidoService.criar', () => {
     expect(resultado.solicitacaoDescontoId).toBe('solicitacao-1');
     expect(prisma._tx.pedido.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ statusLocal: 'AGUARDANDO_APROVACAO' }),
+        data: expect.objectContaining({
+          statusLocal: 'AGUARDANDO_APROVACAO',
+          formaPagamentoId: 'forma-1',
+          condicaoPagamentoId: 'condicao-1',
+        }),
       }),
     );
     expect(prisma._tx.solicitacaoDesconto.update).toHaveBeenCalledWith({
@@ -316,11 +431,11 @@ describe('CriarPedidoService.criar', () => {
     const pedidoErpClientService = pedidoErpClientServiceFake({
       reject: new Error('Radar: produto sem saldo suficiente'),
     });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoService as never,
-      solicitacoesDescontoService as never,
-      pedidoErpClientService as never,
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
     );
 
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
@@ -337,11 +452,11 @@ describe('CriarPedidoService.criar', () => {
     };
     const solicitacoesDescontoService = solicitacoesDescontoServiceFake();
     const pedidoErpClientService = pedidoErpClientServiceFake();
-    const service = new CriarPedidoService(
-      prisma as never,
+    const service = criarService(
+      prisma,
       produtoCalculoService as never,
-      solicitacoesDescontoService as never,
-      pedidoErpClientService as never,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
     );
 
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
@@ -360,14 +475,9 @@ describe('CriarPedidoService.criar', () => {
 describe('CriarPedidoService.criar - peso total (Bloco 3)', () => {
   it('calcula pesoLiquidoTotalKg/pesoBrutoTotalKg = peso do produto x quantidade', async () => {
     const prisma = prismaFake({
-      produtos: [{ id: 'produto-1', pesoLiquidoKg: 10, pesoBrutoKg: 12 }],
+      produtos: [{ id: 'produto-1', idExternoErp: 'produto-externo-1', pesoLiquidoKg: 10, pesoBrutoKg: 12 }],
     });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
 
@@ -383,14 +493,9 @@ describe('CriarPedidoService.criar - peso total (Bloco 3)', () => {
 
   it('pesoLiquidoTotalKg/pesoBrutoTotalKg ficam null quando o produto nao tem peso cadastrado', async () => {
     const prisma = prismaFake({
-      produtos: [{ id: 'produto-1', pesoLiquidoKg: null, pesoBrutoKg: null }],
+      produtos: [{ id: 'produto-1', idExternoErp: 'produto-externo-1', pesoLiquidoKg: null, pesoBrutoKg: null }],
     });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
 
@@ -406,14 +511,9 @@ describe('CriarPedidoService.criar - peso total (Bloco 3)', () => {
 
   it('liquido e bruto sao independentes - um faltando nao zera o outro', async () => {
     const prisma = prismaFake({
-      produtos: [{ id: 'produto-1', pesoLiquidoKg: 10, pesoBrutoKg: null }],
+      produtos: [{ id: 'produto-1', idExternoErp: 'produto-externo-1', pesoLiquidoKg: 10, pesoBrutoKg: null }],
     });
-    const service = new CriarPedidoService(
-      prisma as never,
-      produtoCalculoServiceFake() as never,
-      solicitacoesDescontoServiceFake() as never,
-      pedidoErpClientServiceFake() as never,
-    );
+    const service = criarService(prisma);
 
     await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
 

@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/design/card";
 import { formatarMoeda } from "@/lib/formatacao";
+import type { CondicaoPagamentoDto, FormaPagamentoDto } from "@/lib/pagamento";
 import { buscarClientes, buscarProdutos, calcularItem, criarPedido } from "./actions";
 import type { OpcaoBusca } from "./tipos";
 
@@ -30,7 +31,13 @@ interface ItemLinha {
 
 function novoItem(): ItemLinha {
   return {
-    chave: crypto.randomUUID(),
+    // Sem crypto.randomUUID() de proposito - exige "secure context"
+    // (HTTPS/localhost); a rede interna serve o site em HTTP puro num IP
+    // (ex: http://192.168.2.202:3020), onde a API fica indisponivel e
+    // quebra a tela inteira (TypeError). So precisa ser unica dentro
+    // desta sessao do formulario (key de lista), nao criptograficamente
+    // forte.
+    chave: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     produto: null,
     produtoQuery: "",
     opcoesProduto: [],
@@ -42,7 +49,13 @@ function novoItem(): ItemLinha {
   };
 }
 
-export function CriarPedidoForm() {
+export function CriarPedidoForm({
+  formasPagamento,
+  condicoesPagamento,
+}: {
+  formasPagamento: FormaPagamentoDto[];
+  condicoesPagamento: CondicaoPagamentoDto[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -53,6 +66,8 @@ export function CriarPedidoForm() {
 
   const [itens, setItens] = useState<ItemLinha[]>([novoItem()]);
   const [percentualDesconto, setPercentualDesconto] = useState("0");
+  const [formaPagamentoId, setFormaPagamentoId] = useState("");
+  const [condicaoPagamentoId, setCondicaoPagamentoId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
   const timerCliente = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,7 +143,7 @@ export function CriarPedidoForm() {
   const totalComDesconto = subtotal * (1 - desconto / 100);
 
   function podeSubmeter(): boolean {
-    if (!cliente) return false;
+    if (!cliente || !formaPagamentoId || !condicaoPagamentoId) return false;
     return itens.every((item) => item.produto && item.calculo && !item.erroCalculo);
   }
 
@@ -136,6 +151,14 @@ export function CriarPedidoForm() {
     setErro(null);
     if (!cliente) {
       setErro("Selecione um cliente.");
+      return;
+    }
+    if (!formaPagamentoId) {
+      setErro("Selecione a forma de pagamento.");
+      return;
+    }
+    if (!condicaoPagamentoId) {
+      setErro("Selecione a condição de pagamento.");
       return;
     }
     const itensValidos = itens.filter((item) => item.produto && item.metrosDesejados);
@@ -152,6 +175,8 @@ export function CriarPedidoForm() {
       const resultado = await criarPedido({
         clienteId: cliente.id,
         percentualDesconto: desconto,
+        formaPagamentoId,
+        condicaoPagamentoId,
         itens: itensValidos.map((item) => ({
           produtoId: item.produto!.id,
           metrosDesejados: Number(item.metrosDesejados),
@@ -282,6 +307,48 @@ export function CriarPedidoForm() {
       </section>
 
       <Card className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-3">
+          <label className="flex flex-1 min-w-[220px] flex-col gap-1 text-sm text-muted">
+            Forma de pagamento
+            <select
+              value={formaPagamentoId}
+              onChange={(evento) => setFormaPagamentoId(evento.target.value)}
+              className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+            >
+              <option value="">Selecione...</option>
+              {formasPagamento.map((forma) => (
+                <option key={forma.id} value={forma.id}>
+                  {forma.descricao ?? forma.codigo ?? forma.id}
+                </option>
+              ))}
+            </select>
+            {formasPagamento.length === 0 && (
+              <span className="text-xs text-muted">
+                Nenhuma forma de pagamento disponível - verifique a sincronização.
+              </span>
+            )}
+          </label>
+          <label className="flex flex-1 min-w-[220px] flex-col gap-1 text-sm text-muted">
+            Condição de pagamento
+            <select
+              value={condicaoPagamentoId}
+              onChange={(evento) => setCondicaoPagamentoId(evento.target.value)}
+              className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+            >
+              <option value="">Selecione...</option>
+              {condicoesPagamento.map((condicao) => (
+                <option key={condicao.id} value={condicao.id}>
+                  {condicao.nome ?? condicao.codigo ?? condicao.id}
+                </option>
+              ))}
+            </select>
+            {condicoesPagamento.length === 0 && (
+              <span className="text-xs text-muted">
+                Nenhuma condição de pagamento disponível - verifique a sincronização.
+              </span>
+            )}
+          </label>
+        </div>
         <label className="flex flex-col gap-1 text-sm text-muted">
           Desconto (%)
           <input
