@@ -19,6 +19,7 @@ export interface ContatoClienteDto {
   telefoneDdd: string | null;
   telefoneNumero: string | null;
   funcao: string | null;
+  criadoLocalmente: boolean;
 }
 
 // `enderecos` é `unknown` no backend também (JSONB repassado cru do WK

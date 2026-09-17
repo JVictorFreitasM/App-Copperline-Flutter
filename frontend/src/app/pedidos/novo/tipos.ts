@@ -6,11 +6,21 @@ export interface OpcaoBusca {
   label: string;
 }
 
-export interface ItemFormulario {
+// Item já confirmado no popup de detalhe (img.jpeg) - unifica o que antes
+// era um card inline com campos soltos. metrosDesejados em KM (mesma
+// convenção já usada no resto da tela: convertido pra metros só na
+// chamada da API).
+export interface ItemPedidoState {
   chave: string;
-  produtoId: string | null;
-  produtoLabel: string;
-  metrosDesejados: string;
+  produto: OpcaoBusca;
+  metrosDesejados: number;
+  percentualDesconto: number;
+  observacoes: string;
+  quantidade: number;
+  unidade: string;
+  valorUnitarioBruto: number;
+  valorFinal: number;
+  estoqueDisponivel: number | null;
 }
 
 export interface EstadoCriarPedido {

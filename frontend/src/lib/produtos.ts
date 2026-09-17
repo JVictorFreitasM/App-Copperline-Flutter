@@ -90,6 +90,9 @@ export interface ResultadoCalculoQuantidadeDto {
   valorUnitario: number;
   valorFinal: number;
   margemLucro: number | null;
+  // Popup de item da criacao de pedido ("Em estoque X") - null quando o
+  // produto nao tem saldo sincronizado (nunca inventar 0 nesse caso).
+  estoqueDisponivel: number | null;
 }
 
 // Valores possíveis vêm do enum TipoProduto do backend (schema.prisma) -

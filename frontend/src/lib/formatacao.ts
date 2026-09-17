@@ -45,6 +45,12 @@ export function formatarTelefone(ddd: string | null, numero: string | null): str
   return `(${ddd}) ${numero}`;
 }
 
+// Criação de pedido (popup de item/resumo do pedido) - valor ja em
+// percentual (ex: 10 -> "10%"), nao fracao (0.1).
+export function formatarPercentual(valor: number, casasDecimais = 2): string {
+  return `${valor.toLocaleString("pt-BR", { maximumFractionDigits: casasDecimais })}%`;
+}
+
 export function formatarDataHora(valorIso: string | null): string {
   if (valorIso === null) {
     return "—";

@@ -1,6 +1,7 @@
 "use server";
 
 import { apiFetch, ApiError } from "@/lib/api";
+import type { ContatoClienteDto } from "@/lib/clientes";
 import type { PaginatedResult } from "@/lib/pagination";
 import type { ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
 import type { EstadoCriarPedido, OpcaoBusca } from "./tipos";
@@ -64,10 +65,13 @@ export async function buscarProdutos(query: string): Promise<OpcaoBusca[]> {
 
 // Preview de cálculo por item (mesmo endpoint POST /produtos/:id/calcular
 // já usado pela simulação na tela de produto) - mostra pro vendedor quanto
-// aquele item vai custar ANTES de enviar o pedido inteiro.
+// aquele item vai custar ANTES de enviar o pedido inteiro. codigoTabela/
+// percentualDesconto agora vêm do popup de item (unificação da tela de
+// criar pedido com o popup de confirmação, referência do usuário).
 export async function calcularItem(
   produtoId: string,
   metrosDesejados: number,
+  opcoes: { codigoTabela?: string; percentualDesconto?: number } = {},
 ): Promise<{ status: "sucesso"; resultado: ResultadoCalculoQuantidadeDto } | { status: "erro"; mensagem: string }> {
   try {
     const resultado = await apiFetch<ResultadoCalculoQuantidadeDto>(
@@ -75,7 +79,7 @@ export async function calcularItem(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metrosDesejados }),
+        body: JSON.stringify({ metrosDesejados, ...opcoes }),
         cache: "no-store",
       },
     );
@@ -88,12 +92,100 @@ export async function calcularItem(
   }
 }
 
+// Contatos já sincronizados do cliente (dropdown "Selecionar contato") -
+// GET /clientes/:id já traz `contatos` embutido, sem endpoint novo.
+export async function obterContatosCliente(clienteId: string): Promise<ContatoClienteDto[]> {
+  try {
+    const cliente = await apiFetch<{ contatos: ContatoClienteDto[] }>(
+      `/clientes/${encodeURIComponent(clienteId)}`,
+      { cache: "no-store" },
+    );
+    return cliente.contatos;
+  } catch {
+    return [];
+  }
+}
+
+// Tabelas de preço associadas ao cliente (popup automático ao selecionar
+// o cliente, ver criar-pedido-form.tsx) - GET /clientes/:id/tabelas-preco
+// já existia (Bloco 1), reaproveitado aqui.
+export async function listarTabelasPrecoCliente(clienteId: string): Promise<string[]> {
+  try {
+    const resultado = await apiFetch<{ codigos: string[] }>(
+      `/clientes/${encodeURIComponent(clienteId)}/tabelas-preco`,
+      { cache: "no-store" },
+    );
+    return resultado.codigos;
+  } catch {
+    return [];
+  }
+}
+
+// Preço do produto em cada tabela do cliente (popup de item) - GET
+// /produtos/:id/precos?clienteId= já existia (Bloco 1), reaproveitado aqui.
+export async function listarPrecosPorTabela(
+  produtoId: string,
+  clienteId: string,
+): Promise<{ codigo: string; preco: string | null }[]> {
+  try {
+    const resultado = await apiFetch<{ tabelas: { codigo: string; preco: string | null }[] }>(
+      `/produtos/${encodeURIComponent(produtoId)}/precos?clienteId=${encodeURIComponent(clienteId)}`,
+      { cache: "no-store" },
+    );
+    return resultado.tabelas;
+  } catch {
+    return [];
+  }
+}
+
+interface CriarContatoInput {
+  nome: string;
+  telefoneDdd?: string;
+  telefoneNumero?: string;
+  email?: string;
+  funcao?: string;
+}
+
+// Contato criado por nós (popup "Adicionar contato") - nunca sincroniza
+// pro WK Radar (ver ContatoCliente.criadoLocalmente no backend).
+export async function criarContatoCliente(
+  clienteId: string,
+  input: CriarContatoInput,
+): Promise<{ status: "sucesso"; contato: ContatoClienteDto } | { status: "erro"; mensagem: string }> {
+  try {
+    const contato = await apiFetch<ContatoClienteDto>(
+      `/clientes/${encodeURIComponent(clienteId)}/contatos`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        cache: "no-store",
+      },
+    );
+    return { status: "sucesso", contato };
+  } catch (error) {
+    return {
+      status: "erro",
+      mensagem: error instanceof ApiError ? extrairMensagem(error) : "Erro desconhecido ao adicionar contato.",
+    };
+  }
+}
+
+interface CriarPedidoItemInput {
+  produtoId: string;
+  metrosDesejados: number;
+  percentualDesconto: number;
+  observacoes?: string;
+}
+
 interface CriarPedidoInput {
   clienteId: string;
-  percentualDesconto: number;
   formaPagamentoId: string;
   condicaoPagamentoId: string;
-  itens: { produtoId: string; metrosDesejados: number }[];
+  codigoTabelaPreco?: string;
+  contatoId?: string;
+  vendedorId?: string;
+  itens: CriarPedidoItemInput[];
 }
 
 interface CriarPedidoResultadoDto {
