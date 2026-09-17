@@ -410,6 +410,7 @@ describe('PedidosService.buscarPorId', () => {
           telefoneNumero: '999999999',
         },
         vendedor: { id: 'vendedor-1', nome: 'José Gabriel' },
+        historicoStatus: [{ alteradoEm: new Date('2026-09-17T12:00:00.000Z') }],
       },
     });
     const service = new PedidosService(prisma as never);
@@ -426,6 +427,30 @@ describe('PedidosService.buscarPorId', () => {
       telefoneNumero: '999999999',
     });
     expect(resultado.vendedorResponsavel).toEqual({ id: 'vendedor-1', nome: 'José Gabriel' });
+    expect(resultado.horarioEnvio).toEqual(new Date('2026-09-17T12:00:00.000Z'));
+  });
+
+  it('horarioEnvio fica null quando o pedido nunca teve transicao pra ENVIADO (sincronizado do Radar ou aguardando aprovacao)', async () => {
+    const prisma = prismaFake({
+      findFirst: {
+        id: '1',
+        idExternoErp: 'ext-1',
+        numero: 'PED-1',
+        situacao: null,
+        dataHoraUltimaAlteracao: null,
+        valorTotal: null,
+        incompleto: false,
+        sincronizadoEm: new Date('2026-01-01'),
+        cliente: null,
+        itens: [],
+        historicoStatus: [],
+      },
+    });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.buscarPorId('1', ESCOPO_TODOS);
+
+    expect(resultado.horarioEnvio).toBeNull();
   });
 });
 

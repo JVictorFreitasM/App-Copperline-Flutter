@@ -4,6 +4,7 @@ import type {
   ContatoCliente,
   FormaPagamento,
   Pedido,
+  PedidoHistoricoStatus,
   PedidoItem,
   Produto,
   Usuario,
@@ -168,6 +169,10 @@ export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   // so' preenchido em pedido SINCRONIZADO). So' um dos dois fica
   // preenchido por vez, conforme a origem do pedido.
   vendedorResponsavel: VendedorResumoPedidoDto | null;
+  // "Horario do envio" - timestamp real da transicao pra ENVIADO em
+  // PedidoHistoricoStatus (ver comentario em PEDIDO_DETALHE_INCLUDE). null
+  // pra pedido sincronizado do Radar ou ainda AGUARDANDO_APROVACAO.
+  horarioEnvio: Date | null;
 }
 
 export function paraClienteResumoPedidoDto(
@@ -258,6 +263,7 @@ export function paraPedidoDetalheDto(
     formaPagamento?: FormaPagamento | null;
     condicaoPagamento?: CondicaoPagamento | null;
     contato?: ContatoCliente | null;
+    historicoStatus?: PedidoHistoricoStatus[];
     itens: (PedidoItem & { produto: Produto | null; decididoPor: Usuario | null })[];
   },
   temSolicitacaoDescontoPendente = false,
@@ -268,6 +274,7 @@ export function paraPedidoDetalheDto(
     pesoLiquidoTotalKg: pedido.pesoLiquidoTotalKg?.toString() ?? null,
     pesoBrutoTotalKg: pedido.pesoBrutoTotalKg?.toString() ?? null,
     percentualDescontoSolicitado: pedido.percentualDescontoSolicitado?.toString() ?? null,
+    horarioEnvio: pedido.historicoStatus?.[0]?.alteradoEm ?? null,
     formaPagamento: pedido.formaPagamento
       ? {
           id: pedido.formaPagamento.id,

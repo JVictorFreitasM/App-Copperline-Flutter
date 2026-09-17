@@ -9,7 +9,7 @@ import {
   type PedidoDetalheDto,
   type PedidoItemDto,
 } from "@/lib/pedidos";
-import { formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
+import { formatarDataHora, formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { AprovarReprovarTudo } from "./aprovar-reprovar-tudo";
@@ -131,7 +131,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
               />
             </div>
             <Campo label="Origem de venda" value="—" />
-            <Campo label="Horário do envio" value="—" />
+            <Campo label="Horário do envio" value={formatarDataHora(pedido.horarioEnvio)} />
           </div>
 
           {/* Coluna 2 - pagamento/vendedor */}

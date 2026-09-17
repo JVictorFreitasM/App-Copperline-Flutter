@@ -177,4 +177,5 @@ export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
   codigoTabelaPreco: string | null;
   contato: ContatoClientePedidoDto | null;
   vendedorResponsavel: { id: string; nome: string | null } | null;
+  horarioEnvio: string | null;
 }

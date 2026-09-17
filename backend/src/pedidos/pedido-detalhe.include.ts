@@ -20,6 +20,20 @@ export const PEDIDO_DETALHE_INCLUDE = {
   formaPagamento: true,
   condicaoPagamento: true,
   contato: true,
+  // "Horario do envio" (tela de detalhe) - so existe pra pedido criado
+  // localmente e ja enviado ao ERP: a transicao pra ENVIADO em
+  // PedidoHistoricoStatus (gravada por CriarPedidoService.
+  // persistirPedidoEnviado) e' o UNICO timestamp real de "quando foi
+  // enviado" que o sistema tem (sincronizadoEm tem semantica diferente -
+  // "quando sincronizamos/criamos o registro", nao "quando foi enviado
+  // pro Radar"). Pedido sincronizado do Radar nunca tem linha de
+  // historico daqui (so' escrito pelo nosso proprio fluxo de
+  // criacao/aprovacao), entao continua "-" pra esses - nunca inventado.
+  historicoStatus: {
+    where: { statusNovo: 'ENVIADO' },
+    orderBy: { alteradoEm: 'asc' },
+    take: 1,
+  },
   itens: {
     include: { produto: true, decididoPor: true },
     orderBy: { numero: 'asc' },
