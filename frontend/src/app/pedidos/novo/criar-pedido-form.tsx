@@ -23,10 +23,27 @@ interface ItemLinha {
   produtoQuery: string;
   opcoesProduto: OpcaoBusca[];
   buscandoProduto: boolean;
+  // Nome do campo mantido (metrosDesejados) mas o VALOR digitado/exibido é
+  // em KM (pedido do usuário, 2026-09-17: "100m = 0.1km") - convertido pra
+  // metros só na hora de chamar a API (calcularItem/criarPedido), que
+  // continua em metros (CriarPedidoItemDto.metrosDesejados).
   metrosDesejados: string;
   calculo: { quantidade: number; unidade: string; valorFinal: number } | null;
   erroCalculo: string | null;
   calculando: boolean;
+}
+
+const METROS_POR_KM = 1000;
+
+// unidade "METRO" vem do backend em METROS (corte fracionário livre, ver
+// calculo-quantidade-pedido.ts) - convertida aqui pra KM só pra exibição.
+// "PECA" (rolo/peça fechada) não é distância, fica como está.
+function formatarQuantidadeCalculo(calculo: { quantidade: number; unidade: string }): string {
+  if (calculo.unidade === "METRO") {
+    const km = calculo.quantidade / METROS_POR_KM;
+    return `${km.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} KM`;
+  }
+  return `${calculo.quantidade} ${calculo.unidade}`;
 }
 
 function novoItem(): ItemLinha {
@@ -119,11 +136,11 @@ export function CriarPedidoForm({
     atualizarItem(chave, { metrosDesejados: valor, calculo: null, erroCalculo: null });
     const item = itens.find((i) => i.chave === chave);
     const produtoId = item?.produto?.id;
-    const metros = Number(valor);
-    if (!produtoId || !valor || Number.isNaN(metros) || metros <= 0) return;
+    const km = Number(valor);
+    if (!produtoId || !valor || Number.isNaN(km) || km <= 0) return;
 
     atualizarItem(chave, { calculando: true });
-    const resultado = await calcularItem(produtoId, metros);
+    const resultado = await calcularItem(produtoId, km * METROS_POR_KM);
     if (resultado.status === "sucesso") {
       atualizarItem(chave, {
         calculando: false,
@@ -143,7 +160,7 @@ export function CriarPedidoForm({
   const totalComDesconto = subtotal * (1 - desconto / 100);
 
   function podeSubmeter(): boolean {
-    if (!cliente || !formaPagamentoId || !condicaoPagamentoId) return false;
+    if (!cliente || !formaPagamentoId || !condicaoPagamentoId || itens.length === 0) return false;
     return itens.every((item) => item.produto && item.calculo && !item.erroCalculo);
   }
 
@@ -179,7 +196,7 @@ export function CriarPedidoForm({
         condicaoPagamentoId,
         itens: itensValidos.map((item) => ({
           produtoId: item.produto!.id,
-          metrosDesejados: Number(item.metrosDesejados),
+          metrosDesejados: Number(item.metrosDesejados) * METROS_POR_KM,
         })),
       });
 
@@ -192,7 +209,7 @@ export function CriarPedidoForm({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
       <Card className="flex flex-col gap-2">
         <label className="flex flex-col gap-1 text-sm text-muted">
           Cliente
@@ -235,9 +252,8 @@ export function CriarPedidoForm({
         )}
       </Card>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Itens</h2>
-        {itens.map((item) => (
+      <h2 className="col-span-full text-lg font-semibold text-ink">Itens</h2>
+      {itens.map((item) => (
           <Card key={item.chave} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex flex-1 flex-col gap-1 text-sm text-muted">
@@ -251,7 +267,7 @@ export function CriarPedidoForm({
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm text-muted">
-                Metros desejados
+                Quilômetros desejados
                 <input
                   type="number"
                   step="0.001"
@@ -262,15 +278,13 @@ export function CriarPedidoForm({
                   className="w-36 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light disabled:opacity-40"
                 />
               </label>
-              {itens.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setItens((atual) => atual.filter((i) => i.chave !== item.chave))}
-                  className="px-2 text-sm text-muted hover:text-ink"
-                >
-                  Remover
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setItens((atual) => atual.filter((i) => i.chave !== item.chave))}
+                className="px-2 text-sm text-muted hover:text-ink"
+              >
+                Remover
+              </button>
             </div>
             {!item.produto && item.opcoesProduto.length > 0 && (
               <ul className="flex flex-col gap-1">
@@ -291,20 +305,19 @@ export function CriarPedidoForm({
             {item.erroCalculo && <p className="text-xs font-medium text-ink">{item.erroCalculo}</p>}
             {item.calculo && (
               <p className="text-sm text-ink">
-                {item.calculo.quantidade} {item.calculo.unidade} ·{" "}
+                {formatarQuantidadeCalculo(item.calculo)} ·{" "}
                 <span className="font-medium">{formatarMoeda(String(item.calculo.valorFinal))}</span>
               </p>
             )}
           </Card>
-        ))}
-        <button
-          type="button"
-          onClick={() => setItens((atual) => [...atual, novoItem()])}
-          className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-surface px-5 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:opacity-80"
-        >
-          + Adicionar item
-        </button>
-      </section>
+      ))}
+      <button
+        type="button"
+        onClick={() => setItens((atual) => [...atual, novoItem()])}
+        className="col-span-full inline-flex w-fit items-center justify-center gap-2 rounded-full bg-surface px-5 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:opacity-80"
+      >
+        + Adicionar item
+      </button>
 
       <Card className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-3">
@@ -367,9 +380,9 @@ export function CriarPedidoForm({
         </div>
       </Card>
 
-      {erro && <p className="text-sm font-medium text-ink">{erro}</p>}
+      {erro && <p className="col-span-full text-sm font-medium text-ink">{erro}</p>}
 
-      <div className="flex justify-end">
+      <div className="col-span-full flex justify-end">
         <button
           type="button"
           disabled={pending || !podeSubmeter()}

@@ -16,6 +16,19 @@ import '../widgets/app_card.dart';
 import 'pedido_detalhe_screen.dart';
 
 const _debounceBusca = Duration(milliseconds: 300);
+const _metrosPorKm = 1000;
+
+// unidade "METRO" vem do backend em METROS (corte fracionário livre, ver
+// calculo-quantidade-pedido.ts) - convertida aqui pra KM só pra exibição
+// (pedido do usuário, 2026-09-17: "100m = 0.1km"). "PECA" (rolo/peça
+// fechada) não é distância, fica como está.
+String _formatarQuantidadeCalculo(ResultadoCalculoQuantidade calculo) {
+  if (calculo.unidade == 'METRO') {
+    final km = calculo.quantidade / _metrosPorKm;
+    return '${km.toStringAsFixed(3)} KM';
+  }
+  return '${calculo.quantidade} ${calculo.unidade}';
+}
 
 /// Criação de pedido (OS-BACKEND-25) - equivalente mobile de
 /// `frontend/src/app/pedidos/novo/criar-pedido-form.tsx`, mesma lógica:
@@ -111,12 +124,22 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     setState(() => item.buscando = true);
     item.debounce = Timer(_debounceBusca, () async {
       try {
-        final resultado = await ref.read(
-          produtosProvider((pagina: 1, nome: valor, codigo: null, gtin: null)).future,
-        );
+        // Busca por nome E por código em paralelo (o backend combina os
+        // dois filtros com AND, não dá pra mandar juntos pro mesmo termo)
+        // - mescla os resultados sem duplicar produto que bater nos dois.
+        final resultados = await Future.wait([
+          ref.read(produtosProvider((pagina: 1, nome: valor, codigo: null, gtin: null)).future),
+          ref.read(produtosProvider((pagina: 1, nome: null, codigo: valor, gtin: null)).future),
+        ]);
         if (!mounted) return;
+        final vistos = <String>{};
+        final opcoes = <ProdutoResumo>[];
+        for (final produto in [...resultados[0].data, ...resultados[1].data]) {
+          if (!vistos.add(produto.id)) continue;
+          opcoes.add(produto);
+        }
         setState(() {
-          item.opcoes = resultado.data;
+          item.opcoes = opcoes;
           item.buscando = false;
         });
       } catch (_) {
@@ -140,14 +163,14 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       item.erroCalculo = null;
     });
     final produto = item.produto;
-    final metros = double.tryParse(valor.replaceAll(',', '.'));
-    if (produto == null || metros == null || metros <= 0) return;
+    final km = double.tryParse(valor.replaceAll(',', '.'));
+    if (produto == null || km == null || km <= 0) return;
 
     setState(() => item.calculando = true);
     try {
       final resultado = await ref
           .read(criarPedidoServiceProvider)
-          .calcular(produtoId: produto.id, metrosDesejados: metros);
+          .calcular(produtoId: produto.id, metrosDesejados: km * _metrosPorKm);
       if (!mounted) return;
       setState(() {
         item.calculando = false;
@@ -179,6 +202,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     if (_cliente == null || _formaPagamentoId == null || _condicaoPagamentoId == null) {
       return false;
     }
+    if (_itens.isEmpty) return false;
     return _itens.every((item) => item.produto != null && item.calculo != null && item.erroCalculo == null);
   }
 
@@ -217,7 +241,8 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
             .map(
               (item) => {
                 'produtoId': item.produto!.id,
-                'metrosDesejados': double.parse(item.metrosController.text.replaceAll(',', '.')),
+                'metrosDesejados':
+                    double.parse(item.metrosController.text.replaceAll(',', '.')) * _metrosPorKm,
               },
             )
             .toList(),
@@ -295,14 +320,14 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                             onChanged: (valor) => _onMudarProdutoQuery(item, valor),
                           ),
                         ),
-                        if (_itens.length > 1)
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => setState(() {
-                              item.dispose();
-                              _itens.remove(item);
-                            }),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Remover item',
+                          onPressed: () => setState(() {
+                            item.dispose();
+                            _itens.remove(item);
+                          }),
+                        ),
                       ],
                     ),
                     if (item.produto == null)
@@ -323,7 +348,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                       controller: item.metrosController,
                       enabled: item.produto != null,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Metros desejados'),
+                      decoration: const InputDecoration(labelText: 'Quilômetros desejados'),
                       onChanged: (valor) => _onMudarMetros(item, valor),
                     ),
                     if (item.calculando)
@@ -340,7 +365,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          '${item.calculo!.quantidade} ${item.calculo!.unidade} · '
+                          '${_formatarQuantidadeCalculo(item.calculo!)} · '
                           '${formatarMoeda('${item.calculo!.valorFinal}')}',
                           style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink),
                         ),

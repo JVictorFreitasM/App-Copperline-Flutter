@@ -27,21 +27,39 @@ export async function buscarClientes(query: string): Promise<OpcaoBusca[]> {
   }
 }
 
+// Busca por nome E por código (não dá pra mandar os dois filtros juntos
+// pro backend - ListarProdutosQueryDto os combina com AND - então dispara
+// as duas em paralelo e mescla, sem duplicar produto que bater nos dois).
 export async function buscarProdutos(query: string): Promise<OpcaoBusca[]> {
   const termo = query.trim();
   if (!termo) return [];
 
-  try {
-    const resultado = await apiFetch<
-      PaginatedResult<{ id: string; nome: string | null; codigo: string | null }>
-    >(`/produtos?nome=${encodeURIComponent(termo)}&limit=8`, { cache: "no-store" });
-    return resultado.data.map((produto) => ({
-      id: produto.id,
-      label: `${produto.nome ?? "—"}${produto.codigo ? ` (${produto.codigo})` : ""}`,
-    }));
-  } catch {
-    return [];
+  type ProdutoBusca = { id: string; nome: string | null; codigo: string | null };
+
+  const buscarPor = async (campo: "nome" | "codigo"): Promise<ProdutoBusca[]> => {
+    try {
+      const resultado = await apiFetch<PaginatedResult<ProdutoBusca>>(
+        `/produtos?${campo}=${encodeURIComponent(termo)}&limit=8`,
+        { cache: "no-store" },
+      );
+      return resultado.data;
+    } catch {
+      return [];
+    }
+  };
+
+  const [porNome, porCodigo] = await Promise.all([buscarPor("nome"), buscarPor("codigo")]);
+  const vistos = new Set<string>();
+  const produtos: ProdutoBusca[] = [];
+  for (const produto of [...porNome, ...porCodigo]) {
+    if (vistos.has(produto.id)) continue;
+    vistos.add(produto.id);
+    produtos.push(produto);
   }
+  return produtos.map((produto) => ({
+    id: produto.id,
+    label: `${produto.nome ?? "—"}${produto.codigo ? ` (${produto.codigo})` : ""}`,
+  }));
 }
 
 // Preview de cálculo por item (mesmo endpoint POST /produtos/:id/calcular
