@@ -382,6 +382,51 @@ describe('PedidosService.buscarPorId', () => {
       },
     ]);
   });
+
+  // Achado 2026-09-17: pedido criado localmente (forma/condicao/tabela/
+  // contato/vendedor escolhidos na criacao) aparecia em branco na tela de
+  // detalhe mesmo com o dado salvo no banco - PEDIDO_DETALHE_INCLUDE nunca
+  // buscava essas relacoes.
+  it('mapeia formaPagamento/condicaoPagamento/codigoTabelaPreco/contato/vendedorResponsavel no detalhe', async () => {
+    const prisma = prismaFake({
+      findFirst: {
+        id: '1',
+        idExternoErp: null,
+        numero: null,
+        situacao: null,
+        dataHoraUltimaAlteracao: null,
+        valorTotal: null,
+        incompleto: false,
+        sincronizadoEm: new Date('2026-01-01'),
+        cliente: null,
+        itens: [],
+        codigoTabelaPreco: '110',
+        formaPagamento: { id: 'forma-1', codigo: '06', descricao: 'BOLETO' },
+        condicaoPagamento: { id: 'condicao-1', codigo: '30', nome: '30 DIAS' },
+        contato: {
+          id: 'contato-1',
+          nome: 'Fulano',
+          telefoneDdd: '11',
+          telefoneNumero: '999999999',
+        },
+        vendedor: { id: 'vendedor-1', nome: 'José Gabriel' },
+      },
+    });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.buscarPorId('1', ESCOPO_TODOS);
+
+    expect(resultado.codigoTabelaPreco).toBe('110');
+    expect(resultado.formaPagamento).toEqual({ id: 'forma-1', codigo: '06', descricao: 'BOLETO' });
+    expect(resultado.condicaoPagamento).toEqual({ id: 'condicao-1', codigo: '30', nome: '30 DIAS' });
+    expect(resultado.contato).toEqual({
+      id: 'contato-1',
+      nome: 'Fulano',
+      telefoneDdd: '11',
+      telefoneNumero: '999999999',
+    });
+    expect(resultado.vendedorResponsavel).toEqual({ id: 'vendedor-1', nome: 'José Gabriel' });
+  });
 });
 
 const PEDIDO_DETALHE_BASE = {

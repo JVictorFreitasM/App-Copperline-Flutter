@@ -67,7 +67,11 @@ export default async function PedidoDetalhePage({
 
 function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
   const endereco = pedido.cliente?.enderecos?.[0];
-  const contato = pedido.cliente?.contatos?.[0] ?? null;
+  // Contato ESCOLHIDO na criacao (Pedido.contatoId) tem prioridade - so'
+  // cai pro primeiro contato do cliente quando o pedido nao tem um
+  // vinculado (ex: pedido sincronizado do Radar, que nunca preenche isso).
+  const contato = pedido.contato ?? pedido.cliente?.contatos?.[0] ?? null;
+  const vendedorExibido = pedido.vendedorResponsavel ?? pedido.vendedor;
   // Pedido já faturado é decisão encerrada - não faz sentido oferecer
   // aceitar/recusar item (nem em lote) depois disso (pedido do usuário,
   // 2026-09-17).
@@ -132,7 +136,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
 
           {/* Coluna 2 - pagamento/vendedor */}
           <div className="flex flex-col gap-4">
-            <Campo label="Tabela de preços" value="—" />
+            <Campo label="Tabela de preços" value={pedido.codigoTabelaPreco ?? "—"} />
             <div>
               <p className="text-xs text-muted">Pagamento</p>
               {pedido.percentualDescontoSolicitado ? (
@@ -147,9 +151,15 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
                 <p className="text-sm font-semibold text-ink">{formatarMoeda(pedido.valorTotal)}</p>
               )}
             </div>
-            <Campo label="Forma de pagamento" value="—" />
-            <Campo label="Condição de pagamento" value="—" />
-            <Campo label="Vendedor" value={pedido.vendedor?.nome ?? "—"} />
+            <Campo
+              label="Forma de pagamento"
+              value={pedido.formaPagamento?.descricao ?? pedido.formaPagamento?.codigo ?? "—"}
+            />
+            <Campo
+              label="Condição de pagamento"
+              value={pedido.condicaoPagamento?.nome ?? pedido.condicaoPagamento?.codigo ?? "—"}
+            />
+            <Campo label="Vendedor" value={vendedorExibido?.nome ?? "—"} />
           </div>
 
           {/* Coluna 3 - margem/peso */}

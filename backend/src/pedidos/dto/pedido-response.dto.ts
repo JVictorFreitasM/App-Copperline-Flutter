@@ -1,6 +1,8 @@
 import type {
   Cliente,
+  CondicaoPagamento,
   ContatoCliente,
+  FormaPagamento,
   Pedido,
   PedidoItem,
   Produto,
@@ -126,6 +128,18 @@ export interface ClienteDetalhePedidoDto extends ClienteResumoPedidoDto {
   contatos: ContatoClientePedidoDto[];
 }
 
+export interface FormaPagamentoResumoPedidoDto {
+  id: string;
+  codigo: string | null;
+  descricao: string | null;
+}
+
+export interface CondicaoPagamentoResumoPedidoDto {
+  id: string;
+  codigo: string | null;
+  nome: string | null;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
@@ -140,6 +154,20 @@ export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   // no nosso banco (Radar nao expoe desconto/forma/condicao de pagamento
   // mapeados, ver OS-pendentes-claude-code.md).
   percentualDescontoSolicitado: string | null;
+  // Escolhidos na criacao (POST /pedidos, ver CriarPedidoDto) - null pra
+  // pedido sincronizado do Radar (mesmo criterio de
+  // percentualDescontoSolicitado acima).
+  formaPagamento: FormaPagamentoResumoPedidoDto | null;
+  condicaoPagamento: CondicaoPagamentoResumoPedidoDto | null;
+  codigoTabelaPreco: string | null;
+  contato: ContatoClientePedidoDto | null;
+  // Quem o pedido PERTENCE (Pedido.vendedorId - pode ser diferente de quem
+  // criou, quando supervisor/gerencia cria em nome de alguem da equipe -
+  // ver CriarPedidoService.resolverVendedorAlvo) - DIFERENTE do campo
+  // `vendedor` herdado de PedidoResumoDto (esse e' o vendedor do Radar,
+  // so' preenchido em pedido SINCRONIZADO). So' um dos dois fica
+  // preenchido por vez, conforme a origem do pedido.
+  vendedorResponsavel: VendedorResumoPedidoDto | null;
 }
 
 export function paraClienteResumoPedidoDto(
@@ -226,6 +254,10 @@ export function paraPedidoDetalheDto(
   pedido: Pedido & {
     cliente: (Cliente & { contatos: ContatoCliente[] }) | null;
     vendedorRadar?: Vendedor | null;
+    vendedor?: Vendedor | null;
+    formaPagamento?: FormaPagamento | null;
+    condicaoPagamento?: CondicaoPagamento | null;
+    contato?: ContatoCliente | null;
     itens: (PedidoItem & { produto: Produto | null; decididoPor: Usuario | null })[];
   },
   temSolicitacaoDescontoPendente = false,
@@ -236,6 +268,32 @@ export function paraPedidoDetalheDto(
     pesoLiquidoTotalKg: pedido.pesoLiquidoTotalKg?.toString() ?? null,
     pesoBrutoTotalKg: pedido.pesoBrutoTotalKg?.toString() ?? null,
     percentualDescontoSolicitado: pedido.percentualDescontoSolicitado?.toString() ?? null,
+    formaPagamento: pedido.formaPagamento
+      ? {
+          id: pedido.formaPagamento.id,
+          codigo: pedido.formaPagamento.codigo,
+          descricao: pedido.formaPagamento.descricao,
+        }
+      : null,
+    condicaoPagamento: pedido.condicaoPagamento
+      ? {
+          id: pedido.condicaoPagamento.id,
+          codigo: pedido.condicaoPagamento.codigo,
+          nome: pedido.condicaoPagamento.nome,
+        }
+      : null,
+    codigoTabelaPreco: pedido.codigoTabelaPreco,
+    contato: pedido.contato
+      ? {
+          id: pedido.contato.id,
+          nome: pedido.contato.nome,
+          telefoneDdd: pedido.contato.telefoneDdd,
+          telefoneNumero: pedido.contato.telefoneNumero,
+        }
+      : null,
+    vendedorResponsavel: pedido.vendedor
+      ? { id: pedido.vendedor.id, nome: pedido.vendedor.nome }
+      : null,
     itens: pedido.itens.map(paraPedidoItemDto),
   };
 }

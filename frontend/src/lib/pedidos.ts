@@ -154,10 +154,27 @@ export interface ClienteDetalhePedidoDto {
   contatos: ContatoClientePedidoDto[];
 }
 
+export interface FormaPagamentoResumoPedidoDto {
+  id: string;
+  codigo: string | null;
+  descricao: string | null;
+}
+
+export interface CondicaoPagamentoResumoPedidoDto {
+  id: string;
+  codigo: string | null;
+  nome: string | null;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
   cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
   pesoLiquidoTotalKg: string | null;
   pesoBrutoTotalKg: string | null;
   percentualDescontoSolicitado: string | null;
+  formaPagamento: FormaPagamentoResumoPedidoDto | null;
+  condicaoPagamento: CondicaoPagamentoResumoPedidoDto | null;
+  codigoTabelaPreco: string | null;
+  contato: ContatoClientePedidoDto | null;
+  vendedorResponsavel: { id: string; nome: string | null } | null;
 }
