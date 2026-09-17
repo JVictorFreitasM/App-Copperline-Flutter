@@ -68,6 +68,10 @@ export default async function PedidoDetalhePage({
 function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
   const endereco = pedido.cliente?.enderecos?.[0];
   const contato = pedido.cliente?.contatos?.[0] ?? null;
+  // Pedido já faturado é decisão encerrada - não faz sentido oferecer
+  // aceitar/recusar item (nem em lote) depois disso (pedido do usuário,
+  // 2026-09-17).
+  const faturado = pedido.situacao === "FATURADO";
 
   return (
     <>
@@ -83,7 +87,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         </Link>
       </div>
 
-      <AprovarReprovarTudo pedidoId={pedido.id} />
+      {!faturado && <AprovarReprovarTudo pedidoId={pedido.id} />}
 
       <div className="rounded-card bg-surface p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -184,7 +188,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         </div>
       </div>
 
-      <TabelaItens pedidoId={pedido.id} itens={pedido.itens} />
+      <TabelaItens pedidoId={pedido.id} itens={pedido.itens} faturado={faturado} />
     </>
   );
 }
@@ -213,7 +217,15 @@ function EnderecoTexto({ endereco }: { endereco: EnderecoClientePedidoDto }) {
   );
 }
 
-function TabelaItens({ pedidoId, itens }: { pedidoId: string; itens: PedidoItemDto[] }) {
+function TabelaItens({
+  pedidoId,
+  itens,
+  faturado,
+}: {
+  pedidoId: string;
+  itens: PedidoItemDto[];
+  faturado: boolean;
+}) {
   if (itens.length === 0) {
     return <EstadoVazio mensagem="Nenhum item neste pedido." />;
   }
@@ -239,11 +251,13 @@ function TabelaItens({ pedidoId, itens }: { pedidoId: string; itens: PedidoItemD
             return (
               <tr key={item.id} className="border-b border-line last:border-0">
                 <td className="px-4 py-3">
-                  <ItemAprovacaoBotoes
-                    pedidoId={pedidoId}
-                    itemId={item.id}
-                    statusAprovacao={item.statusAprovacao}
-                  />
+                  {!faturado && (
+                    <ItemAprovacaoBotoes
+                      pedidoId={pedidoId}
+                      itemId={item.id}
+                      statusAprovacao={item.statusAprovacao}
+                    />
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted">{item.produto?.codigo ?? "—"}</td>
                 <td className="px-4 py-3 text-muted">{item.quantidadeVenda ?? "—"}</td>
