@@ -5,6 +5,22 @@ function empresarialSvcClientFake(tabelas: TabelaPrecoBruta[]) {
   return { buscarTabelasPreco: jest.fn().mockResolvedValue(tabelas) };
 }
 
+// ID REST (/empresarial/v1/tabela-preco-venda-produto) - namespace
+// DIFERENTE do SOAP (ver comentario de TabelaPreco.idVendaProdutoExterno
+// no schema.prisma, achado 2026-09-17).
+function erpClientFake(idVendaProdutoExterno: string | null = '950272') {
+  return {
+    get: jest.fn().mockImplementation(() => {
+      if (idVendaProdutoExterno === null) {
+        return Promise.reject(new Error('404'));
+      }
+      // Filtro ?Codigo= devolve LISTA, mesmo com 1 resultado (confirmado
+      // contra o ambiente real).
+      return Promise.resolve([{ id: idVendaProdutoExterno, codigo: '110', inativo: false }]);
+    }),
+  };
+}
+
 function configuracaoTabelaPrecoServiceFake(codigoSelecionado: string | null = '110') {
   return { obterCodigoSelecionado: jest.fn().mockResolvedValue(codigoSelecionado) };
 }
@@ -64,6 +80,7 @@ describe('TabelaPrecoSyncStrategy', () => {
     const client = empresarialSvcClientFake([tabelaBrutaFake()]);
     const strategy = new TabelaPrecoSyncStrategy(
       client as never,
+      erpClientFake() as never,
       prismaFake() as never,
       configuracaoTabelaPrecoServiceFake('110') as never,
     );
@@ -74,10 +91,75 @@ describe('TabelaPrecoSyncStrategy', () => {
     expect(resultado.registros).toHaveLength(1);
   });
 
+  it('fetch() tambem busca o ID REST (tabela-preco-venda-produto) pra cada codigo', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const erpClient = erpClientFake('950272');
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      erpClient as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(erpClient.get).toHaveBeenCalledWith('/empresarial/v1/tabela-preco-venda-produto', {
+      Codigo: '110',
+    });
+    expect(resultado.registros[0].idVendaProdutoExterno).toBe('950272');
+  });
+
+  it('fetch() usa o primeiro item da lista devolvida pelo filtro ?Codigo= (nunca um objeto solto)', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const erpClient = {
+      get: jest.fn().mockResolvedValue([{ id: '950272', codigo: '110', inativo: false }]),
+    };
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      erpClient as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(resultado.registros[0].idVendaProdutoExterno).toBe('950272');
+  });
+
+  it('fetch() devolve idVendaProdutoExterno null quando a lista REST vem vazia (codigo nao existe nesse lado)', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const erpClient = { get: jest.fn().mockResolvedValue([]) };
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      erpClient as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(resultado.registros[0].idVendaProdutoExterno).toBeNull();
+  });
+
+  it('fetch() nao lanca (idVendaProdutoExterno fica null) quando a busca REST falha', async () => {
+    const client = empresarialSvcClientFake([tabelaBrutaFake()]);
+    const strategy = new TabelaPrecoSyncStrategy(
+      client as never,
+      erpClientFake(null) as never,
+      prismaFake() as never,
+      configuracaoTabelaPrecoServiceFake('110') as never,
+    );
+
+    const resultado = await strategy.fetch(JANELA);
+
+    expect(resultado.registros[0].idVendaProdutoExterno).toBeNull();
+  });
+
   it('fetch() nao chama a API quando nenhum codigo foi selecionado ainda', async () => {
     const client = empresarialSvcClientFake([tabelaBrutaFake()]);
     const strategy = new TabelaPrecoSyncStrategy(
       client as never,
+      erpClientFake() as never,
       prismaFake() as never,
       configuracaoTabelaPrecoServiceFake(null) as never,
     );
@@ -96,6 +178,7 @@ describe('TabelaPrecoSyncStrategy', () => {
     const prisma = prismaFake({ codigosDeCliente: [{ codigo: '205' }, { codigo: '310' }] });
     const strategy = new TabelaPrecoSyncStrategy(
       client as never,
+      erpClientFake() as never,
       prisma as never,
       configuracaoTabelaPrecoServiceFake('110') as never,
     );
@@ -113,6 +196,7 @@ describe('TabelaPrecoSyncStrategy', () => {
     const prisma = prismaFake({ codigosDeCliente: [{ codigo: '110' }] });
     const strategy = new TabelaPrecoSyncStrategy(
       client as never,
+      erpClientFake() as never,
       prisma as never,
       configuracaoTabelaPrecoServiceFake('110') as never,
     );
@@ -127,6 +211,7 @@ describe('TabelaPrecoSyncStrategy', () => {
     const prisma = prismaFake({ codigosDeCliente: [{ codigo: '205' }] });
     const strategy = new TabelaPrecoSyncStrategy(
       client as never,
+      erpClientFake() as never,
       prisma as never,
       configuracaoTabelaPrecoServiceFake(null) as never,
     );
@@ -137,17 +222,19 @@ describe('TabelaPrecoSyncStrategy', () => {
     expect(resultado.registros).toHaveLength(1);
   });
 
-  it('map() converte valores BR (numero e data) corretamente', () => {
+  it('map() converte valores BR (numero e data) corretamente e preserva idVendaProdutoExterno', () => {
     const strategy = new TabelaPrecoSyncStrategy(
       empresarialSvcClientFake([]) as never,
+      erpClientFake() as never,
       prismaFake() as never,
       configuracaoTabelaPrecoServiceFake() as never,
     );
 
-    const mapeado = strategy.map(tabelaBrutaFake());
+    const mapeado = strategy.map({ ...tabelaBrutaFake(), idVendaProdutoExterno: '950272' });
 
     expect(mapeado.idExternoErp).toBe('58');
     expect(mapeado.codigo).toBe('110');
+    expect(mapeado.idVendaProdutoExterno).toBe('950272');
     expect(mapeado.itens[0].preco).toBe('2600.02');
     expect(mapeado.itens[0].quantidadeMaxima).toBe('99999999999999.0000');
     expect(mapeado.itens[0].dataUltimoReajuste?.toISOString()).toBe('2025-11-03T00:00:00.000Z');
@@ -158,10 +245,11 @@ describe('TabelaPrecoSyncStrategy', () => {
     const prisma = prismaFake({ tabelaExistente: { id: 'tabela-1' } });
     const strategy = new TabelaPrecoSyncStrategy(
       empresarialSvcClientFake([]) as never,
+      erpClientFake() as never,
       prisma as never,
       configuracaoTabelaPrecoServiceFake() as never,
     );
-    const mapeado = strategy.map(tabelaBrutaFake());
+    const mapeado = strategy.map({ ...tabelaBrutaFake(), idVendaProdutoExterno: '950272' });
 
     await strategy.upsert(mapeado);
 
@@ -171,5 +259,25 @@ describe('TabelaPrecoSyncStrategy', () => {
         codigoItem: { notIn: ['50191'] },
       },
     });
+  });
+
+  it('upsert() grava idVendaProdutoExterno na tabela', async () => {
+    const prisma = prismaFake({ tabelaExistente: { id: 'tabela-1' } });
+    const strategy = new TabelaPrecoSyncStrategy(
+      empresarialSvcClientFake([]) as never,
+      erpClientFake() as never,
+      prisma as never,
+      configuracaoTabelaPrecoServiceFake() as never,
+    );
+    const mapeado = strategy.map({ ...tabelaBrutaFake(), idVendaProdutoExterno: '950272' });
+
+    await strategy.upsert(mapeado);
+
+    expect(prisma.tx.tabelaPreco.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ idVendaProdutoExterno: '950272' }),
+        update: expect.objectContaining({ idVendaProdutoExterno: '950272' }),
+      }),
+    );
   });
 });

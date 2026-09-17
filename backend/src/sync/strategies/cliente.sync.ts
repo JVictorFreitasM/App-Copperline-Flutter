@@ -33,6 +33,7 @@ const CAMPOS_CLIENTE = [
   'detalhes.idVendedores',
   'informacoesFinanceiras.limiteCredito',
   'informacoesFinanceiras.dataLimiteCredito',
+  'informacoesExtras2.idTabelaPrecoProduto',
 ];
 
 const TAMANHO_JANELA_PADRAO_MS = 24 * 60 * 60 * 1000; // 1 dia
@@ -93,6 +94,7 @@ export class ClienteSyncStrategy implements SyncStrategy<
       dataLimiteCredito: bruto.informacoesFinanceiras?.dataLimiteCredito
         ? new Date(bruto.informacoesFinanceiras.dataLimiteCredito)
         : null,
+      tabelaPrecoIdExterno: bruto.informacoesExtras2?.idTabelaPrecoProduto ?? null,
     };
   }
 
@@ -115,6 +117,7 @@ export class ClienteSyncStrategy implements SyncStrategy<
           sincronizadoEm,
           limiteCredito: mapeado.limiteCredito,
           dataLimiteCredito: mapeado.dataLimiteCredito,
+          tabelaPrecoIdExterno: mapeado.tabelaPrecoIdExterno,
         },
         // incompleto:false tambem no update - "completa" um eventual stub
         // criado por PedidoSyncStrategy (OS 07) quando o cliente de verdade
@@ -130,6 +133,7 @@ export class ClienteSyncStrategy implements SyncStrategy<
           sincronizadoEm,
           limiteCredito: mapeado.limiteCredito,
           dataLimiteCredito: mapeado.dataLimiteCredito,
+          tabelaPrecoIdExterno: mapeado.tabelaPrecoIdExterno,
         },
       });
 

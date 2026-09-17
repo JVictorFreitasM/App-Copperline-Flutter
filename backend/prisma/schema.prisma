@@ -85,6 +85,18 @@ model Cliente {
   limiteCredito     Decimal?  @map("limite_credito") @db.Decimal(14, 2)
   dataLimiteCredito DateTime? @map("data_limite_credito")
 
+  // Tabela de preco NATIVA do cadastro do cliente no Radar
+  // (informacoesExtras2.idTabelaPrecoProduto - achado em 2026-09-17,
+  // schema real confirmado pelo usuario). ID EXTERNO (nao codigo) porque
+  // e' exatamente o que o Radar devolve - resolvido pro `codigo` de
+  // TabelaPreco so' na LEITURA (ClienteTabelaPrecoService), mesmo criterio
+  // de bootstrap ja documentado em ClienteTabelaPreco (a linha de
+  // TabelaPreco pode nao existir ainda quando o cliente sincroniza).
+  // Usado como FALLBACK quando o cliente nao tem nenhuma linha manual em
+  // ClienteTabelaPreco (admin nunca associou) - nao substitui a decisao
+  // manual do admin quando ela existir.
+  tabelaPrecoIdExterno String? @map("tabela_preco_id_externo")
+
   // "Pin" de localizacao (visita com foto/geolocalizacao, extensao da
   // OS-BACKEND-28) - NAO vem do WK Radar (o endereco em `enderecos` acima
   // e' o cadastral, sem coordenada). Definido manualmente por um vendedor
@@ -331,10 +343,28 @@ model TipoAcondicionamento {
 // de SaldoEstoque - tabela de preco pode referenciar item nao
 // sincronizado como Produto ainda).
 model TabelaPreco {
-  id             String   @id @default(uuid())
-  idExternoErp   String   @unique @map("id_externo_erp")
-  codigo         String   @unique
-  ativa          Boolean  @default(true)
+  id           String @id @default(uuid())
+  // ID do SOAP Empresarial.svc (BuscarTabelasPreco) - so' serve pra casar
+  // upsert dos ITENS/precos (ItemTabelaPreco), sincronizados por esse
+  // mesmo servico. NUNCA usar este campo como idTabelaPreco no payload de
+  // POST /comercial/v1/pedido - e' um namespace de ID DIFERENTE do REST
+  // (achado em 2026-09-17: Radar tem dois sistemas de tabela de preco com
+  // IDs incompativeis entre si - confirmado testando contra o ambiente
+  // real, "Id: 58" do SOAP nao existe no espaco REST). Ver
+  // idVendaProdutoExterno abaixo pra esse caso.
+  idExternoErp String @unique @map("id_externo_erp")
+  codigo       String @unique
+  ativa        Boolean @default(true)
+
+  // ID do REST /empresarial/v1/tabela-preco-venda-produto (mesmo namespace
+  // usado por POST /comercial/v1/pedido, itens[].idTabelaPreco, e por
+  // Cliente.tabelaPrecoIdExterno) - o campo que REALMENTE deve ir no
+  // payload de criacao de pedido. Nullable: so' preenchido depois que
+  // tabela-preco.sync.ts busca esse endpoint pra cada codigo rastreado
+  // (pode nao ter sido preenchido ainda pra tabela sincronizada antes
+  // desta OS).
+  idVendaProdutoExterno String? @map("id_venda_produto_externo")
+
   sincronizadoEm DateTime @map("sincronizado_em")
 
   itens ItemTabelaPreco[]

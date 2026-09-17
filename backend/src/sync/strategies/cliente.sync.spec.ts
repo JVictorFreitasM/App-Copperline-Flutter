@@ -35,7 +35,22 @@ describe('ClienteSyncStrategy.map', () => {
       vendedoresExternoIds: [],
       limiteCredito: null,
       dataLimiteCredito: null,
+      tabelaPrecoIdExterno: null,
     });
+  });
+
+  // Achado 2026-09-17 - tabela de preco NATIVA do cadastro do cliente,
+  // schema real confirmado pelo usuario (informacoesExtras2).
+  it('mapeia informacoesExtras2.idTabelaPrecoProduto', () => {
+    const bruto: WkRadarCliente = {
+      id: '123',
+      inativo: false,
+      informacoesExtras2: { idTabelaPrecoProduto: 'tabela-ext-110' },
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.tabelaPrecoIdExterno).toBe('tabela-ext-110');
   });
 
   it('mapeia informacoesFinanceiras.limiteCredito/dataLimiteCredito (OS-BACKEND-36)', () => {
@@ -130,6 +145,7 @@ const MAPEADO_BASE = {
   vendedoresExternoIds: [] as string[],
   limiteCredito: null as number | null,
   dataLimiteCredito: null as Date | null,
+  tabelaPrecoIdExterno: null as string | null,
 };
 
 describe('ClienteSyncStrategy.upsert (OS-BACKEND-23, vinculo N:N com vendedor)', () => {

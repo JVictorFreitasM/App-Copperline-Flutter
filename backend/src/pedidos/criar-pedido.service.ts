@@ -371,11 +371,17 @@ export class CriarPedidoService {
     }
     const tabela = await this.prisma.tabelaPreco.findUnique({
       where: { codigo: codigoTabela },
-      select: { idExternoErp: true },
+      select: { idVendaProdutoExterno: true },
     });
-    if (!tabela) {
+    // idVendaProdutoExterno (REST, namespace DIFERENTE de idExternoErp que
+    // e' do SOAP - achado em 2026-09-17, ver comentario no schema.prisma)
+    // - e' o que POST /comercial/v1/pedido realmente espera em
+    // itens[].idTabelaPreco. Falha aqui em vez de mandar idExternoErp por
+    // engano: o Radar ja rejeitou um pedido de teste com "Id invalido"
+    // quando isso aconteceu.
+    if (!tabela?.idVendaProdutoExterno) {
       throw new UnprocessableEntityException(
-        `Tabela de preço '${codigoTabela}' selecionada ainda não foi sincronizada.`,
+        `Tabela de preço '${codigoTabela}' selecionada ainda não tem o ID de venda (REST) sincronizado - rode a sincronização de tabela de preço novamente.`,
       );
     }
 
@@ -388,7 +394,7 @@ export class CriarPedidoService {
       }
       return {
         produtoIdExterno: produto.idExternoErp,
-        idTabelaPreco: tabela.idExternoErp,
+        idTabelaPreco: tabela.idVendaProdutoExterno as string,
         quantidade: item.quantidade,
         // SEM desconto (preco de tabela puro) - ver comentario abaixo
         // sobre o percentual blendado.

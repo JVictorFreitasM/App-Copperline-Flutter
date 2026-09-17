@@ -23,7 +23,7 @@ const CONDICAO_PAGAMENTO_PADRAO = {
   validade: null,
   parcelas: [{ percentual: 100, prazo: 30 }],
 };
-const TABELA_PRECO_PADRAO = { idExternoErp: 'tabela-externo-1' };
+const TABELA_PRECO_PADRAO = { idVendaProdutoExterno: 'tabela-venda-externo-1' };
 const CONTATO_PADRAO = { id: 'contato-1', clienteId: 'cliente-1' };
 
 function prismaFake(overrides: {
@@ -496,7 +496,7 @@ describe('CriarPedidoService.criar', () => {
       itens: [
         {
           produtoIdExterno: 'produto-externo-1',
-          idTabelaPreco: 'tabela-externo-1',
+          idTabelaPreco: 'tabela-venda-externo-1',
           quantidade: 3,
           valorUnitario: 30, // BRUTO (sem desconto), nao valorTotal/quantidade
         },
@@ -522,6 +522,20 @@ describe('CriarPedidoService.criar', () => {
 
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
       /Nenhuma tabela de preço selecionada/,
+    );
+    expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
+  });
+
+  // Achado 2026-09-17: idExternoErp (SOAP) e idVendaProdutoExterno (REST)
+  // sao namespaces DIFERENTES de ID no Radar - so' o REST e' valido pro
+  // payload de POST /comercial/v1/pedido. Confirmado testando contra o
+  // ambiente real ("Id invalido" quando mandamos o SOAP por engano).
+  it('tabela sincronizada mas sem idVendaProdutoExterno (REST) ainda: falha antes de chamar o ERP', async () => {
+    const prisma = prismaFake({ tabelaPreco: { idVendaProdutoExterno: null } });
+    const service = criarService(prisma);
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      /ainda não tem o ID de venda \(REST\) sincronizado/,
     );
     expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
   });

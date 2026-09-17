@@ -17,6 +17,14 @@ export class ClienteTabelaPrecoService {
   // mesmo criterio anti-IDOR de ClienteEstatisticasService.obter: 404
   // tanto pra cliente inexistente quanto pra cliente fora do escopo de
   // quem esta autenticado, nunca 403.
+  //
+  // Fallback pra tabela NATIVA do Radar (achado em 2026-09-17,
+  // Cliente.tabelaPrecoIdExterno, ver cliente.sync.ts) - so' entra em jogo
+  // quando o admin NUNCA associou nenhuma tabela manualmente aqui
+  // (associacoes.length === 0). Resolve o id externo pro `codigo` de
+  // TabelaPreco na LEITURA (nunca grava/duplica) - se a tabela referenciada
+  // ainda nao sincronizou, cai pro comportamento de sempre (array vazio,
+  // consumidor usa o fallback global ConfiguracaoTabelaPreco).
   async listarPorCliente(clienteId: string, escopo: EscopoClientes): Promise<string[]> {
     const whereEscopo = construirWhereClientePorEscopo(escopo);
     if (whereEscopo === null) {
@@ -25,7 +33,7 @@ export class ClienteTabelaPrecoService {
 
     const cliente = await this.prisma.cliente.findFirst({
       where: { id: clienteId, ...whereEscopo },
-      select: { id: true },
+      select: { id: true, tabelaPrecoIdExterno: true },
     });
     if (!cliente) {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
@@ -36,7 +44,18 @@ export class ClienteTabelaPrecoService {
       select: { codigo: true },
       orderBy: { criadoEm: 'asc' },
     });
-    return associacoes.map((a) => a.codigo);
+    if (associacoes.length > 0) {
+      return associacoes.map((a) => a.codigo);
+    }
+
+    if (!cliente.tabelaPrecoIdExterno) {
+      return [];
+    }
+    const tabelaNativa = await this.prisma.tabelaPreco.findUnique({
+      where: { idExternoErp: cliente.tabelaPrecoIdExterno },
+      select: { codigo: true },
+    });
+    return tabelaNativa ? [tabelaNativa.codigo] : [];
   }
 
   async associar(clienteId: string, codigo: string): Promise<void> {

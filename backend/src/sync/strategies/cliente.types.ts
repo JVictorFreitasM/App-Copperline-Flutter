@@ -41,6 +41,16 @@ export interface WkRadarClienteInformacoesFinanceiras {
   dataLimiteCredito?: string | null;
 }
 
+// idTabelaPrecoProduto (achado em 2026-09-17, schema real confirmado pelo
+// usuario) - tabela de preco NATIVA do cadastro do cliente no Radar,
+// separada da associacao manual admin (ClienteTabelaPreco). Os demais
+// campos deste bloco (idFormaPagamento/idCondicaoPagamento/idClassificacao/
+// descontoComercial) existem no schema real mas ficam FORA de escopo por
+// ora - nao pedidos, nao mapeados.
+export interface WkRadarClienteInformacoesExtras2 {
+  idTabelaPrecoProduto?: string | null;
+}
+
 export interface WkRadarCliente {
   id: string;
   codigoIntegrador?: string | null;
@@ -52,6 +62,7 @@ export interface WkRadarCliente {
   contatos?: WkRadarContato[] | null;
   detalhes?: WkRadarClienteDetalhes | null;
   informacoesFinanceiras?: WkRadarClienteInformacoesFinanceiras | null;
+  informacoesExtras2?: WkRadarClienteInformacoesExtras2 | null;
 }
 
 export interface ContatoMapeado {
@@ -76,4 +87,5 @@ export interface ClienteMapeado {
   vendedoresExternoIds: string[];
   limiteCredito: number | null;
   dataLimiteCredito: Date | null;
+  tabelaPrecoIdExterno: string | null;
 }

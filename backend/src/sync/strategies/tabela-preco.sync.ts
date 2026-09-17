@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { parseDataHoraBr } from '../../common/parse-data-br';
 import { parseDecimalBr } from '../../common/parse-decimal-br';
 import { EmpresarialSvcClientService } from '../../empresarial-svc-client/empresarial-svc-client.service';
@@ -6,6 +6,7 @@ import type {
   ItemTabelaPrecoBruto,
   TabelaPrecoBruta,
 } from '../../empresarial-svc-client/empresarial-svc-client.types';
+import { ErpClientService } from '../../erp-client/erp-client.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfiguracaoTabelaPrecoService } from '../../tabelas-preco/configuracao-tabela-preco.service';
 import type {
@@ -32,6 +33,24 @@ export interface TabelaPrecoMapeada {
   codigo: string;
   ativa: boolean;
   itens: ItemTabelaPrecoMapeado[];
+  idVendaProdutoExterno: string | null;
+}
+
+// Bruto do SOAP (Empresarial.svc) + o ID do REST buscado a parte (mesmo
+// codigo, sistema diferente - ver comentario de
+// TabelaPreco.idVendaProdutoExterno no schema.prisma).
+interface TabelaPrecoBrutaComRest extends TabelaPrecoBruta {
+  idVendaProdutoExterno: string | null;
+}
+
+// Resposta de GET /empresarial/v1/tabela-preco-venda-produto?Codigo=X
+// (REST, confirmado contra o ambiente real em 2026-09-17) - objeto unico
+// quando filtrado por Codigo, nao array.
+interface WkRadarTabelaPrecoVendaProduto {
+  id: string;
+  codigo: string;
+  nome: string | null;
+  inativo: boolean;
 }
 
 // nomeEntidade = 'tabela-preco'. IGNORA o cursor incremental (janela.desde)
@@ -50,13 +69,15 @@ export interface TabelaPrecoMapeada {
 // pra "configurar intervalo de sincronizacao", ja existe.
 @Injectable()
 export class TabelaPrecoSyncStrategy
-  implements SyncStrategy<TabelaPrecoBruta, TabelaPrecoMapeada>
+  implements SyncStrategy<TabelaPrecoBrutaComRest, TabelaPrecoMapeada>
 {
   readonly nomeEntidade = 'tabela-preco';
   readonly agendamento = 'CONFIGURAVEL' as const;
+  private readonly logger = new Logger(TabelaPrecoSyncStrategy.name);
 
   constructor(
     private readonly empresarialSvcClient: EmpresarialSvcClientService,
+    private readonly erpClient: ErpClientService,
     private readonly prisma: PrismaService,
     private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
   ) {}
@@ -69,7 +90,7 @@ export class TabelaPrecoSyncStrategy
   // chamada separada (a API so aceita um `Codigo` por vez no filtro, ver
   // empresarial-svc-client) - sem chamada nenhuma se nao houver codigo
   // algum configurado (nem global, nem por cliente).
-  async fetch(_janela: SyncWindow): Promise<SyncFetchResultado<TabelaPrecoBruta>> {
+  async fetch(_janela: SyncWindow): Promise<SyncFetchResultado<TabelaPrecoBrutaComRest>> {
     const codigos = await this.obterCodigosParaSincronizar();
     if (codigos.length === 0) {
       return {
@@ -80,11 +101,39 @@ export class TabelaPrecoSyncStrategy
       };
     }
 
-    const registros: TabelaPrecoBruta[] = [];
+    const registros: TabelaPrecoBrutaComRest[] = [];
     for (const codigo of codigos) {
-      registros.push(...(await this.empresarialSvcClient.buscarTabelasPreco(codigo)));
+      const brutas = await this.empresarialSvcClient.buscarTabelasPreco(codigo);
+      const idVendaProdutoExterno = await this.buscarIdVendaProdutoExterno(codigo);
+      for (const bruta of brutas) {
+        registros.push({ ...bruta, idVendaProdutoExterno });
+      }
     }
     return { registros, avisos: [] };
+  }
+
+  // ID do REST (POST /comercial/v1/pedido, itens[].idTabelaPreco) - sistema
+  // DIFERENTE do SOAP usado acima pros itens/precos (ver comentario de
+  // TabelaPreco.idVendaProdutoExterno no schema.prisma). O filtro por
+  // ?Codigo= devolve uma LISTA (confirmado contra o ambiente real,
+  // 2026-09-17 - mesmo com 1 unico resultado, nunca um objeto solto,
+  // diferente de /tabela-preco-venda-produto/{id} que e' objeto direto).
+  // Null (nunca lanca) quando o codigo nao existe nesse lado REST -
+  // fail-safe, mesmo criterio ja usado em parseDataBrWkRadar: um dado
+  // auxiliar ausente nao deveria derrubar o sync da tabela inteira.
+  private async buscarIdVendaProdutoExterno(codigo: string): Promise<string | null> {
+    try {
+      const resultado = await this.erpClient.get<WkRadarTabelaPrecoVendaProduto[]>(
+        '/empresarial/v1/tabela-preco-venda-produto',
+        { Codigo: codigo },
+      );
+      return resultado[0]?.id ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao buscar id REST (tabela-preco-venda-produto) pro codigo '${codigo}': ${error instanceof Error ? error.message : error}`,
+      );
+      return null;
+    }
   }
 
   private async obterCodigosParaSincronizar(): Promise<string[]> {
@@ -100,12 +149,13 @@ export class TabelaPrecoSyncStrategy
     return [...codigos];
   }
 
-  map(bruto: TabelaPrecoBruta): TabelaPrecoMapeada {
+  map(bruto: TabelaPrecoBrutaComRest): TabelaPrecoMapeada {
     return {
       idExternoErp: bruto.Id,
       codigo: bruto.Codigo,
       ativa: bruto.Ativa,
       itens: bruto.ItensTabelaPreco.map(mapearItem),
+      idVendaProdutoExterno: bruto.idVendaProdutoExterno,
     };
   }
 
@@ -120,11 +170,17 @@ export class TabelaPrecoSyncStrategy
             idExternoErp: mapeado.idExternoErp,
             codigo: mapeado.codigo,
             ativa: mapeado.ativa,
+            idVendaProdutoExterno: mapeado.idVendaProdutoExterno,
             sincronizadoEm,
           },
           update: {
             codigo: mapeado.codigo,
             ativa: mapeado.ativa,
+            // undefined (nao null) quando a busca REST falhou nesta
+            // rodada - Prisma trata undefined como "nao mexer no campo",
+            // preserva um valor bom de uma sincronizacao anterior em vez
+            // de apagar por uma falha pontual (ver buscarIdVendaProdutoExterno).
+            idVendaProdutoExterno: mapeado.idVendaProdutoExterno ?? undefined,
             sincronizadoEm,
           },
         });
