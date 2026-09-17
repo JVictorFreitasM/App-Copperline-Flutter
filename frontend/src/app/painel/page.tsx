@@ -2,6 +2,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import Form from "next/form";
 import type {
+  ComparativoMensalDashboardDto,
   ComparativoVendedorDto,
   EstoqueCriticoDashboardDto,
   FunilPedidosDashboardDto,
@@ -10,7 +11,11 @@ import type {
   RankingDashboardDto,
   ResumoDashboardDto,
   VendasDashboardDto,
+  VendasPorEstadoDashboardDto,
+  VendasVsFaturadoDashboardDto,
 } from "@/lib/dashboard";
+import { nomeMesAbreviado, rotuloAnoMes } from "@/lib/dashboard";
+import { GraficoBarrasComparativo } from "@/components/design/grafico-barras-comparativo";
 import { MapaCalorVendasWrapper } from "@/components/design/mapa-calor-vendas-wrapper";
 import type { VendedorEquipeDto } from "@/lib/vendedores";
 import { formatarData, formatarMoeda } from "@/lib/formatacao";
@@ -79,6 +84,9 @@ export default async function PainelPage({
     funilPedidosResultado,
     equipeResultado,
     mapaCalorResultado,
+    comparativoMensalResultado,
+    vendasPorEstadoResultado,
+    vendasVsFaturadoResultado,
   ] = await Promise.allSettled([
     apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
     apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
@@ -92,6 +100,15 @@ export default async function PainelPage({
     }),
     apiFetch<VendedorEquipeDto[]>("/vendedores/equipe", { cache: "no-store" }),
     apiFetch<MapaCalorVendasDto>(`/dashboard/mapa-calor-vendas?${queryPeriodo}`, {
+      cache: "no-store",
+    }),
+    apiFetch<ComparativoMensalDashboardDto>("/dashboard/comparativo-mensal", {
+      cache: "no-store",
+    }),
+    apiFetch<VendasPorEstadoDashboardDto>(`/dashboard/vendas-por-estado?${queryPeriodo}`, {
+      cache: "no-store",
+    }),
+    apiFetch<VendasVsFaturadoDashboardDto>(`/dashboard/vendas-vs-faturado?${queryPeriodo}`, {
       cache: "no-store",
     }),
   ]);
@@ -112,6 +129,9 @@ export default async function PainelPage({
   const [funilPedidos, erroFunilPedidos] = extrair(funilPedidosResultado);
   const [equipe, erroEquipe] = extrair(equipeResultado);
   const [mapaCalor, erroMapaCalor] = extrair(mapaCalorResultado);
+  const [comparativoMensal, erroComparativoMensal] = extrair(comparativoMensalResultado);
+  const [vendasPorEstado, erroVendasPorEstado] = extrair(vendasPorEstadoResultado);
+  const [vendasVsFaturado, erroVendasVsFaturado] = extrair(vendasVsFaturadoResultado);
 
   // OS-WEB-40 - comparativo só busca quando há seleção válida (2-4
   // vendedores); sem seleção, o card mostra o seletor sem gráfico, nada de
@@ -278,6 +298,72 @@ export default async function PainelPage({
             rotulo: item.etapa,
             valor: item.quantidade,
           }))}
+        />
+      ),
+    },
+    {
+      // Epico 2 (OS-dashboard-configuracoes-notificacoes-auditoria.md) -
+      // "vendas" aqui e' venda CONFIRMADA (FATURADO/ATENDIDO), mesma
+      // definição já usada em obterResumo (valorFaturadoRecente) - sem
+      // filtro de período (compara sempre os 2 anos inteiros).
+      titulo: "Comparativo mensal (ano atual x anterior)",
+      legenda: comparativoMensal && (
+        <p className="text-sm text-muted">
+          {comparativoMensal.anoAtual} vs {comparativoMensal.anoAnterior}
+        </p>
+      ),
+      conteudo: !comparativoMensal ? (
+        <ErroConexao mensagem={erroComparativoMensal!} />
+      ) : (
+        <GraficoBarrasComparativo
+          dados={comparativoMensal.meses.map((item) => ({
+            rotulo: nomeMesAbreviado(item.mes),
+            valorA: Number(item.valorAnoAtual),
+            valorB: Number(item.valorAnoAnterior),
+          }))}
+          rotuloSerieA={String(comparativoMensal.anoAtual)}
+          rotuloSerieB={String(comparativoMensal.anoAnterior)}
+          formato="moeda"
+        />
+      ),
+    },
+    {
+      titulo: "Vendas x Faturado",
+      conteudo: !vendasVsFaturado ? (
+        <ErroConexao mensagem={erroVendasVsFaturado!} />
+      ) : vendasVsFaturado.meses.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum pedido ou nota fiscal no período selecionado." />
+      ) : (
+        <GraficoBarrasComparativo
+          dados={vendasVsFaturado.meses.map((item) => ({
+            rotulo: rotuloAnoMes(item.mes),
+            valorA: Number(item.valorVendido),
+            valorB: Number(item.valorFaturado),
+          }))}
+          rotuloSerieA="Vendido"
+          rotuloSerieB="Faturado"
+          formato="moeda"
+        />
+      ),
+    },
+    {
+      titulo: "Vendas por estado",
+      legenda: vendasPorEstado && vendasPorEstado.quantidadePedidosSemUf > 0 && (
+        <p className="text-sm text-muted">
+          {vendasPorEstado.quantidadePedidosSemUf} pedido(s) sem UF de entrega informada
+        </p>
+      ),
+      conteudo: !vendasPorEstado ? (
+        <ErroConexao mensagem={erroVendasPorEstado!} />
+      ) : vendasPorEstado.estados.length === 0 ? (
+        <EstadoVazio mensagem="Nenhum pedido com UF de entrega no período selecionado." />
+      ) : (
+        <GraficoBarras
+          dados={vendasPorEstado.estados.map((item) => ({
+            rotulo: item.uf,
+            valor: Number(item.valorTotal),
+          }))}
+          formato="moeda"
         />
       ),
     },

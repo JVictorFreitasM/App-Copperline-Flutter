@@ -17,6 +17,8 @@ function prismaFake(overrides: {
   saldosEstoque?: unknown[];
   vinculosClienteVendedor?: unknown[];
   vendedores?: unknown[];
+  pedidoCount?: number;
+  notasFiscais?: unknown[];
 }) {
   return {
     cliente: {
@@ -34,7 +36,7 @@ function prismaFake(overrides: {
       findMany: jest.fn().mockResolvedValue(overrides.vendedores ?? []),
     },
     pedido: {
-      count: jest.fn().mockResolvedValue(overrides.pedidosEmAberto ?? 0),
+      count: jest.fn().mockResolvedValue(overrides.pedidoCount ?? overrides.pedidosEmAberto ?? 0),
       aggregate: jest.fn().mockResolvedValue(
         overrides.pedidoAggregate ?? { _count: 0, _sum: { valorTotal: overrides.somaFaturado ?? null } },
       ),
@@ -51,7 +53,7 @@ function prismaFake(overrides: {
       groupBy: jest.fn().mockResolvedValue(overrides.notaFiscalGroupBy ?? []),
       findMany: jest
         .fn()
-        .mockResolvedValue(overrides.notasFiscaisRecentes ?? []),
+        .mockResolvedValue(overrides.notasFiscaisRecentes ?? overrides.notasFiscais ?? []),
     },
     saldoEstoque: {
       findMany: jest.fn().mockResolvedValue(overrides.saldosEstoque ?? []),
@@ -415,5 +417,103 @@ describe('DashboardService.obterMapaCalorVendas', () => {
     expect(resultado.pontos).toEqual([]);
     expect(resultado.totalClientesNoPeriodo).toBe(0);
     expect(prisma.cliente.findMany).not.toHaveBeenCalled();
+  });
+});
+
+// OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 2.
+describe('DashboardService.obterComparativoMensal', () => {
+  it('soma valorTotal por mes, separando ano atual do ano anterior', async () => {
+    const prisma = prismaFake({
+      pedidosRecentes: [
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2026, 0, 15)), valorTotal: 100 },
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2026, 0, 20)), valorTotal: 50 },
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2025, 0, 10)), valorTotal: 80 },
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2026, 5, 1)), valorTotal: 30 },
+      ],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterComparativoMensal({ ano: 2026 });
+
+    expect(resultado.anoAtual).toBe(2026);
+    expect(resultado.anoAnterior).toBe(2025);
+    expect(resultado.meses[0]).toEqual({
+      mes: 1,
+      valorAnoAtual: '150',
+      valorAnoAnterior: '80',
+    });
+    expect(resultado.meses[5]).toEqual({
+      mes: 6,
+      valorAnoAtual: '30',
+      valorAnoAnterior: '0',
+    });
+    expect(resultado.meses).toHaveLength(12);
+  });
+
+  it('usa o ano corrente quando nenhum ano e informado', async () => {
+    const prisma = prismaFake({ pedidosRecentes: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterComparativoMensal({});
+
+    expect(resultado.anoAtual).toBe(new Date().getFullYear());
+  });
+});
+
+// OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2.
+describe('DashboardService.obterVendasPorEstado', () => {
+  it('mapeia valor/quantidade por UF e expoe quantidadePedidosSemUf separado', async () => {
+    const prisma = prismaFake({
+      pedidoGroupBy: [
+        { ufEntrega: 'MA', _sum: { valorTotal: 1000 }, _count: 3 },
+        { ufEntrega: 'PI', _sum: { valorTotal: 500 }, _count: 1 },
+      ],
+      pedidoCount: 42,
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterVendasPorEstado({});
+
+    expect(resultado.estados).toEqual([
+      { uf: 'MA', valorTotal: '1000', quantidadePedidos: 3 },
+      { uf: 'PI', valorTotal: '500', quantidadePedidos: 1 },
+    ]);
+    expect(resultado.quantidadePedidosSemUf).toBe(42);
+    expect(prisma.pedido.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ ufEntrega: { not: null } }) }),
+    );
+  });
+});
+
+// OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2 - "Vendas
+// x Faturado".
+describe('DashboardService.obterVendasVsFaturado', () => {
+  it('agrupa vendido (Pedido) e faturado (NotaFiscal) pelo mesmo mes, independente', async () => {
+    const prisma = prismaFake({
+      pedidosRecentes: [
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2026, 0, 5)), valorTotal: 100 },
+        { dataHoraUltimaAlteracao: new Date(Date.UTC(2026, 1, 5)), valorTotal: 50 },
+      ],
+      notasFiscais: [
+        { dataEmissao: new Date(Date.UTC(2026, 0, 10)), valorTotalNotaFiscal: 60 },
+      ],
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterVendasVsFaturado({});
+
+    expect(resultado.meses).toEqual([
+      { mes: '2026-01', valorVendido: '100', valorFaturado: '60' },
+      { mes: '2026-02', valorVendido: '50', valorFaturado: '0' },
+    ]);
+  });
+
+  it('sem nenhum pedido/nota no periodo, devolve lista de meses vazia', async () => {
+    const prisma = prismaFake({ pedidosRecentes: [], notasFiscais: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterVendasVsFaturado({});
+
+    expect(resultado.meses).toEqual([]);
   });
 });

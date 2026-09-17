@@ -1,8 +1,12 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ComparativoVendedoresService } from './comparativo-vendedores.service';
 import { DashboardService } from './dashboard.service';
+import { ComparativoMensalQueryDto } from './dto/comparativo-mensal-dashboard.dto';
+import type { ComparativoMensalDashboardDto } from './dto/comparativo-mensal-dashboard.dto';
 import { ComparativoVendedoresQueryDto } from './dto/comparativo-vendedores.dto';
 import type { ComparativoVendedorDto } from './dto/comparativo-vendedores.dto';
+import type { VendasPorEstadoDashboardDto } from './dto/vendas-por-estado-dashboard.dto';
+import type { VendasVsFaturadoDashboardDto } from './dto/vendas-vs-faturado-dashboard.dto';
 import { EstoqueCriticoQueryDto } from './dto/estoque-critico-dashboard.dto';
 import type { EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
 import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
@@ -90,5 +94,27 @@ export class DashboardController {
       query.vendedorIds,
       filtroPeriodo(query.dataInicial, query.dataFinal) ?? {},
     );
+  }
+
+  // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 2 -
+  // comparativo mes a mes, ano atual vs ano anterior.
+  @Get('comparativo-mensal')
+  obterComparativoMensal(
+    @Query() query: ComparativoMensalQueryDto,
+  ): Promise<ComparativoMensalDashboardDto> {
+    return this.dashboardService.obterComparativoMensal(query);
+  }
+
+  // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2.
+  @Get('vendas-por-estado')
+  obterVendasPorEstado(@Query() query: PeriodoQueryDto): Promise<VendasPorEstadoDashboardDto> {
+    return this.dashboardService.obterVendasPorEstado(query);
+  }
+
+  // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2 -
+  // "Vendas x Faturado".
+  @Get('vendas-vs-faturado')
+  obterVendasVsFaturado(@Query() query: PeriodoQueryDto): Promise<VendasVsFaturadoDashboardDto> {
+    return this.dashboardService.obterVendasVsFaturado(query);
   }
 }

@@ -132,3 +132,71 @@ export interface MapaCalorVendasDto {
   pontos: PontoMapaCalorVendasDto[];
   totalClientesNoPeriodo: number;
 }
+
+// Mesmo shape de backend/src/dashboard/dto/comparativo-mensal-dashboard.dto.ts
+// (Epico 2, OS-dashboard-configuracoes-notificacoes-auditoria.md).
+export interface ComparativoMensalMesDto {
+  mes: number;
+  valorAnoAtual: string;
+  valorAnoAnterior: string;
+}
+
+export interface ComparativoMensalDashboardDto {
+  anoAtual: number;
+  anoAnterior: number;
+  meses: ComparativoMensalMesDto[];
+}
+
+// Mesmo shape de backend/src/dashboard/dto/vendas-por-estado-dashboard.dto.ts
+// (Epico 1.2). quantidadePedidosSemUf existe pra tela nunca fingir
+// cobertura de 100% (so' ~7% dos pedidos tem UF de entrega).
+export interface VendasPorEstadoDto {
+  uf: string;
+  valorTotal: string;
+  quantidadePedidos: number;
+}
+
+export interface VendasPorEstadoDashboardDto {
+  periodo: PeriodoDto;
+  estados: VendasPorEstadoDto[];
+  quantidadePedidosSemUf: number;
+}
+
+// Mesmo shape de backend/src/dashboard/dto/vendas-vs-faturado-dashboard.dto.ts
+// (Epico 1.2).
+export interface VendasVsFaturadoMesDto {
+  mes: string;
+  valorVendido: string;
+  valorFaturado: string;
+}
+
+export interface VendasVsFaturadoDashboardDto {
+  periodo: PeriodoDto;
+  meses: VendasVsFaturadoMesDto[];
+}
+
+const NOMES_MES_ABREVIADOS = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
+
+// mesNumero: 1-12 (Janeiro=1, mesmo formato de ComparativoMensalMesDto.mes).
+export function nomeMesAbreviado(mesNumero: number): string {
+  return NOMES_MES_ABREVIADOS[mesNumero - 1] ?? String(mesNumero);
+}
+
+// "2026-01" -> "Jan/26".
+export function rotuloAnoMes(anoMes: string): string {
+  const [ano, mes] = anoMes.split("-");
+  return `${nomeMesAbreviado(Number(mes))}/${ano.slice(2)}`;
+}

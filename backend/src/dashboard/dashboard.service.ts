@@ -13,6 +13,12 @@ import type { MapaCalorVendasDto } from './dto/mapa-calor-vendas.dto';
 import type { PeriodoQueryDto } from './dto/periodo-query.dto';
 import type { ResumoDashboardDto } from './dto/resumo-dashboard.dto';
 import type { VendasDashboardDto } from './dto/vendas-dashboard.dto';
+import type {
+  ComparativoMensalDashboardDto,
+  ComparativoMensalQueryDto,
+} from './dto/comparativo-mensal-dashboard.dto';
+import type { VendasPorEstadoDashboardDto } from './dto/vendas-por-estado-dashboard.dto';
+import type { VendasVsFaturadoDashboardDto } from './dto/vendas-vs-faturado-dashboard.dto';
 
 const PERIODO_VALOR_FATURADO_DIAS = 30;
 const QUANTIDADE_RECENTES = 5;
@@ -379,4 +385,130 @@ export class DashboardService {
 
     return { pontos, totalClientesNoPeriodo: clientesAgrupado.length };
   }
+
+  // Epico 2 (OS-dashboard-configuracoes-notificacoes-auditoria.md) -
+  // "vendas" aqui reaproveita a MESMA definicao ja usada em obterResumo
+  // (valorFaturadoRecente: SITUACOES_FATURADAS) pra nao inventar um segundo
+  // criterio de "venda aprovada" dentro do mesmo dashboard. Agregacao por
+  // mes feita em JS (Prisma nao tem date_trunc no groupBy) - mesmo criterio
+  // ja usado em obterRanking pra somas que o Prisma nao agrupa sozinho;
+  // volume de pedidos/ano desta empresa nao justifica SQL cru ainda.
+  async obterComparativoMensal(
+    query: ComparativoMensalQueryDto,
+  ): Promise<ComparativoMensalDashboardDto> {
+    const anoAtual = query.ano ?? new Date().getFullYear();
+    const anoAnterior = anoAtual - 1;
+
+    const pedidos = await this.prisma.pedido.findMany({
+      where: {
+        situacao: { in: SITUACOES_FATURADAS },
+        dataHoraUltimaAlteracao: {
+          gte: new Date(Date.UTC(anoAnterior, 0, 1)),
+          lt: new Date(Date.UTC(anoAtual + 1, 0, 1)),
+        },
+      },
+      select: { dataHoraUltimaAlteracao: true, valorTotal: true },
+    });
+
+    const somaPorAnoMes = new Map<string, number>();
+    for (const pedido of pedidos) {
+      const data = pedido.dataHoraUltimaAlteracao!;
+      const chave = `${data.getUTCFullYear()}-${data.getUTCMonth()}`;
+      somaPorAnoMes.set(
+        chave,
+        (somaPorAnoMes.get(chave) ?? 0) + Number(pedido.valorTotal ?? 0),
+      );
+    }
+
+    const meses = Array.from({ length: 12 }, (_, indiceMes) => ({
+      mes: indiceMes + 1,
+      valorAnoAtual: (somaPorAnoMes.get(`${anoAtual}-${indiceMes}`) ?? 0).toString(),
+      valorAnoAnterior: (somaPorAnoMes.get(`${anoAnterior}-${indiceMes}`) ?? 0).toString(),
+    }));
+
+    return { anoAtual, anoAnterior, meses };
+  }
+
+  // Epico 1.2 - Pedido.ufEntrega so' vem preenchido pra ~7% dos pedidos
+  // (ver comentario no schema.prisma) - quantidadePedidosSemUf exposto
+  // explicitamente pra tela nunca fingir cobertura de 100%.
+  async obterVendasPorEstado(query: PeriodoQueryDto): Promise<VendasPorEstadoDashboardDto> {
+    const periodo = filtroPeriodo(query.dataInicial, query.dataFinal);
+
+    const [porEstado, semUf] = await this.prisma.$transaction([
+      this.prisma.pedido.groupBy({
+        by: ['ufEntrega'],
+        where: { ufEntrega: { not: null }, dataHoraUltimaAlteracao: periodo },
+        _sum: { valorTotal: true },
+        _count: true,
+        orderBy: { _sum: { valorTotal: 'desc' } },
+      }),
+      this.prisma.pedido.count({
+        where: { ufEntrega: null, dataHoraUltimaAlteracao: periodo },
+      }),
+    ]);
+
+    return {
+      periodo: { dataInicial: query.dataInicial ?? null, dataFinal: query.dataFinal ?? null },
+      estados: porEstado.map((linha) => ({
+        uf: linha.ufEntrega as string,
+        valorTotal: (linha._sum?.valorTotal ?? 0).toString(),
+        quantidadePedidos: linha._count as unknown as number,
+      })),
+      quantidadePedidosSemUf: semUf,
+    };
+  }
+
+  // Epico 1.2 - "Vendas x Faturado": valorVendido e' o TOTAL de pedidos no
+  // periodo (sem filtro de situacao, ao contrario de obterComparativoMensal
+  // acima - aqui o objetivo e' justamente mostrar o GAP entre o que foi
+  // vendido e o que ja foi faturado de verdade, ver NotaFiscal). Agregacao
+  // por mes em JS, mesmo criterio de obterComparativoMensal.
+  async obterVendasVsFaturado(query: PeriodoQueryDto): Promise<VendasVsFaturadoDashboardDto> {
+    const periodo = filtroPeriodo(query.dataInicial, query.dataFinal);
+
+    const [pedidos, notas] = await Promise.all([
+      this.prisma.pedido.findMany({
+        where: { dataHoraUltimaAlteracao: periodo },
+        select: { dataHoraUltimaAlteracao: true, valorTotal: true },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { dataEmissao: periodo },
+        select: { dataEmissao: true, valorTotalNotaFiscal: true },
+      }),
+    ]);
+
+    const vendidoPorMes = new Map<string, number>();
+    for (const pedido of pedidos) {
+      if (!pedido.dataHoraUltimaAlteracao) continue;
+      const chave = chaveAnoMes(pedido.dataHoraUltimaAlteracao);
+      vendidoPorMes.set(chave, (vendidoPorMes.get(chave) ?? 0) + Number(pedido.valorTotal ?? 0));
+    }
+
+    const faturadoPorMes = new Map<string, number>();
+    for (const nota of notas) {
+      if (!nota.dataEmissao) continue;
+      const chave = chaveAnoMes(nota.dataEmissao);
+      faturadoPorMes.set(
+        chave,
+        (faturadoPorMes.get(chave) ?? 0) + Number(nota.valorTotalNotaFiscal ?? 0),
+      );
+    }
+
+    const chaves = new Set([...vendidoPorMes.keys(), ...faturadoPorMes.keys()]);
+    const meses = [...chaves].sort().map((chave) => ({
+      mes: chave,
+      valorVendido: (vendidoPorMes.get(chave) ?? 0).toString(),
+      valorFaturado: (faturadoPorMes.get(chave) ?? 0).toString(),
+    }));
+
+    return {
+      periodo: { dataInicial: query.dataInicial ?? null, dataFinal: query.dataFinal ?? null },
+      meses,
+    };
+  }
+}
+
+function chaveAnoMes(data: Date): string {
+  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, '0')}`;
 }
