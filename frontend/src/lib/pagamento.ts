@@ -24,3 +24,26 @@ export interface CondicaoPagamentoDto {
   antecipada: boolean;
   parcelas: ParcelaCondicaoPagamentoDto[];
 }
+
+// Listagem admin (GET /admin/formas-pagamento e /admin/condicoes-pagamento,
+// painel de ativar/desativar) - traz TODAS (inclusive inativas no Radar),
+// com os sinais de estado separados (ver
+// backend/src/pagamento/dto/pagamento-response.dto.ts).
+export interface AdminFormaPagamentoDto {
+  id: string;
+  codigo: string | null;
+  descricao: string | null;
+  inativaNoErp: boolean;
+  desativadaManualmente: boolean;
+  ativo: boolean;
+}
+
+export interface AdminCondicaoPagamentoDto {
+  id: string;
+  codigo: string | null;
+  nome: string | null;
+  validade: string | null;
+  expirada: boolean;
+  desativadaManualmente: boolean;
+  ativo: boolean;
+}

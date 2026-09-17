@@ -90,6 +90,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
               },
               { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
               {
+                href: "/admin/pagamento",
+                rotulo: "Forma e condição de pagamento",
+                icone: <IconeMoeda />,
+              },
+              {
                 href: "/admin/importar-swagger",
                 rotulo: "Importar via Swagger",
                 icone: <IconeUpload />,
