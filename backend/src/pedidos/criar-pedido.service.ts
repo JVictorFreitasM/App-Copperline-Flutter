@@ -5,9 +5,9 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { AxiosError } from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoCalculoService } from '../produtos/produto-calculo.service';
-import type { ResultadoCalculoQuantidade } from '../produtos/domain/calculo-quantidade-pedido';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { ConfiguracaoTabelaPrecoService } from '../tabelas-preco/configuracao-tabela-preco.service';
 import {
@@ -20,13 +20,17 @@ import type { PedidoErpParcelaInput } from './pedido-erp-client.service';
 export interface CriarPedidoItemInput {
   produtoId: string;
   metrosDesejados: number;
+  percentualDesconto: number;
+  observacoes?: string;
 }
 
 export interface CriarPedidoInput {
   clienteId: string;
-  percentualDesconto: number;
   formaPagamentoId: string;
   condicaoPagamentoId: string;
+  codigoTabelaPreco?: string;
+  contatoId?: string;
+  vendedorId?: string;
   itens: CriarPedidoItemInput[];
 }
 
@@ -38,8 +42,17 @@ export interface CriarPedidoResultadoDto {
   solicitacaoDescontoId: string | null;
 }
 
-interface ItemCalculado extends ResultadoCalculoQuantidade {
+// Desconto agora e' POR ITEM (OS-pendentes-claude-code.md) - cada item
+// carrega seu proprio percentualDesconto/valorUnitarioBruto/valorTotal
+// (ja com desconto aplicado, via ProdutoCalculoService.calcular).
+interface ItemCalculado {
   produtoId: string;
+  quantidade: number;
+  unidade: string;
+  valorUnitarioBruto: number;
+  valorTotal: number;
+  percentualDesconto: number;
+  observacoes?: string;
 }
 
 // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - null quando
@@ -55,6 +68,11 @@ interface DadosProduto {
   idExternoErp: string;
   pesoLiquidoKg: number | null;
   pesoBrutoKg: number | null;
+}
+
+interface VendedorAlvo {
+  id: string;
+  idExternoErp: string;
 }
 
 // Orquestra os pedaços já construídos em OS's anteriores (nunca reimplementa
@@ -85,65 +103,67 @@ export class CriarPedidoService {
     usuarioId: string,
     escopo: EscopoClientes,
   ): Promise<CriarPedidoResultadoDto> {
-    const vendedor = await this.prisma.vendedor.findFirst({
-      where: { usuarioId },
-    });
-    if (!vendedor) {
-      throw new ForbiddenException(
-        'Usuário autenticado não é um vendedor cadastrado - não pode criar pedidos',
-      );
-    }
+    const vendedorAlvo = await this.resolverVendedorAlvo(
+      input.vendedorId,
+      usuarioId,
+      escopo,
+    );
 
     const cliente = await this.buscarClienteNoEscopo(input.clienteId, escopo);
     const formaPagamento = await this.buscarFormaPagamento(input.formaPagamentoId);
     const condicaoPagamento = await this.buscarCondicaoPagamento(
       input.condicaoPagamentoId,
     );
+    const contatoId = input.contatoId
+      ? (await this.buscarContatoDoCliente(input.contatoId, cliente.id)).id
+      : null;
 
     const itensCalculados: ItemCalculado[] = [];
     for (const item of input.itens) {
       const calculo = await this.produtoCalculoService.calcular(
         item.produtoId,
         item.metrosDesejados,
+        {
+          codigoTabela: input.codigoTabelaPreco,
+          percentualDesconto: item.percentualDesconto,
+        },
       );
-      // ProdutoCalculoService devolve valorFinal (OS-novas-implementacoes.md
-      // Bloco 1, ja com desconto POR ITEM opcional aplicado - nao usado
-      // aqui, POST /pedidos aplica o desconto uma vez sobre o SUBTOTAL do
-      // pedido inteiro, ver mais abaixo) - mapeado pro shape interno
-      // ItemCalculado.valorTotal, que o resto deste service ja consome.
       itensCalculados.push({
         produtoId: item.produtoId,
         quantidade: calculo.quantidade,
         unidade: calculo.unidade,
+        valorUnitarioBruto: calculo.valorUnitario,
         valorTotal: calculo.valorFinal,
+        percentualDesconto: item.percentualDesconto,
+        observacoes: item.observacoes,
       });
     }
 
-    const subtotal = itensCalculados.reduce(
-      (soma, item) => soma + item.valorTotal,
-      0,
-    );
     const valorComDesconto = arredondarMoeda(
-      subtotal * (1 - input.percentualDesconto / 100),
+      itensCalculados.reduce((soma, item) => soma + item.valorTotal, 0),
     );
     const produtosPorId = await this.buscarDadosProdutos(itensCalculados);
     const pesoTotal = calcularPesoTotal(itensCalculados, produtosPorId);
 
-    // pedidoId:null - ainda nao criamos o Pedido local (so criamos DEPOIS
-    // de decidir o caminho, ver comentario da classe). Se necessitar
-    // aprovacao, a SolicitacaoDesconto criada aqui fica com pedidoId nulo
-    // temporariamente ate' persistirPedidoAguardandoAprovacao() vincula-la.
+    // Gate de aprovacao continua 1 por PEDIDO (nao por item) - decisao
+    // confirmada com o usuario: o MAIOR desconto entre os itens decide se
+    // o pedido inteiro precisa de aprovacao. pedidoId:null - ainda nao
+    // criamos o Pedido local (so criamos DEPOIS de decidir o caminho, ver
+    // comentario da classe).
+    const maiorPercentualDesconto = Math.max(
+      ...itensCalculados.map((item) => item.percentualDesconto),
+    );
     const avaliacao = await this.solicitacoesDescontoService.avaliarDesconto({
-      vendedorSolicitanteId: vendedor.id,
+      vendedorSolicitanteId: vendedorAlvo.id,
       pedidoId: null,
-      percentualSolicitado: input.percentualDesconto,
+      percentualSolicitado: maiorPercentualDesconto,
     });
 
     if (!avaliacao.necessitaAprovacao) {
       const resultadoErp = await this.enviarAoErp(
         cliente,
-        vendedor,
-        input.percentualDesconto,
+        vendedorAlvo,
+        input.codigoTabelaPreco,
         valorComDesconto,
         itensCalculados,
         produtosPorId,
@@ -151,9 +171,9 @@ export class CriarPedidoService {
         condicaoPagamento,
       );
       const pedido = await this.persistirPedidoEnviado(
-        vendedor.id,
+        vendedorAlvo.id,
         cliente.id,
-        input.percentualDesconto,
+        maiorPercentualDesconto,
         valorComDesconto,
         pesoTotal,
         itensCalculados,
@@ -161,6 +181,8 @@ export class CriarPedidoService {
         usuarioId,
         formaPagamento.id,
         condicaoPagamento.id,
+        input.codigoTabelaPreco ?? null,
+        contatoId,
       );
       return {
         status: 'ENVIADO',
@@ -172,9 +194,9 @@ export class CriarPedidoService {
     }
 
     const pedido = await this.persistirPedidoAguardandoAprovacao(
-      vendedor.id,
+      vendedorAlvo.id,
       cliente.id,
-      input.percentualDesconto,
+      maiorPercentualDesconto,
       valorComDesconto,
       pesoTotal,
       itensCalculados,
@@ -182,6 +204,8 @@ export class CriarPedidoService {
       usuarioId,
       formaPagamento.id,
       condicaoPagamento.id,
+      input.codigoTabelaPreco ?? null,
+      contatoId,
     );
     return {
       status: 'AGUARDANDO_APROVACAO',
@@ -190,6 +214,50 @@ export class CriarPedidoService {
       idExternoErp: null,
       solicitacaoDescontoId: avaliacao.solicitacao.id,
     };
+  }
+
+  // Resolve em nome de qual vendedor o pedido e' criado. Sem override
+  // (vendedorId): precisa ser o proprio usuario cadastrado como vendedor
+  // (comportamento de sempre). Com override: so' aceito quando o usuario
+  // logado tem escopo de EQUIPE (supervisor/gerente) e o alvo esta' dentro
+  // dela, OU quando e' admin (escopo TODOS) - nunca confia no vendedorId
+  // do DTO sem checar contra o escopo resolvido pelo backend (mesmo
+  // criterio anti-IDOR do resto do modulo).
+  private async resolverVendedorAlvo(
+    vendedorId: string | undefined,
+    usuarioId: string,
+    escopo: EscopoClientes,
+  ): Promise<VendedorAlvo> {
+    if (!vendedorId) {
+      const vendedor = await this.prisma.vendedor.findFirst({
+        where: { usuarioId },
+        select: { id: true, idExternoErp: true },
+      });
+      if (!vendedor) {
+        throw new ForbiddenException(
+          'Usuário autenticado não é um vendedor cadastrado - especifique vendedorId ou cadastre-se como vendedor',
+        );
+      }
+      return vendedor;
+    }
+
+    const autorizado =
+      escopo.tipo === 'TODOS' ||
+      (escopo.tipo === 'EQUIPE' && escopo.vendedorIds.includes(vendedorId));
+    if (!autorizado) {
+      throw new ForbiddenException(
+        'Vendedor informado está fora da sua equipe - não é possível criar pedido em nome dele',
+      );
+    }
+
+    const vendedor = await this.prisma.vendedor.findUnique({
+      where: { id: vendedorId },
+      select: { id: true, idExternoErp: true, inativo: true },
+    });
+    if (!vendedor || vendedor.inativo) {
+      throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado ou inativo`);
+    }
+    return vendedor;
   }
 
   // Mesmo criterio de IDOR de OS-BACKEND-23 (ClientesService.buscarPorId):
@@ -241,6 +309,21 @@ export class CriarPedidoService {
     return condicao;
   }
 
+  // Mesmo criterio IDOR do resto do modulo - contato precisa pertencer AO
+  // cliente do pedido, nunca so' existir em algum lugar do banco.
+  private async buscarContatoDoCliente(contatoId: string, clienteId: string) {
+    const contato = await this.prisma.contatoCliente.findFirst({
+      where: { id: contatoId, clienteId },
+      select: { id: true },
+    });
+    if (!contato) {
+      throw new NotFoundException(
+        `Contato '${contatoId}' não encontrado para este cliente`,
+      );
+    }
+    return contato;
+  }
+
   private async buscarDadosProdutos(
     itens: ItemCalculado[],
   ): Promise<Map<string, DadosProduto>> {
@@ -265,20 +348,22 @@ export class CriarPedidoService {
   // classe) - se o Radar falhar, nada foi persistido ainda.
   private async enviarAoErp(
     cliente: { idExternoErp: string },
-    vendedor: { idExternoErp: string },
-    percentualDesconto: number,
+    vendedor: VendedorAlvo,
+    codigoTabelaPreco: string | undefined,
     valorComDesconto: number,
     itens: ItemCalculado[],
     produtosPorId: Map<string, DadosProduto>,
     formaPagamento: { idExternoErp: string },
     condicaoPagamento: { idExternoErp: string; parcelas: unknown },
   ) {
-    // Tabela GLOBAL selecionada (mesma fonte que ProdutoCalculoService usa
-    // hoje pra resolver preco quando nenhum codigoTabela explicito e'
-    // passado - CriarPedidoService nunca passa um, ver chamada acima).
-    // Sem ela configurada, nao ha idTabelaPreco pra reportar ao Radar -
-    // falha aqui, nunca inventa/omite silenciosamente.
-    const codigoTabela = await this.configuracaoTabelaPrecoService.obterCodigoSelecionado();
+    // Tabela escolhida no popup (input.codigoTabelaPreco) com fallback pro
+    // singleton GLOBAL de sempre (ConfiguracaoTabelaPrecoService) quando
+    // nao informada - mesmo comportamento de antes desta OS pra quem ainda
+    // nao manda o campo. Sem nenhuma delas configurada, nao ha
+    // idTabelaPreco pra reportar ao Radar - falha aqui, nunca
+    // inventa/omite silenciosamente.
+    const codigoTabela =
+      codigoTabelaPreco ?? (await this.configuracaoTabelaPrecoService.obterCodigoSelecionado());
     if (!codigoTabela) {
       throw new UnprocessableEntityException(
         'Nenhuma tabela de preço selecionada globalmente - configure via PATCH /admin/tabelas-preco/configuracao antes de criar um pedido.',
@@ -305,9 +390,29 @@ export class CriarPedidoService {
         produtoIdExterno: produto.idExternoErp,
         idTabelaPreco: tabela.idExternoErp,
         quantidade: item.quantidade,
-        valorUnitario: item.valorTotal / item.quantidade,
+        // SEM desconto (preco de tabela puro) - ver comentario abaixo
+        // sobre o percentual blendado.
+        valorUnitario: item.valorUnitarioBruto,
       };
     });
+
+    // Desconto agora e' POR ITEM do lado de ca, mas o schema real do WK
+    // Radar pra desconto por item nunca foi confirmado (POST
+    // /comercial/v1/pedido so' tem `total.percentualDescontoProdutos`,
+    // aplicado uma vez sobre o pedido inteiro) - por isso continuamos
+    // mandando um percentual UNICO "blendado", reconstruido a partir da
+    // soma dos itens com desconto, em vez de inventar um campo por item no
+    // payload. Limitacao conhecida: o Radar nao sabe que o desconto variou
+    // por produto, so' o total final bate. Revisitar se confirmar suporte
+    // real do Radar a desconto por item.
+    const subtotalBruto = itens.reduce(
+      (soma, item) => soma + item.valorUnitarioBruto * item.quantidade,
+      0,
+    );
+    const percentualBlendado =
+      subtotalBruto > 0
+        ? arredondarMoeda((1 - valorComDesconto / subtotalBruto) * 100)
+        : 0;
 
     const parcelas = calcularParcelas(
       condicaoPagamento.parcelas,
@@ -320,15 +425,13 @@ export class CriarPedidoService {
         clienteIdExterno: cliente.idExternoErp,
         vendedorIdExterno: vendedor.idExternoErp,
         idCondicaoPagamento: condicaoPagamento.idExternoErp,
-        percentualDesconto,
+        percentualDesconto: percentualBlendado,
         itens: itensErp,
         parcelas,
       });
     } catch (error) {
       throw new ServiceUnavailableException(
-        error instanceof Error
-          ? error.message
-          : 'Falha ao enviar pedido ao WK Radar',
+        `Falha ao enviar pedido ao WK Radar: ${extrairMensagemErroErp(error)}`,
       );
     }
   }
@@ -344,6 +447,8 @@ export class CriarPedidoService {
     usuarioId: string,
     formaPagamentoId: string,
     condicaoPagamentoId: string,
+    codigoTabelaPreco: string | null,
+    contatoId: string | null,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -359,6 +464,8 @@ export class CriarPedidoService {
           pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
           formaPagamentoId,
           condicaoPagamentoId,
+          codigoTabelaPreco,
+          contatoId,
           statusLocal: 'ENVIADO',
           incompleto: false,
           sincronizadoEm,
@@ -390,6 +497,8 @@ export class CriarPedidoService {
     usuarioId: string,
     formaPagamentoId: string,
     condicaoPagamentoId: string,
+    codigoTabelaPreco: string | null,
+    contatoId: string | null,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -403,6 +512,8 @@ export class CriarPedidoService {
           pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
           formaPagamentoId,
           condicaoPagamentoId,
+          codigoTabelaPreco,
+          contatoId,
           statusLocal: 'AGUARDANDO_APROVACAO',
           incompleto: false,
           sincronizadoEm,
@@ -441,7 +552,11 @@ async function criarItensPedido(
       numero: indice + 1,
       produtoId: item.produtoId,
       quantidadeVenda: item.quantidade,
+      valorUnitario: item.quantidade > 0 ? item.valorTotal / item.quantidade : 0,
+      valorUnitarioBruto: item.valorUnitarioBruto,
       valorTotal: item.valorTotal,
+      percentualDesconto: item.percentualDesconto,
+      observacoes: item.observacoes ?? null,
       sincronizadoEm,
     })),
   });
@@ -513,4 +628,23 @@ function arredondarMoeda(valor: number): number {
 
 function arredondarPeso(valor: number): number {
   return Math.round(valor * 1000) / 1000;
+}
+
+// Sem isso, o catch de enviarAoErp so tinha `error.message` do Axios (ex:
+// "Request failed with status code 400") - generico, esconde a razao real
+// da rejeicao do Radar (que vem no corpo da resposta, `error.response.data`
+// - normalmente {message: "..."} ou {errors: [...]}, formato nao
+// documentado no swagger). Confirmado em producao (2026-09-17): usuario via
+// so "Request failed with status code 400" na tela, sem pista do motivo.
+function extrairMensagemErroErp(error: unknown): string {
+  if (error instanceof AxiosError) {
+    const corpo = error.response?.data as
+      | { message?: string; errors?: unknown }
+      | undefined;
+    if (corpo?.message) return corpo.message;
+    if (corpo?.errors) return JSON.stringify(corpo.errors);
+    if (corpo) return JSON.stringify(corpo);
+    return error.message;
+  }
+  return error instanceof Error ? error.message : 'erro desconhecido';
 }

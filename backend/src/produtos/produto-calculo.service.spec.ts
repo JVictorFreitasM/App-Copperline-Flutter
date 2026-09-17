@@ -13,9 +13,13 @@ function tipoAcondicionamentoFake(tamanhoPadrao: number | null) {
   return tamanhoPadrao === null ? null : { tamanhoPadrao: decimalFake(tamanhoPadrao) };
 }
 
-function prismaFake(produto: Record<string, unknown> | null) {
+function prismaFake(
+  produto: Record<string, unknown> | null,
+  saldoEstoque: Record<string, unknown> | null = null,
+) {
   return {
     produto: { findUnique: jest.fn().mockResolvedValue(produto) },
+    saldoEstoque: { findUnique: jest.fn().mockResolvedValue(saldoEstoque) },
   };
 }
 
@@ -82,6 +86,7 @@ describe('ProdutoCalculoService.calcular', () => {
       valorUnitario: 10,
       valorFinal: 900,
       margemLucro: null,
+      estoqueDisponivel: null,
     });
   });
 
@@ -120,6 +125,7 @@ describe('ProdutoCalculoService.calcular', () => {
       valorUnitario: 10,
       valorFinal: 900,
       margemLucro: null,
+      estoqueDisponivel: null,
     });
   });
 
@@ -143,6 +149,30 @@ describe('ProdutoCalculoService.calcular', () => {
       valorUnitario: 10,
       valorFinal: 125,
       margemLucro: null,
+      estoqueDisponivel: null,
+    });
+  });
+
+  it('devolve estoqueDisponivel quando ha saldo sincronizado pro codigo do produto', async () => {
+    const prisma = prismaFake(
+      {
+        id: 'p1',
+        codigo: 'C1',
+        tipoAcondicionamento: null,
+        precoVenda: decimalFake(10),
+      },
+      { quantidadeDisponivel: decimalFake(42) },
+    );
+    const service = new ProdutoCalculoService(
+      prisma as never,
+      precoProdutoServiceFake() as never,
+    );
+
+    const resultado = await service.calcular('p1', 10);
+
+    expect(resultado.estoqueDisponivel).toBe(42);
+    expect(prisma.saldoEstoque.findUnique).toHaveBeenCalledWith({
+      where: { codigoProduto: 'C1' },
     });
   });
 

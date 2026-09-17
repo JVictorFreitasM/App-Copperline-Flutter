@@ -1,5 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { CriarPedidoService } from './criar-pedido.service';
+import type { CriarPedidoInput } from './criar-pedido.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 
 const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
@@ -22,14 +24,17 @@ const CONDICAO_PAGAMENTO_PADRAO = {
   parcelas: [{ percentual: 100, prazo: 30 }],
 };
 const TABELA_PRECO_PADRAO = { idExternoErp: 'tabela-externo-1' };
+const CONTATO_PADRAO = { id: 'contato-1', clienteId: 'cliente-1' };
 
 function prismaFake(overrides: {
   vendedor?: Record<string, unknown> | null;
+  vendedorPorId?: Record<string, unknown> | null;
   cliente?: Record<string, unknown> | null;
   produtos?: Record<string, unknown>[];
   formaPagamento?: Record<string, unknown> | null;
   condicaoPagamento?: Record<string, unknown> | null;
   tabelaPreco?: Record<string, unknown> | null;
+  contato?: Record<string, unknown> | null;
 } = {}) {
   const pedidoCreate = jest
     .fn()
@@ -55,6 +60,13 @@ function prismaFake(overrides: {
         .fn()
         .mockResolvedValue(
           'vendedor' in overrides ? overrides.vendedor : { id: 'vendedor-1', idExternoErp: 'vendedor-externo-1' },
+        ),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          'vendedorPorId' in overrides
+            ? overrides.vendedorPorId
+            : { id: 'vendedor-2', idExternoErp: 'vendedor-externo-2', inativo: false },
         ),
     },
     cliente: {
@@ -92,16 +104,27 @@ function prismaFake(overrides: {
           'tabelaPreco' in overrides ? overrides.tabelaPreco : TABELA_PRECO_PADRAO,
         ),
     },
+    contatoCliente: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue('contato' in overrides ? overrides.contato : CONTATO_PADRAO),
+    },
     $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
     _tx: tx,
   };
 }
 
 function produtoCalculoServiceFake(
-  resultado: { quantidade: number; unidade: string; valorFinal: number } = {
+  resultado: {
+    quantidade: number;
+    unidade: string;
+    valorUnitario: number;
+    valorFinal: number;
+  } = {
     quantidade: 3,
     unidade: 'PECA',
-    valorFinal: 90,
+    valorUnitario: 30,
+    valorFinal: 81, // 90 (30*3) com 10% de desconto
   },
 ) {
   return { calcular: jest.fn().mockResolvedValue(resultado) };
@@ -156,16 +179,15 @@ function criarService(
   );
 }
 
-const INPUT_BASE = {
+const INPUT_BASE: CriarPedidoInput = {
   clienteId: 'cliente-1',
-  percentualDesconto: 10,
   formaPagamentoId: 'forma-1',
   condicaoPagamentoId: 'condicao-1',
-  itens: [{ produtoId: 'produto-1', metrosDesejados: 90 }],
+  itens: [{ produtoId: 'produto-1', metrosDesejados: 90, percentualDesconto: 10 }],
 };
 
 describe('CriarPedidoService.criar', () => {
-  it('lanca ForbiddenException quando o usuario autenticado nao e um vendedor cadastrado', async () => {
+  it('lanca ForbiddenException quando o usuario autenticado nao e um vendedor cadastrado (sem vendedorId)', async () => {
     const prisma = prismaFake({ vendedor: null });
     const service = criarService(prisma);
 
@@ -211,6 +233,15 @@ describe('CriarPedidoService.criar', () => {
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('lanca NotFoundException quando o contatoId nao pertence ao cliente do pedido', async () => {
+    const prisma = prismaFake({ contato: null });
+    const service = criarService(prisma);
+
+    await expect(
+      service.criar({ ...INPUT_BASE, contatoId: 'contato-de-outro-cliente' }, 'u1', ESCOPO_TODOS),
+    ).rejects.toThrow(NotFoundException);
   });
 
   // OS-novas-implementacoes.md Bloco 2 - "verificacao de necessidade de
@@ -274,13 +305,83 @@ describe('CriarPedidoService.criar', () => {
     );
   });
 
+  describe('vendedorId (criar pedido em nome de outro vendedor da equipe)', () => {
+    it('SUPERVISOR/GERENTE pode criar em nome de um vendedor dentro da propria equipe', async () => {
+      const prisma = prismaFake({
+        vendedorPorId: { id: 'vend-2', idExternoErp: 'vend-2-externo', inativo: false },
+      });
+      const service = criarService(prisma);
+
+      const resultado = await service.criar(
+        { ...INPUT_BASE, vendedorId: 'vend-2' },
+        'u-sup',
+        { tipo: 'EQUIPE', vendedorIds: ['vend-1', 'vend-2'] },
+      );
+
+      expect(resultado.status).toBe('ENVIADO');
+      expect(prisma.vendedor.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'vend-2' } }),
+      );
+      expect(prisma._tx.pedido.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ vendedorId: 'vend-2' }) }),
+      );
+    });
+
+    it('lanca ForbiddenException quando o vendedorId esta fora da equipe de quem chama', async () => {
+      const prisma = prismaFake();
+      const service = criarService(prisma);
+
+      await expect(
+        service.criar({ ...INPUT_BASE, vendedorId: 'vend-fora-da-equipe' }, 'u-sup', {
+          tipo: 'EQUIPE',
+          vendedorIds: ['vend-1', 'vend-2'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('lanca ForbiddenException quando quem chama nao tem equipe (escopo PROPRIO) e tenta usar vendedorId', async () => {
+      const prisma = prismaFake();
+      const service = criarService(prisma);
+
+      await expect(
+        service.criar({ ...INPUT_BASE, vendedorId: 'vend-2' }, 'u1', {
+          tipo: 'PROPRIO',
+          vendedorId: 'vend-1',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('ADMIN (escopo TODOS) pode criar em nome de qualquer vendedor', async () => {
+      const prisma = prismaFake({
+        vendedorPorId: { id: 'vend-9', idExternoErp: 'vend-9-externo', inativo: false },
+      });
+      const service = criarService(prisma);
+
+      const resultado = await service.criar(
+        { ...INPUT_BASE, vendedorId: 'vend-9' },
+        'u-admin',
+        ESCOPO_TODOS,
+      );
+
+      expect(resultado.status).toBe('ENVIADO');
+    });
+
+    it('lanca NotFoundException quando o vendedorId autorizado nao existe/esta inativo', async () => {
+      const prisma = prismaFake({ vendedorPorId: null });
+      const service = criarService(prisma);
+
+      await expect(
+        service.criar({ ...INPUT_BASE, vendedorId: 'vend-2' }, 'u-sup', {
+          tipo: 'EQUIPE',
+          vendedorIds: ['vend-1', 'vend-2'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
   it('dentro do limite: envia ao ERP e persiste o pedido com status ENVIADO (criterio de aceite)', async () => {
     const prisma = prismaFake();
-    const produtoCalculoService = produtoCalculoServiceFake({
-      quantidade: 3,
-      unidade: 'PECA',
-      valorFinal: 90,
-    });
+    const produtoCalculoService = produtoCalculoServiceFake();
     const solicitacoesDescontoService = solicitacoesDescontoServiceFake({
       necessitaAprovacao: false,
     });
@@ -319,13 +420,64 @@ describe('CriarPedidoService.criar', () => {
     });
   });
 
-  it('monta o payload do ERP com os IDs externos resolvidos e parcelas derivadas da condicao de pagamento', async () => {
+  it('persiste codigoTabelaPreco e contatoId escolhidos na criacao', async () => {
     const prisma = prismaFake();
-    const produtoCalculoService = produtoCalculoServiceFake({
-      quantidade: 3,
-      unidade: 'PECA',
-      valorFinal: 90,
+    const service = criarService(prisma);
+
+    await service.criar(
+      { ...INPUT_BASE, codigoTabelaPreco: '110', contatoId: 'contato-1' },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          codigoTabelaPreco: '110',
+          contatoId: 'contato-1',
+        }),
+      }),
+    );
+  });
+
+  it('persiste percentualDesconto/valorUnitarioBruto/observacoes por item', async () => {
+    const prisma = prismaFake();
+    const service = criarService(prisma);
+
+    await service.criar(
+      {
+        ...INPUT_BASE,
+        itens: [
+          {
+            produtoId: 'produto-1',
+            metrosDesejados: 90,
+            percentualDesconto: 10,
+            observacoes: 'entregar no deposito',
+          },
+        ],
+      },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(prisma._tx.pedidoItem.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          produtoId: 'produto-1',
+          quantidadeVenda: 3,
+          valorUnitario: 27, // 81 (valorTotal com desconto) / 3
+          valorUnitarioBruto: 30,
+          valorTotal: 81,
+          percentualDesconto: 10,
+          observacoes: 'entregar no deposito',
+        }),
+      ],
     });
+  });
+
+  it('monta o payload do ERP com os IDs externos resolvidos, valorUnitario BRUTO por item e percentual blendado', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake();
     const pedidoErpClientService = pedidoErpClientServiceFake();
     const service = criarService(
       prisma,
@@ -340,19 +492,19 @@ describe('CriarPedidoService.criar', () => {
       clienteIdExterno: 'cliente-externo-1',
       vendedorIdExterno: 'vendedor-externo-1',
       idCondicaoPagamento: 'condicao-externo-1',
-      percentualDesconto: 10,
+      percentualDesconto: 10, // blendado: (1 - 81/90) * 100 = 10
       itens: [
         {
           produtoIdExterno: 'produto-externo-1',
           idTabelaPreco: 'tabela-externo-1',
           quantidade: 3,
-          valorUnitario: 30,
+          valorUnitario: 30, // BRUTO (sem desconto), nao valorTotal/quantidade
         },
       ],
       parcelas: [
         expect.objectContaining({
           idFormaPagamento: 'forma-externo-1',
-          valor: 81, // 90 * (1 - 10%) = 81, 1 parcela de 100%
+          valor: 81, // valorComDesconto * 100%
         }),
       ],
     });
@@ -390,7 +542,7 @@ describe('CriarPedidoService.criar', () => {
     );
 
     const resultado = await service.criar(
-      { ...INPUT_BASE, percentualDesconto: 30 },
+      { ...INPUT_BASE, itens: [{ ...INPUT_BASE.itens[0], percentualDesconto: 30 }] },
       'u1',
       ESCOPO_TODOS,
     );
@@ -422,6 +574,45 @@ describe('CriarPedidoService.criar', () => {
     });
   });
 
+  it('gate de aprovacao usa o MAIOR desconto entre os itens (nao o primeiro nem uma media)', async () => {
+    const prisma = prismaFake({
+      produtos: [
+        { id: 'produto-1', idExternoErp: 'produto-externo-1', pesoLiquidoKg: null, pesoBrutoKg: null },
+        { id: 'produto-2', idExternoErp: 'produto-externo-2', pesoLiquidoKg: null, pesoBrutoKg: null },
+      ],
+    });
+    const produtoCalculoService = {
+      calcular: jest.fn().mockResolvedValue({
+        quantidade: 1,
+        unidade: 'PECA',
+        valorUnitario: 100,
+        valorFinal: 100,
+      }),
+    };
+    const solicitacoesDescontoService = solicitacoesDescontoServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService as never,
+      solicitacoesDescontoService,
+    );
+
+    await service.criar(
+      {
+        ...INPUT_BASE,
+        itens: [
+          { produtoId: 'produto-1', metrosDesejados: 10, percentualDesconto: 5 },
+          { produtoId: 'produto-2', metrosDesejados: 10, percentualDesconto: 40 },
+        ],
+      },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(solicitacoesDescontoService.avaliarDesconto).toHaveBeenCalledWith(
+      expect.objectContaining({ percentualSolicitado: 40 }),
+    );
+  });
+
   it('erro do ERP: nao persiste NENHUM registro local (criterio de aceite - sem orfao)', async () => {
     const prisma = prismaFake();
     const produtoCalculoService = produtoCalculoServiceFake();
@@ -443,6 +634,38 @@ describe('CriarPedidoService.criar', () => {
     );
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
+  });
+
+  it('erro do ERP (AxiosError): usa a mensagem do corpo da resposta, nao o texto generico do Axios', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake();
+    const solicitacoesDescontoService = solicitacoesDescontoServiceFake({
+      necessitaAprovacao: false,
+    });
+    const erroAxios = new AxiosError(
+      'Request failed with status code 400',
+      'ERR_BAD_REQUEST',
+      undefined,
+      undefined,
+      {
+        status: 400,
+        statusText: 'Bad Request',
+        headers: new AxiosHeaders(),
+        config: { headers: new AxiosHeaders() },
+        data: { message: 'Vendedor MOCK-0001 não encontrado' },
+      },
+    );
+    const pedidoErpClientService = pedidoErpClientServiceFake({ reject: erroAxios });
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
+    );
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      'Vendedor MOCK-0001 não encontrado',
+    );
   });
 
   it('erro no calculo de um item propaga sem persistir nada (mesmo raciocinio de nao deixar orfao)', async () => {

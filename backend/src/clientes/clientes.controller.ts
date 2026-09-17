@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   StreamableFile,
   UseGuards,
@@ -32,8 +33,10 @@ import type { ConflitoClienteDto } from './clientes.service';
 import type {
   ClienteDetalheDto,
   ClienteResumoDto,
+  ContatoClienteDto,
 } from './dto/cliente-response.dto';
 import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dto';
+import { CriarContatoClienteDto } from './dto/criar-contato-cliente.dto';
 import { DefinirLocalizacaoClienteDto } from './dto/definir-localizacao-cliente.dto';
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
@@ -138,6 +141,19 @@ export class ClientesController {
     const escopo = await this.resolverEscopo(idpUser);
     const codigos = await this.clienteTabelaPrecoService.listarPorCliente(id, escopo);
     return { codigos };
+  }
+
+  // Contato criado por nos (popup "Adicionar contato" da criacao de
+  // pedido, web e mobile) - mesma especificidade de rota que
+  // "/:id/tabelas-preco" acima, mesmo escopo por vendedor.
+  @Post(':id/contatos')
+  async criarContato(
+    @Param('id') id: string,
+    @Body() dto: CriarContatoClienteDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ContatoClienteDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clientesService.criarContato(id, dto, escopo);
   }
 
   // OS-BACKEND-36 - "/:id/financeiro" e' mais especifico que "/:id" (3

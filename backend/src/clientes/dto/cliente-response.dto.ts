@@ -28,6 +28,19 @@ export interface ContatoClienteDto {
   telefoneDdd: string | null;
   telefoneNumero: string | null;
   funcao: string | null;
+  criadoLocalmente: boolean;
+}
+
+export function paraContatoClienteDto(contato: ContatoCliente): ContatoClienteDto {
+  return {
+    id: contato.id,
+    nome: contato.nome,
+    email: contato.email,
+    telefoneDdd: contato.telefoneDdd,
+    telefoneNumero: contato.telefoneNumero,
+    funcao: contato.funcao,
+    criadoLocalmente: contato.criadoLocalmente,
+  };
 }
 
 export interface ClienteDetalheDto extends ClienteResumoDto {
@@ -56,13 +69,6 @@ export function paraClienteDetalheDto(
   return {
     ...paraClienteResumoDto(cliente),
     enderecos: cliente.enderecos,
-    contatos: cliente.contatos.map((contato) => ({
-      id: contato.id,
-      nome: contato.nome,
-      email: contato.email,
-      telefoneDdd: contato.telefoneDdd,
-      telefoneNumero: contato.telefoneNumero,
-      funcao: contato.funcao,
-    })),
+    contatos: cliente.contatos.map(paraContatoClienteDto),
   };
 }

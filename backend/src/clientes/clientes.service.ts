@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
 import {
   construirWhereClientePorEscopo,
@@ -9,9 +10,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   paraClienteDetalheDto,
   paraClienteResumoDto,
+  paraContatoClienteDto,
   type ClienteDetalheDto,
   type ClienteResumoDto,
+  type ContatoClienteDto,
 } from './dto/cliente-response.dto';
+import type { CriarContatoClienteDto } from './dto/criar-contato-cliente.dto';
 import type { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 
 export interface ConflitoClienteDto {
@@ -98,6 +102,41 @@ export class ClientesService {
     }
 
     return paraClienteDetalheDto(cliente);
+  }
+
+  // Contato criado por nos (nunca sincronizado do Radar, ver
+  // ContatoCliente.criadoLocalmente no schema) - mesmo escopo por vendedor
+  // de buscarPorId, pra nao deixar adicionar contato num cliente fora da
+  // carteira de quem chama. idExternoErp sintetico ("LOCAL-<uuid>") so'
+  // pra satisfazer a coluna @unique sem torna-la nullable - nunca colide
+  // com um id real do Radar (que nao usa esse prefixo).
+  async criarContato(
+    clienteId: string,
+    dto: CriarContatoClienteDto,
+    escopo: EscopoClientes,
+  ): Promise<ContatoClienteDto> {
+    const whereEscopo = construirWhereClientePorEscopo(escopo);
+    const cliente = whereEscopo
+      ? await this.prisma.cliente.findFirst({ where: { id: clienteId, ...whereEscopo } })
+      : null;
+    if (!cliente) {
+      throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
+    }
+
+    const contato = await this.prisma.contatoCliente.create({
+      data: {
+        idExternoErp: `LOCAL-${randomUUID()}`,
+        clienteId,
+        nome: dto.nome,
+        telefoneDdd: dto.telefoneDdd ?? null,
+        telefoneNumero: dto.telefoneNumero ?? null,
+        email: dto.email ?? null,
+        funcao: dto.funcao ?? null,
+        criadoLocalmente: true,
+        sincronizadoEm: new Date(),
+      },
+    });
+    return paraContatoClienteDto(contato);
   }
 
   // Unica excecao ao escopo por vendedor (OS-BACKEND-23, criterio de

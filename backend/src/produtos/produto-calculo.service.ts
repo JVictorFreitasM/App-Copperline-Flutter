@@ -27,6 +27,10 @@ export interface ResultadoCalculoComPreco {
   valorUnitario: number;
   valorFinal: number;
   margemLucro: number | null;
+  // Popup de item da criacao de pedido ("Em estoque X") - null quando o
+  // produto nao tem codigo ou nunca teve saldo sincronizado (nunca
+  // inventar 0 nesse caso, ver mesmo criterio de margemLucro acima).
+  estoqueDisponivel: number | null;
 }
 
 // Orquestra a funcao de dominio (calcularQuantidadePedido, ver
@@ -74,6 +78,12 @@ export class ProdutoCalculoService {
         ? arredondarMoeda(resultado.valorTotal * (1 - opcoes.percentualDesconto / 100))
         : resultado.valorTotal;
 
+      const estoqueDisponivel = produto.codigo
+        ? await this.prisma.saldoEstoque
+            .findUnique({ where: { codigoProduto: produto.codigo } })
+            .then((saldo) => (saldo ? Number(saldo.quantidadeDisponivel) : null))
+        : null;
+
       return {
         quantidade: resultado.quantidade,
         unidade: resultado.unidade,
@@ -83,6 +93,7 @@ export class ProdutoCalculoService {
         // markup sobre custo) - nunca inventar um numero aqui, ver
         // OS-pendentes-claude-code.md.
         margemLucro: null,
+        estoqueDisponivel,
       };
     } catch (error) {
       if (error instanceof QuantidadeNaoFechaEmUnidadeError) {

@@ -13,13 +13,26 @@ function prismaFake(overrides: {
   findMany?: unknown[];
   count?: number;
   findFirst?: unknown;
+  contatoCriado?: unknown;
 }) {
   const findMany = jest.fn().mockResolvedValue(overrides.findMany ?? []);
   const count = jest.fn().mockResolvedValue(overrides.count ?? 0);
   const findFirst = jest.fn().mockResolvedValue(overrides.findFirst ?? null);
+  const contatoCreate = jest.fn().mockResolvedValue(
+    overrides.contatoCriado ?? {
+      id: 'contato-novo',
+      nome: 'Fulano',
+      email: null,
+      telefoneDdd: null,
+      telefoneNumero: null,
+      funcao: null,
+      criadoLocalmente: true,
+    },
+  );
 
   return {
     cliente: { findMany, count, findFirst },
+    contatoCliente: { create: contatoCreate },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
 }
@@ -250,6 +263,43 @@ describe('ClientesService.buscarPorId', () => {
         funcao: 'Comprador',
       },
     ]);
+  });
+});
+
+describe('ClientesService.criarContato', () => {
+  it('lanca NotFoundException quando o cliente nao existe ou esta fora do escopo', async () => {
+    const prisma = prismaFake({ findFirst: null });
+    const service = new ClientesService(prisma as never);
+
+    await expect(
+      service.criarContato('inexistente', { nome: 'Fulano' }, ESCOPO_TODOS),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.contatoCliente.create).not.toHaveBeenCalled();
+  });
+
+  it('cria o contato com criadoLocalmente:true e idExternoErp sintetico', async () => {
+    const prisma = prismaFake({ findFirst: { id: '1' } });
+    const service = new ClientesService(prisma as never);
+
+    const resultado = await service.criarContato(
+      '1',
+      { nome: 'Fulano', telefoneDdd: '11', telefoneNumero: '999999999' },
+      ESCOPO_TODOS,
+    );
+
+    expect(resultado.criadoLocalmente).toBe(true);
+    expect(prisma.contatoCliente.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          clienteId: '1',
+          nome: 'Fulano',
+          telefoneDdd: '11',
+          telefoneNumero: '999999999',
+          criadoLocalmente: true,
+          idExternoErp: expect.stringMatching(/^LOCAL-/),
+        }),
+      }),
+    );
   });
 });
 
