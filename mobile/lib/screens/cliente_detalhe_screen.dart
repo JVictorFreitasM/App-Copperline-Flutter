@@ -13,6 +13,7 @@ import '../core/models/visita.dart';
 import '../core/providers/agendamentos_visita_provider.dart';
 import '../core/providers/clientes_provider.dart';
 import '../core/providers/cliente_resumo_llm_provider.dart';
+import '../core/models/configuracao_rastreio.dart';
 import '../core/providers/offline_provider.dart';
 import '../core/providers/visitas_provider.dart';
 import '../core/formatacao.dart';
@@ -25,12 +26,6 @@ import '../widgets/stat_card.dart';
 import '../widgets/timeline.dart';
 
 String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
-
-// Raio máximo aceito entre a posição do vendedor e o pin do cliente -
-// mesmo valor do backend (RAIO_MAXIMO_METROS, visitas.service.ts), checado
-// aqui ANTES de abrir a câmera/enviar a chamada só pra dar feedback
-// imediato (o backend segue sendo a fonte de verdade, valida de novo).
-const double _raioMaximoMetros = 50;
 
 /// Detalhe do cliente (mobile, equivalente à OS-WEB-15) - mostra o que a
 /// listagem não mostra: contatos. Só leitura. Sem endereços (mesmo recorte
@@ -530,23 +525,29 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
   }
 
   Future<void> _fazerCheckin(BuildContext context) async {
-    final posicao = await _obterPosicaoOuAvisar(context);
-    if (posicao == null || !context.mounted) return;
+    final config = await ref.read(configuracaoRastreioProvider.future);
+    if (!context.mounted) return;
+    final posicaoResultado = await _obterPosicaoOuBloquear(context, config);
+    if (posicaoResultado.bloqueado || !context.mounted) return;
+    final posicao = posicaoResultado.posicao;
 
-    final distancia = Geolocator.distanceBetween(
-      widget.cliente.localizacaoLat!,
-      widget.cliente.localizacaoLng!,
-      posicao.latitude,
-      posicao.longitude,
-    );
-    if (distancia > _raioMaximoMetros) {
-      _mostrarSnackBar(
-        context,
-        'Você está a ${distancia.round()}m do cliente - fora do raio de '
-        '${_raioMaximoMetros.round()}m para check-in.',
+    if (posicao != null) {
+      final distancia = Geolocator.distanceBetween(
+        widget.cliente.localizacaoLat!,
+        widget.cliente.localizacaoLng!,
+        posicao.latitude,
+        posicao.longitude,
       );
-      return;
+      if (distancia > config.distanciaMaximaClienteRegistroVisitaMetros) {
+        _mostrarSnackBar(
+          context,
+          'Você está a ${distancia.round()}m do cliente - fora do raio de '
+          '${config.distanciaMaximaClienteRegistroVisitaMetros.round()}m para check-in.',
+        );
+        return;
+      }
     }
+    if (!context.mounted) return;
 
     // Só câmera nativa - ImageSource.camera nunca abre a galeria (requisito
     // explícito da OS: sem opção de escolher foto existente). SEM
@@ -577,8 +578,8 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
             .read(visitasAcoesServiceProvider)
             .checkin(
               clienteId: widget.cliente.id,
-              latitude: posicao.latitude,
-              longitude: posicao.longitude,
+              latitude: posicao?.latitude,
+              longitude: posicao?.longitude,
               caminhoFoto: caminhoFinal,
               nota: nota,
             );
@@ -593,8 +594,8 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
           timestamp: DateTime.now(),
           payload: {
             'clienteId': widget.cliente.id,
-            'latitude': posicao.latitude,
-            'longitude': posicao.longitude,
+            if (posicao != null) 'latitude': posicao.latitude,
+            if (posicao != null) 'longitude': posicao.longitude,
             'foto': fotoBase64,
             if (nota.isNotEmpty) 'nota': nota,
           },
@@ -608,23 +609,29 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
   }
 
   Future<void> _fazerCheckout(BuildContext context, Visita visita) async {
-    final posicao = await _obterPosicaoOuAvisar(context);
-    if (posicao == null || !context.mounted) return;
+    final config = await ref.read(configuracaoRastreioProvider.future);
+    if (!context.mounted) return;
+    final posicaoResultado = await _obterPosicaoOuBloquear(context, config);
+    if (posicaoResultado.bloqueado || !context.mounted) return;
+    final posicao = posicaoResultado.posicao;
 
-    final distancia = Geolocator.distanceBetween(
-      widget.cliente.localizacaoLat!,
-      widget.cliente.localizacaoLng!,
-      posicao.latitude,
-      posicao.longitude,
-    );
-    if (distancia > _raioMaximoMetros) {
-      _mostrarSnackBar(
-        context,
-        'Você está a ${distancia.round()}m do cliente - fora do raio de '
-        '${_raioMaximoMetros.round()}m para checkout.',
+    if (posicao != null) {
+      final distancia = Geolocator.distanceBetween(
+        widget.cliente.localizacaoLat!,
+        widget.cliente.localizacaoLng!,
+        posicao.latitude,
+        posicao.longitude,
       );
-      return;
+      if (distancia > config.distanciaMaximaClienteRegistroVisitaMetros) {
+        _mostrarSnackBar(
+          context,
+          'Você está a ${distancia.round()}m do cliente - fora do raio de '
+          '${config.distanciaMaximaClienteRegistroVisitaMetros.round()}m para checkout.',
+        );
+        return;
+      }
     }
+    if (!context.mounted) return;
 
     final resultado = await _pedirNotaOpcional(
       context,
@@ -641,8 +648,8 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
             .read(visitasAcoesServiceProvider)
             .checkout(
               visitaId: visita.id,
-              latitude: posicao.latitude,
-              longitude: posicao.longitude,
+              latitude: posicao?.latitude,
+              longitude: posicao?.longitude,
               nota: nota,
             );
         ref.invalidate(minhasVisitasProvider(_hojeIso()));
@@ -655,8 +662,8 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
           timestamp: DateTime.now(),
           payload: {
             'visitaId': visita.id,
-            'latitude': posicao.latitude,
-            'longitude': posicao.longitude,
+            if (posicao != null) 'latitude': posicao.latitude,
+            if (posicao != null) 'longitude': posicao.longitude,
             if (nota.isNotEmpty) 'nota': nota,
           },
         );
@@ -698,19 +705,35 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     );
   }
 
-  Future<Position?> _obterPosicaoOuAvisar(BuildContext context) async {
+  // Tenta obter a posição atual; se falhar (permissão negada, GPS
+  // indisponível), decide entre BLOQUEAR (mostra aviso, quem chama deve
+  // abortar) ou seguir sem posição, conforme
+  // `permitirRegistroComGpsDesabilitado` (Épico 4, config-aba-
+  // rastreio.jpg). O backend segue sendo a fonte de verdade - valida de
+  // novo em todo caso.
+  Future<({Position? posicao, bool bloqueado})> _obterPosicaoOuBloquear(
+    BuildContext context,
+    ConfiguracaoRastreio config,
+  ) async {
     try {
-      return await obterPosicaoAtual();
+      final posicao = await obterPosicaoAtual();
+      return (posicao: posicao, bloqueado: false);
     } on PermissaoLocalizacaoNegadaException {
+      if (config.permitirRegistroComGpsDesabilitado) {
+        return (posicao: null, bloqueado: false);
+      }
       if (context.mounted) {
         _mostrarSnackBar(context, 'Permissão de localização negada.');
       }
-      return null;
+      return (posicao: null, bloqueado: true);
     } catch (erro) {
+      if (config.permitirRegistroComGpsDesabilitado) {
+        return (posicao: null, bloqueado: false);
+      }
       if (context.mounted) {
         _mostrarSnackBar(context, 'Falha ao obter localização: $erro');
       }
-      return null;
+      return (posicao: null, bloqueado: true);
     }
   }
 

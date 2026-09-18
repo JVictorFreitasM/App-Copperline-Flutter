@@ -86,12 +86,20 @@ class CriarPedidoService {
   // Resposta (CriarPedidoResultadoDto) só é usada pelo `id` do pedido
   // criado, pra navegar direto pro detalhe (mesmo padrão do web,
   // `criar-pedido-form.tsx`) - sem model próprio pra isso.
+  //
+  // latitude/longitude opcionais (Épico 4, config-aba-rastreio.jpg -
+  // "Distância máxima do cliente para registro de pedido") - o app manda
+  // best-effort quando consegue a posição (ver criar_pedido_screen.dart);
+  // o backend só exige de verdade quando essa config tiver um valor
+  // configurado (senão ignora).
   Future<String> criar({
     required String clienteId,
     required double percentualDesconto,
     required String formaPagamentoId,
     required String condicaoPagamentoId,
     required List<Map<String, dynamic>> itens,
+    double? latitude,
+    double? longitude,
   }) async {
     final json = await _apiClient.postJson('/pedidos', {
       'clienteId': clienteId,
@@ -99,6 +107,8 @@ class CriarPedidoService {
       'formaPagamentoId': formaPagamentoId,
       'condicaoPagamentoId': condicaoPagamentoId,
       'itens': itens,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
     });
     return json['pedidoId'] as String;
   }

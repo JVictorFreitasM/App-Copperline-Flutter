@@ -23,17 +23,21 @@ class VisitasAcoesService {
 
   final ApiClient _apiClient;
 
+  // latitude/longitude opcionais (Épico 4, config-aba-rastreio.jpg -
+  // "permitirRegistroComGpsDesabilitado") - só omitidos quando essa
+  // config permite (checado na tela antes de chamar, ver
+  // cliente_detalhe_screen.dart); o backend valida de novo.
   Future<Visita> checkin({
     required String clienteId,
-    required double latitude,
-    required double longitude,
+    double? latitude,
+    double? longitude,
     required String caminhoFoto,
     String? nota,
   }) async {
     final json = await _apiClient.postMultipart('/visitas/checkin', {
       'clienteId': clienteId,
-      'latitude': latitude.toString(),
-      'longitude': longitude.toString(),
+      if (latitude != null) 'latitude': latitude.toString(),
+      if (longitude != null) 'longitude': longitude.toString(),
       if (nota != null && nota.isNotEmpty) 'nota': nota,
     }, caminhoFoto);
     return Visita.fromJson(json);
@@ -41,13 +45,13 @@ class VisitasAcoesService {
 
   Future<Visita> checkout({
     required String visitaId,
-    required double latitude,
-    required double longitude,
+    double? latitude,
+    double? longitude,
     String? nota,
   }) async {
     final json = await _apiClient.postJson('/visitas/$visitaId/checkout', {
-      'latitude': latitude,
-      'longitude': longitude,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       if (nota != null && nota.isNotEmpty) 'nota': nota,
     });
     return Visita.fromJson(json);

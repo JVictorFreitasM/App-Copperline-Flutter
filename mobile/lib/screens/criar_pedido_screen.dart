@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api_exception.dart';
 import '../core/formatacao.dart';
+import '../core/localizacao_atual.dart';
 import '../core/models/cliente.dart';
 import '../core/models/pedido.dart';
 import '../core/models/produto.dart';
@@ -232,6 +233,23 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
 
     setState(() => _enviando = true);
     try {
+      // Posição best-effort (Épico 4, config-aba-rastreio.jpg -
+      // "Distância máxima do cliente para registro de pedido") - tenta
+      // capturar, mas NUNCA bloqueia o envio se falhar (permissão
+      // negada, GPS indisponível): o backend só exige de verdade quando
+      // essa distância tiver um valor configurado, e nesse caso já
+      // rejeita com uma mensagem clara (mostrada via ApiException
+      // abaixo) se a posição realmente faltar.
+      double? latitude;
+      double? longitude;
+      try {
+        final posicao = await obterPosicaoAtual();
+        latitude = posicao.latitude;
+        longitude = posicao.longitude;
+      } catch (_) {
+        // Segue sem posição - ver comentário acima.
+      }
+
       final pedidoId = await ref.read(criarPedidoServiceProvider).criar(
         clienteId: _cliente!.id,
         percentualDesconto: _desconto,
@@ -246,6 +264,8 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
               },
             )
             .toList(),
+        latitude: latitude,
+        longitude: longitude,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

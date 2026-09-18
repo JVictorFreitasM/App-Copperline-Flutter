@@ -25,20 +25,15 @@ export interface MobileSnapshotDto {
   // em lote - ja e' leitura da tabela local SaldoEstoque (nao chama o
   // Estoque.svc), entao incluir aqui nao adiciona dependencia externa.
   estoque: EstoqueConsultaDto[];
-  // Epico 4 (config-aba-rastreio.jpg) - so os campos que o APP precisa
-  // aplicar do lado dele (janela de rastreio, precisao, intervalo
-  // minimo). As 2 distancias maximas (pedido/visita) ficam DE FORA -
-  // continuam so' enforcement de backend (VisitasService/CriarPedidoService),
-  // o app nao precisa delas pra decidir nada localmente.
+  // Epico 4 (config-aba-rastreio.jpg) - campos que o APP aplica do lado
+  // dele (janela de rastreio, precisao, intervalo minimo, distancias
+  // maximas pra pre-check de UX no checkin/checkout/criar pedido - o
+  // backend continua sendo a fonte de verdade, valida de novo em todo
+  // caso; isso e' so' feedback imediato antes de chamar a API).
   configuracaoRastreio: ConfiguracaoRastreioParaMobileDto;
 }
 
-export type ConfiguracaoRastreioParaMobileDto = Omit<
-  ConfiguracaoRastreioDto,
-  | 'distanciaMaximaClienteRegistroPedidoMetros'
-  | 'distanciaMaximaClienteRegistroVisitaMetros'
-  | 'atualizadoEm'
->;
+export type ConfiguracaoRastreioParaMobileDto = Omit<ConfiguracaoRastreioDto, 'atualizadoEm'>;
 
 // Tetos de seguranca (nao paginacao real - decisao confirmada com o
 // usuario: uma resposta so, comprimida via gzip, ver main.ts). Carteira
@@ -150,6 +145,10 @@ export class MobileSnapshotService {
         precisaoMinimaMetrosGps: configRastreio.precisaoMinimaMetrosGps,
         tempoMinimoAcordarGpsMs: configRastreio.tempoMinimoAcordarGpsMs,
         permitirRegistroComGpsDesabilitado: configRastreio.permitirRegistroComGpsDesabilitado,
+        distanciaMaximaClienteRegistroPedidoMetros:
+          configRastreio.distanciaMaximaClienteRegistroPedidoMetros,
+        distanciaMaximaClienteRegistroVisitaMetros:
+          configRastreio.distanciaMaximaClienteRegistroVisitaMetros,
       },
     };
   }

@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../api_client.dart';
 import '../models/cliente.dart';
+import '../models/configuracao_rastreio.dart';
 import '../models/estoque.dart';
 import '../models/pedido.dart';
 import '../models/produto.dart';
 import 'local_database.dart';
 
 const _chaveGeradoEm = 'geradoEm';
+const _chaveConfiguracaoRastreio = 'configuracaoRastreio';
 
 /// Baixa GET /mobile/snapshot (OS-BACKEND-29) e repopula o espelho local
 /// (OS-MOBILE-22) - substitui o conteúdo inteiro de cada tabela a cada
@@ -66,6 +68,17 @@ class SnapshotService {
         'chave': _chaveGeradoEm,
         'valor': json['geradoEm'] as String,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      // Épico 4 - null-safe (app antigo apontando pra um backend ainda
+      // sem essa OS, mesmo critério de `estoque` acima): sem a chave,
+      // mantém o que já estava salvo (não apaga a linha).
+      final configuracaoRastreio = json['configuracaoRastreio'];
+      if (configuracaoRastreio != null) {
+        await tx.insert('snapshot_meta', {
+          'chave': _chaveConfiguracaoRastreio,
+          'valor': jsonEncode(configuracaoRastreio),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
     });
   }
 
@@ -77,6 +90,16 @@ class SnapshotService {
     );
     if (linhas.isEmpty) return null;
     return linhas.first['valor'] as String;
+  }
+
+  Future<ConfiguracaoRastreio> configuracaoRastreio() async {
+    final linhas = await _localDatabase.db.query(
+      'snapshot_meta',
+      where: 'chave = ?',
+      whereArgs: [_chaveConfiguracaoRastreio],
+    );
+    if (linhas.isEmpty) return ConfiguracaoRastreio.padrao();
+    return ConfiguracaoRastreio.fromJson(jsonDecode(linhas.first['valor'] as String));
   }
 
   Future<List<ClienteResumo>> clientes() async {

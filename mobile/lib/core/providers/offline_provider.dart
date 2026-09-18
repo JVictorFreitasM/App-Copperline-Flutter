@@ -6,6 +6,7 @@ import '../local_db/acao_pendente.dart';
 import '../local_db/fila_pendente_service.dart';
 import '../local_db/local_database.dart';
 import '../local_db/snapshot_service.dart';
+import '../models/configuracao_rastreio.dart';
 
 /// Infraestrutura offline (OS-MOBILE-22) - banco local (abertura é
 /// assíncrona, por isso FutureProvider) + os dois serviços que operam
@@ -22,6 +23,14 @@ final filaPendenteServiceProvider = FutureProvider<FilaPendenteService>((ref) as
   final apiClient = ref.watch(apiClientProvider);
   final db = await ref.watch(localDatabaseProvider.future);
   return FilaPendenteService(apiClient, db);
+});
+
+/// Config de Rastreio (Épico 4) lida do espelho local (populada a cada
+/// `SnapshotService.baixar()`) - nunca falha por estar offline, sempre
+/// tem pelo menos o default conservador (`ConfiguracaoRastreio.padrao()`).
+final configuracaoRastreioProvider = FutureProvider<ConfiguracaoRastreio>((ref) async {
+  final snapshot = await ref.watch(snapshotServiceProvider.future);
+  return snapshot.configuracaoRastreio();
 });
 
 /// Quantidade de ações offline aguardando envio (PENDENTE/ERRO) - usado

@@ -61,6 +61,16 @@ class RastreioNotifier extends Notifier<bool> {
 
   Future<void> _capturarPonto() async {
     try {
+      // Janela de rastreio (Épico 4, config-aba-rastreio.jpg -
+      // sábado/domingo/horário) - lida do espelho local (nunca falha por
+      // estar offline, sempre tem um default). Fora da janela: nem chega
+      // a acordar o GPS, só pula esta captura silenciosamente (mesmo
+      // critério de falha pontual abaixo).
+      final config = await ref.read(configuracaoRastreioProvider.future);
+      if (!config.dentroDaJanela(DateTime.now())) {
+        return;
+      }
+
       final posicao = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
@@ -74,16 +84,17 @@ class RastreioNotifier extends Notifier<bool> {
               'latitude': posicao.latitude,
               'longitude': posicao.longitude,
               'timestamp': posicao.timestamp.toIso8601String(),
+              'precisao': posicao.accuracy,
             },
           ],
         },
       );
       ref.invalidate(contagemPendentesProvider);
     } catch (_) {
-      // Falha pontual de GPS (sem sinal, timeout) - so pula esta captura,
-      // a proxima tentativa e' automatica no proximo intervalo (nao ha
-      // erro pra mostrar pro usuario aqui, e' um evento silencioso de
-      // fundo).
+      // Falha pontual de GPS (sem sinal, timeout) ou de leitura da config
+      // local - so pula esta captura, a proxima tentativa e' automatica
+      // no proximo intervalo (nao ha erro pra mostrar pro usuario aqui,
+      // e' um evento silencioso de fundo).
     }
   }
 }
