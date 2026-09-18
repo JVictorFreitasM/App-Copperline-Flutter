@@ -113,6 +113,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
           nomeUsuario={user.name}
           papel={user.role}
           linkSair={`${apiPublicUrl}/auth/logout`}
+          mostrarConfiguracoes={user.role === "admin"}
         />
         {children}
       </div>

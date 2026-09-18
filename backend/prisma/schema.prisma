@@ -1101,15 +1101,74 @@ model ConfiguracaoGamificacao {
 // credencial, e o proprio texto da OS pede "para poder ajustar sem
 // deploy" - por isso fica em tabela (mesmo padrao estrutural de
 // ConfiguracaoLlm), editavel via PATCH /admin/configuracao-desconto, nao
-// env var. Valor UNICO global (nao por papel) - decisao confirmada com o
-// usuario: o criterio de aceite fala em "desconto acima de X%" sem
-// distinguir o papel de quem solicita.
+// env var. limitePercentual continua o UNICO valor que a hierarquia de
+// aprovacao (SolicitacaoDesconto, ver domain/solicitacao-desconto.entity.ts)
+// realmente usa pra decidir se dispara aprovacao - e' o que a aba
+// "Alcada de Aprovacao" da tela de Configuracoes (Epico 4,
+// OS-dashboard-configuracoes-notificacoes-auditoria.md) rotula como
+// "Percentual maximo de desconto para vendedores". habilitarAprovacaoPorAlcada/
+// percentualAlcadaGerencial/percentualAlcadaSupervisao sao os 3 campos
+// adicionais dessa aba (referencia: config-aba-aprovacao.jpg) - guardados
+// aqui pra edicao futura ja ficarem disponiveis via GET/PATCH, mas AINDA
+// NAO conectados a logica de aprovacao (SolicitacaoDesconto.necessitaAprovacao/
+// calcularPapelExigido continuam usando so' limitePercentual + hierarquia de
+// papel fixa) - wire-up registrado como pendencia em
+// OS-pendentes-claude-code.md, fora do escopo desta OS (que pede so' a
+// tela de configuracao, nao mudanca na regra de aprovacao em si).
 model ConfiguracaoDesconto {
-  id               String   @id @default(uuid())
-  limitePercentual Decimal  @default(20) @map("limite_percentual") @db.Decimal(5, 2)
-  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+  id                          String   @id @default(uuid())
+  limitePercentual            Decimal  @default(20) @map("limite_percentual") @db.Decimal(5, 2)
+  habilitarAprovacaoPorAlcada Boolean  @default(true) @map("habilitar_aprovacao_por_alcada")
+  percentualAlcadaGerencial   Decimal  @default(50) @map("percentual_alcada_gerencial") @db.Decimal(5, 2)
+  percentualAlcadaSupervisao  Decimal  @default(50) @map("percentual_alcada_supervisao") @db.Decimal(5, 2)
+  atualizadoEm                DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_desconto")
+}
+
+// Tabela singleton (1 linha, service garante) - aba "Orcamento" da tela de
+// Configuracoes (Epico 4, OS-dashboard-configuracoes-notificacoes-auditoria.md).
+// Referencia: config-aba-orcamento.jpg. "Orcamento" como conceito de negocio
+// distinto de Pedido ainda nao existe no modelo de dados (ver
+// OS-pendentes-claude-code.md) - estas 4 flags sao apenas as configuracoes
+// que a tela pede pra existir, sem ainda ligar a nenhum fluxo real de
+// orcamento (fora do escopo desta OS).
+model ConfiguracaoOrcamento {
+  id                                        String   @id @default(uuid())
+  habilitarCriacaoOrcamento                 Boolean  @default(true) @map("habilitar_criacao_orcamento")
+  permitirVendedorTransformarEmPedido       Boolean  @default(true) @map("permitir_vendedor_transformar_em_pedido")
+  criarPedidoSugeridoComoOrcamento          Boolean  @default(true) @map("criar_pedido_sugerido_como_orcamento")
+  permitirAlteracaoVendedorOrcamentoCriado  Boolean  @default(true) @map("permitir_alteracao_vendedor_orcamento_criado")
+  atualizadoEm                              DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_orcamento")
+}
+
+// Tabela singleton (1 linha, service garante) - aba "Rastreio" da tela de
+// Configuracoes (Epico 4, OS-dashboard-configuracoes-notificacoes-auditoria.md).
+// Referencia: config-aba-rastreio.jpg. Escopo desta OS e' so' Web
+// (Next.js) - estes campos ficam disponiveis via GET/PATCH pro admin
+// configurar, mas o app mobile (Flutter) NAO foi alterado nesta rodada
+// pra realmente ler/aplicar esses valores (fora de escopo, "Sem alteracoes
+// em mobile/Flutter" no cabecalho da OS) - wire-up no app registrado em
+// OS-pendentes-claude-code.md. horarioInicio/TerminoRastreamento em
+// "HH:mm" (string, nao Int) pra bater 1:1 com o input de horario da
+// imagem, sem inventar granularidade em minutos que a tela nao mostra.
+model ConfiguracaoRastreio {
+  id                                          String   @id @default(uuid())
+  desabilitarEdicaoHorarioTrabalhoAndroid     Boolean  @default(true) @map("desabilitar_edicao_horario_trabalho_android")
+  habilitarRastreamentoSabados                Boolean  @default(false) @map("habilitar_rastreamento_sabados")
+  habilitarRastreamentoDomingos               Boolean  @default(false) @map("habilitar_rastreamento_domingos")
+  horarioInicioRastreamento                   String   @default("07:30") @map("horario_inicio_rastreamento") @db.VarChar(5)
+  horarioTerminoRastreamento                  String   @default("18:00") @map("horario_termino_rastreamento") @db.VarChar(5)
+  precisaoMinimaMetrosGps                     Int      @default(50) @map("precisao_minima_metros_gps")
+  tempoMinimoAcordarGpsMs                     Int      @default(30000) @map("tempo_minimo_acordar_gps_ms")
+  permitirRegistroComGpsDesabilitado          Boolean  @default(false) @map("permitir_registro_com_gps_desabilitado")
+  distanciaMaximaClienteRegistroPedidoMetros  Int?     @map("distancia_maxima_cliente_registro_pedido_metros")
+  distanciaMaximaClienteRegistroVisitaMetros  Int      @default(50) @map("distancia_maxima_cliente_registro_visita_metros")
+  atualizadoEm                                DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_rastreio")
 }
 
 enum StatusSolicitacaoDesconto {

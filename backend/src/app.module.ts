@@ -32,6 +32,7 @@ import { OportunidadesModule } from './oportunidades/oportunidades.module';
 import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
 import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acondicionamento.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
+import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { PagamentoModule } from './pagamento/pagamento.module';
     TabelasPrecoModule,
     TiposAcondicionamentoModule,
     PagamentoModule,
+    ConfiguracoesModule,
   ],
 })
 export class AppModule {}

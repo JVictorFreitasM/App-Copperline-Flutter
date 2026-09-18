@@ -3,11 +3,22 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export interface ConfiguracaoDescontoDto {
   limitePercentual: number;
+  habilitarAprovacaoPorAlcada: boolean;
+  percentualAlcadaGerencial: number;
+  percentualAlcadaSupervisao: number;
   atualizadoEm: string;
 }
 
+// Campos opcionais: o endpoint ops (admin/configuracao-desconto,
+// ApiKeyGuard) so envia limitePercentual; o endpoint web novo da aba
+// "Alcada de Aprovacao" (admin/configuracoes/alcada-aprovacao,
+// requireRole('admin')) envia os 4 campos - so os informados sao
+// persistidos.
 export interface AtualizarConfiguracaoDescontoInput {
-  limitePercentual: number;
+  limitePercentual?: number;
+  habilitarAprovacaoPorAlcada?: boolean;
+  percentualAlcadaGerencial?: number;
+  percentualAlcadaSupervisao?: number;
 }
 
 // Singleton (1 linha) - mesmo padrao ja usado por ConfiguracaoLlmService
@@ -30,7 +41,20 @@ export class ConfiguracaoDescontoService {
     const existente = await this.obterOuCriarLinha();
     const atualizado = await this.prisma.configuracaoDesconto.update({
       where: { id: existente.id },
-      data: { limitePercentual: input.limitePercentual },
+      data: {
+        ...(input.limitePercentual !== undefined && {
+          limitePercentual: input.limitePercentual,
+        }),
+        ...(input.habilitarAprovacaoPorAlcada !== undefined && {
+          habilitarAprovacaoPorAlcada: input.habilitarAprovacaoPorAlcada,
+        }),
+        ...(input.percentualAlcadaGerencial !== undefined && {
+          percentualAlcadaGerencial: input.percentualAlcadaGerencial,
+        }),
+        ...(input.percentualAlcadaSupervisao !== undefined && {
+          percentualAlcadaSupervisao: input.percentualAlcadaSupervisao,
+        }),
+      },
     });
     return paraDto(atualizado);
   }
@@ -53,10 +77,16 @@ export class ConfiguracaoDescontoService {
 
 function paraDto(config: {
   limitePercentual: { toNumber(): number };
+  habilitarAprovacaoPorAlcada: boolean;
+  percentualAlcadaGerencial: { toNumber(): number };
+  percentualAlcadaSupervisao: { toNumber(): number };
   atualizadoEm: Date;
 }): ConfiguracaoDescontoDto {
   return {
     limitePercentual: config.limitePercentual.toNumber(),
+    habilitarAprovacaoPorAlcada: config.habilitarAprovacaoPorAlcada,
+    percentualAlcadaGerencial: config.percentualAlcadaGerencial.toNumber(),
+    percentualAlcadaSupervisao: config.percentualAlcadaSupervisao.toNumber(),
     atualizadoEm: config.atualizadoEm.toISOString(),
   };
 }
