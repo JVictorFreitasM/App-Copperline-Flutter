@@ -13,6 +13,24 @@ function vendedorEscopoServiceFake(
   return { resolverEscopoVendedores: jest.fn().mockResolvedValue(escopo) };
 }
 
+function configuracaoRastreioServiceFake(precisaoMinimaMetrosGps = 50) {
+  return {
+    obter: jest.fn().mockResolvedValue({
+      desabilitarEdicaoHorarioTrabalhoAndroid: true,
+      habilitarRastreamentoSabados: false,
+      habilitarRastreamentoDomingos: false,
+      horarioInicioRastreamento: '07:30',
+      horarioTerminoRastreamento: '18:00',
+      precisaoMinimaMetrosGps,
+      tempoMinimoAcordarGpsMs: 30000,
+      permitirRegistroComGpsDesabilitado: false,
+      distanciaMaximaClienteRegistroPedidoMetros: null,
+      distanciaMaximaClienteRegistroVisitaMetros: 50,
+      atualizadoEm: '2026-01-01T00:00:00.000Z',
+    }),
+  };
+}
+
 function prismaFake(overrides: {
   vendedor?: Record<string, unknown> | null;
   pontos?: Record<string, unknown>[];
@@ -61,7 +79,7 @@ function prismaFake(overrides: {
 describe('RastreioService.registrarLote', () => {
   it('grava todos os pontos com o timestamp original (capturadoEm), nao o momento do envio', async () => {
     const prisma = prismaFake();
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.registrarLote('u1', [
       { latitude: -23.5, longitude: -46.6, timestamp: '2026-01-01T10:00:00.000Z' },
@@ -89,9 +107,50 @@ describe('RastreioService.registrarLote', () => {
     });
   });
 
+  it('descarta pontos com precisao pior que a minima configurada (Epico 4)', async () => {
+    const prisma = prismaFake();
+    const service = new RastreioService(
+      prisma as never,
+      vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake(50) as never,
+    );
+
+    const resultado = await service.registrarLote('u1', [
+      { latitude: -23.5, longitude: -46.6, timestamp: '2026-01-01T10:00:00.000Z', precisao: 30 },
+      { latitude: -23.6, longitude: -46.7, timestamp: '2026-01-01T10:05:00.000Z', precisao: 80 },
+      { latitude: -23.7, longitude: -46.8, timestamp: '2026-01-01T10:10:00.000Z' },
+    ]);
+
+    // 30m (dentro) + sem precisao informada (sempre passa) = 2; 80m
+    // (pior que o minimo de 50m) descartado.
+    expect(resultado.quantidade).toBe(2);
+    expect(prisma.localizacaoUsuario.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ latitude: -23.5 }),
+        expect.objectContaining({ latitude: -23.7 }),
+      ],
+    });
+  });
+
+  it('nao chama createMany quando TODOS os pontos do lote sao descartados por precisao', async () => {
+    const prisma = prismaFake();
+    const service = new RastreioService(
+      prisma as never,
+      vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake(50) as never,
+    );
+
+    const resultado = await service.registrarLote('u1', [
+      { latitude: -23.5, longitude: -46.6, timestamp: '2026-01-01T10:00:00.000Z', precisao: 100 },
+    ]);
+
+    expect(resultado.quantidade).toBe(0);
+    expect(prisma.localizacaoUsuario.createMany).not.toHaveBeenCalled();
+  });
+
   it('usa o mesmo loteId pra todos os pontos de uma chamada', async () => {
     const prisma = prismaFake();
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await service.registrarLote('u1', [
       { latitude: 0, longitude: 0, timestamp: '2026-01-01T00:00:00.000Z' },
@@ -106,7 +165,7 @@ describe('RastreioService.registrarLote', () => {
 describe('RastreioService.consultarTrajeto', () => {
   it('lanca NotFoundException quando o vendedor nao existe', async () => {
     const prisma = prismaFake({ vendedor: null });
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.consultarTrajeto('inexistente', '2026-01-01'),
@@ -115,7 +174,7 @@ describe('RastreioService.consultarTrajeto', () => {
 
   it('retorna trajeto vazio (sem erro) quando o vendedor nao tem usuario vinculado', async () => {
     const prisma = prismaFake({ vendedor: { usuarioId: null } });
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.consultarTrajeto('v1', '2026-01-01');
 
@@ -138,7 +197,7 @@ describe('RastreioService.consultarTrajeto', () => {
         },
       ],
     });
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.consultarTrajeto('v1', '2026-01-01');
 
@@ -150,7 +209,7 @@ describe('RastreioService.consultarTrajeto', () => {
 
   it('filtra pelo dia inteiro (00:00 a 23:59:59.999) do parametro data', async () => {
     const prisma = prismaFake();
-    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never);
+    const service = new RastreioService(prisma as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await service.consultarTrajeto('v1', '2026-01-01');
 
@@ -174,6 +233,7 @@ describe('RastreioService.obterUltimasPosicoesEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'PROPRIO', vendedorId: 'v1' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -186,6 +246,7 @@ describe('RastreioService.obterUltimasPosicoesEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'NENHUM' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -224,6 +285,7 @@ describe('RastreioService.obterUltimasPosicoesEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1', 'v2'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     const resultado = await service.obterUltimasPosicoesEquipe(IDP_USER as never, 'u-sup');
@@ -259,6 +321,7 @@ describe('RastreioService.obterUltimasPosicoesEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     const resultado = await service.obterUltimasPosicoesEquipe(IDP_USER as never, 'u-sup');
@@ -271,6 +334,7 @@ describe('RastreioService.obterUltimasPosicoesEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await service.obterUltimasPosicoesEquipe(IDP_USER as never, 'u-admin');
@@ -286,6 +350,7 @@ describe('RastreioService.obterTrajetoEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'PROPRIO', vendedorId: 'v1' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -298,6 +363,7 @@ describe('RastreioService.obterTrajetoEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -319,6 +385,7 @@ describe('RastreioService.obterTrajetoEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     const resultado = await service.obterTrajetoEquipe(IDP_USER as never, 'u-sup', 'v1', '2026-01-01');
@@ -331,6 +398,7 @@ describe('RastreioService.obterTrajetoEquipe', () => {
     const service = new RastreioService(
       prisma as never,
       vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(

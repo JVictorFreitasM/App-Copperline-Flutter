@@ -5,6 +5,7 @@ import {
   IsArray,
   IsISO8601,
   IsNumber,
+  IsOptional,
   Max,
   Min,
   ValidateNested,
@@ -38,6 +39,16 @@ export class PontoRastreioDto {
   // online preserva o timestamp original).
   @IsISO8601()
   timestamp!: string;
+
+  // Precisao do GPS em metros no momento da captura (Position.accuracy,
+  // Epico 4 - "Precisão mínima do GPS"). Opcional pra compatibilidade com
+  // clientes antigos que ainda nao mandam esse campo - ponto sem precisao
+  // informada passa direto (nunca descartado so por faltar o campo, ver
+  // RastreioService.registrarLote).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  precisao?: number;
 }
 
 export class EnviarLoteRastreioDto {

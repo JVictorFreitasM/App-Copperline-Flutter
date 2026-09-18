@@ -22,6 +22,30 @@ function vendedorEscopoServiceFake(escopo: EscopoClientes = ESCOPO_TODOS) {
   return { resolverEscopoVendedores: jest.fn().mockResolvedValue(escopo) };
 }
 
+function configuracaoRastreioServiceFake(
+  overrides: {
+    distanciaMaximaClienteRegistroVisitaMetros?: number;
+    permitirRegistroComGpsDesabilitado?: boolean;
+  } = {},
+) {
+  return {
+    obter: jest.fn().mockResolvedValue({
+      desabilitarEdicaoHorarioTrabalhoAndroid: true,
+      habilitarRastreamentoSabados: false,
+      habilitarRastreamentoDomingos: false,
+      horarioInicioRastreamento: '07:30',
+      horarioTerminoRastreamento: '18:00',
+      precisaoMinimaMetrosGps: 50,
+      tempoMinimoAcordarGpsMs: 30000,
+      permitirRegistroComGpsDesabilitado: overrides.permitirRegistroComGpsDesabilitado ?? false,
+      distanciaMaximaClienteRegistroPedidoMetros: null,
+      distanciaMaximaClienteRegistroVisitaMetros:
+        overrides.distanciaMaximaClienteRegistroVisitaMetros ?? 50,
+      atualizadoEm: '2026-01-01T00:00:00.000Z',
+    }),
+  };
+}
+
 function decimalFake(valor: number) {
   return { toNumber: () => valor, toString: () => String(valor) };
 }
@@ -172,7 +196,7 @@ beforeEach(() => {
 describe('VisitasService.checkin', () => {
   it('lanca ForbiddenException quando o usuario nao e um vendedor cadastrado', async () => {
     const prisma = prismaFake({ vendedor: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin('u1', { clienteId: 'c1', latitude: 0, longitude: 0 }, FOTO_BUFFER),
@@ -181,7 +205,7 @@ describe('VisitasService.checkin', () => {
 
   it('lanca NotFoundException quando o cliente nao pertence ao vendedor', async () => {
     const prisma = prismaFake({ cliente: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin('u1', { clienteId: 'c1', latitude: 0, longitude: 0 }, FOTO_BUFFER),
@@ -192,7 +216,7 @@ describe('VisitasService.checkin', () => {
     const prisma = prismaFake({
       cliente: clienteBruto({ localizacaoLat: null, localizacaoLng: null }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin(
@@ -205,7 +229,7 @@ describe('VisitasService.checkin', () => {
 
   it('lanca BadRequestException quando o check-in esta fora do raio de 50m do pin', async () => {
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     // ~0.01 grau de diferenca ja e' mais de 1km - bem fora do raio.
     await expect(
@@ -217,11 +241,68 @@ describe('VisitasService.checkin', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('usa a distancia maxima configurada, nao mais um valor fixo de 50m (Epico 4)', async () => {
+    const prisma = prismaFake();
+    const service = new VisitasService(
+      prisma as never,
+      fotoStorageFake() as never,
+      vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake({ distanciaMaximaClienteRegistroVisitaMetros: 5000 }) as never,
+    );
+
+    // Mesma coordenada que estourava o raio fixo de 50m - agora passa,
+    // pois o raio configurado (5000m) cobre essa distancia.
+    await service.checkin(
+      'u1',
+      { clienteId: 'cliente-1', latitude: -23.56, longitude: -46.6333 },
+      FOTO_BUFFER,
+    );
+
+    expect(prisma.visita.create).toHaveBeenCalled();
+  });
+
+  it('permite check-in sem lat/lng quando permitirRegistroComGpsDesabilitado esta ligado (Epico 4)', async () => {
+    const prisma = prismaFake();
+    const service = new VisitasService(
+      prisma as never,
+      fotoStorageFake() as never,
+      vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake({ permitirRegistroComGpsDesabilitado: true }) as never,
+    );
+
+    await service.checkin('u1', { clienteId: 'cliente-1' }, FOTO_BUFFER);
+
+    expect(prisma.visita.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          checkinLat: undefined,
+          checkinLng: undefined,
+          distanciaCheckinMetros: null,
+        }),
+      }),
+    );
+  });
+
+  it('rejeita check-in sem lat/lng quando permitirRegistroComGpsDesabilitado esta desligado (Epico 4)', async () => {
+    const prisma = prismaFake();
+    const service = new VisitasService(
+      prisma as never,
+      fotoStorageFake() as never,
+      vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake({ permitirRegistroComGpsDesabilitado: false }) as never,
+    );
+
+    await expect(
+      service.checkin('u1', { clienteId: 'cliente-1' }, FOTO_BUFFER),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.visita.create).not.toHaveBeenCalled();
+  });
+
   it('bloqueia com ConflictException quando ja existe visita aberta (nao cancelada) do vendedor', async () => {
     const prisma = prismaFake({
       visitaAberta: { id: 'visita-aberta', clienteId: 'outro-cliente' },
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin(
@@ -235,7 +316,7 @@ describe('VisitasService.checkin', () => {
 
   it('lanca BadRequestException quando a foto esta vazia', async () => {
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin(
@@ -249,7 +330,7 @@ describe('VisitasService.checkin', () => {
   it('lanca BadRequestException quando a foto nao tem EXIF de data/hora (anti-fraude)', async () => {
     exifrMock.parse.mockResolvedValue({});
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin(
@@ -263,7 +344,7 @@ describe('VisitasService.checkin', () => {
   it('lanca BadRequestException quando a data EXIF da foto diverge do check-in', async () => {
     exifrMock.parse.mockResolvedValue({ DateTimeOriginal: new Date('2020-01-01T00:00:00.000Z') });
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkin(
@@ -277,7 +358,7 @@ describe('VisitasService.checkin', () => {
   it('cria a visita, salva a foto e grava a distancia calculada quando tudo e valido', async () => {
     const prisma = prismaFake();
     const fotoStorage = fotoStorageFake();
-    const service = new VisitasService(prisma as never, fotoStorage as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorage as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.checkin(
       'u1',
@@ -311,6 +392,7 @@ describe('VisitasService.checkin', () => {
         prisma as never,
         fotoStorageFake() as never,
         vendedorEscopoServiceFake() as never,
+        configuracaoRastreioServiceFake() as never,
       );
 
       await expect(
@@ -332,6 +414,7 @@ describe('VisitasService.checkin', () => {
         prisma as never,
         fotoStorageFake() as never,
         vendedorEscopoServiceFake() as never,
+        configuracaoRastreioServiceFake() as never,
       );
 
       await service.checkin(
@@ -350,6 +433,7 @@ describe('VisitasService.checkin', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake() as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await service.checkin(
@@ -366,7 +450,7 @@ describe('VisitasService.checkin', () => {
 describe('VisitasService.checkout', () => {
   it('lanca NotFoundException quando a visita nao existe ou nao pertence ao vendedor', async () => {
     const prisma = prismaFake({ visitaExistente: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkout('u1', 'visita-1', { latitude: -23.5505, longitude: -46.6333 }),
@@ -377,7 +461,7 @@ describe('VisitasService.checkout', () => {
     const prisma = prismaFake({
       visitaExistente: visitaBruta({ canceladaEm: new Date() }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkout('u1', 'visita-1', { latitude: -23.5505, longitude: -46.6333 }),
@@ -388,7 +472,7 @@ describe('VisitasService.checkout', () => {
     const prisma = prismaFake({
       visitaExistente: visitaBruta({ checkoutEm: new Date('2026-01-01T11:00:00.000Z') }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkout('u1', 'visita-1', { latitude: -23.5505, longitude: -46.6333 }),
@@ -402,7 +486,7 @@ describe('VisitasService.checkout', () => {
         cliente: { localizacaoLat: decimalFake(-23.5505), localizacaoLng: decimalFake(-46.6333) },
       }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.checkout('u1', 'visita-1', { latitude: -23.56, longitude: -46.6333 }),
@@ -415,7 +499,7 @@ describe('VisitasService.checkout', () => {
         cliente: { localizacaoLat: decimalFake(-23.5505), localizacaoLng: decimalFake(-46.6333) },
       }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.checkout('u1', 'visita-1', {
       latitude: -23.5505,
@@ -435,7 +519,7 @@ describe('VisitasService.checkout', () => {
 describe('VisitasService.cancelar', () => {
   it('lanca NotFoundException quando a visita nao existe ou nao pertence ao vendedor', async () => {
     const prisma = prismaFake({ visitaExistente: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(service.cancelar('u1', 'visita-1', 'errei o cliente')).rejects.toThrow(
       NotFoundException,
@@ -444,7 +528,7 @@ describe('VisitasService.cancelar', () => {
 
   it('lanca ConflictException quando a visita ja foi cancelada', async () => {
     const prisma = prismaFake({ visitaExistente: visitaBruta({ canceladaEm: new Date() }) });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(service.cancelar('u1', 'visita-1', 'errei o cliente')).rejects.toThrow(
       ConflictException,
@@ -455,7 +539,7 @@ describe('VisitasService.cancelar', () => {
     const prisma = prismaFake({
       visitaExistente: visitaBruta({ checkoutEm: new Date() }),
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(service.cancelar('u1', 'visita-1', 'errei o cliente')).rejects.toThrow(
       ConflictException,
@@ -464,7 +548,7 @@ describe('VisitasService.cancelar', () => {
 
   it('cancela e registra EventoNotificacao VISITA_CANCELADA na mesma transacao', async () => {
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.cancelar('u1', 'visita-1', 'errei o cliente');
 
@@ -484,7 +568,7 @@ describe('VisitasService.cancelar', () => {
 describe('VisitasService.listarPorCliente', () => {
   it('lanca NotFoundException quando o cliente nao existe ou esta fora do escopo', async () => {
     const prisma = prismaFake({ cliente: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(service.listarPorCliente('c1', ESCOPO_TODOS)).rejects.toThrow(
       NotFoundException,
@@ -493,7 +577,7 @@ describe('VisitasService.listarPorCliente', () => {
 
   it('lanca NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {
     const prisma = prismaFake();
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(
       service.listarPorCliente('c1', { tipo: 'NENHUM' }),
@@ -508,7 +592,7 @@ describe('VisitasService.listarPorCliente', () => {
         visitaBruta({ id: 'v1', checkinEm: new Date('2026-01-01T00:00:00.000Z') }),
       ],
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.listarPorCliente('cliente-1', ESCOPO_TODOS);
 
@@ -522,7 +606,7 @@ describe('VisitasService.listarPorCliente', () => {
 describe('VisitasService.listarMinhas', () => {
   it('lanca ForbiddenException quando o usuario nao e um vendedor cadastrado', async () => {
     const prisma = prismaFake({ vendedor: null });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await expect(service.listarMinhas('usuario-1')).rejects.toThrow(ForbiddenException);
   });
@@ -531,7 +615,7 @@ describe('VisitasService.listarMinhas', () => {
     const prisma = prismaFake({
       visitasMinhas: [visitaBruta({ id: 'v1' })],
     });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     const resultado = await service.listarMinhas('usuario-1');
 
@@ -543,7 +627,7 @@ describe('VisitasService.listarMinhas', () => {
 
   it('filtra por data (YYYY-MM-DD) quando informada', async () => {
     const prisma = prismaFake({ visitasMinhas: [] });
-    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never);
+    const service = new VisitasService(prisma as never, fotoStorageFake() as never, vendedorEscopoServiceFake() as never, configuracaoRastreioServiceFake() as never);
 
     await service.listarMinhas('usuario-1', '2026-01-15');
 
@@ -574,6 +658,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'PROPRIO', vendedorId: 'v1' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -587,6 +672,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'NENHUM' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -600,6 +686,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -621,6 +708,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['vendedor-1', 'vendedor-2'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     const resultado = await service.listarEquipe(IDP_USER as never, 'u-sup', filtroBase());
@@ -645,6 +733,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await service.listarEquipe(IDP_USER as never, 'u-admin', filtroBase());
@@ -659,6 +748,7 @@ describe('VisitasService.listarEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await service.listarEquipe(IDP_USER as never, 'u-admin', filtroBase({ clienteId: 'cliente-9' }));
@@ -676,6 +766,7 @@ describe('VisitasService.obterCaminhoFotoEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'PROPRIO', vendedorId: 'v1' }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -689,6 +780,7 @@ describe('VisitasService.obterCaminhoFotoEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -704,6 +796,7 @@ describe('VisitasService.obterCaminhoFotoEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -719,6 +812,7 @@ describe('VisitasService.obterCaminhoFotoEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     await expect(
@@ -734,6 +828,7 @@ describe('VisitasService.obterCaminhoFotoEquipe', () => {
       prisma as never,
       fotoStorageFake() as never,
       vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1'] }) as never,
+      configuracaoRastreioServiceFake() as never,
     );
 
     const caminho = await service.obterCaminhoFotoEquipe(IDP_USER as never, 'u-sup', 'visita-1');

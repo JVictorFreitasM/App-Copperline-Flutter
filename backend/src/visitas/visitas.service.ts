@@ -10,6 +10,7 @@ import exifr from 'exifr';
 import type { IdpUser } from '@copperline/idp-client';
 import type { Prisma } from '../../generated/prisma/client';
 import { paginar, type PaginatedResult } from '../common/pagination';
+import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
 import { filtroPeriodo } from '../dashboard/filtro-periodo';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -34,14 +35,17 @@ import { VisitaFotoStorageService } from './visita-foto-storage.service';
 
 export interface CheckinInput {
   clienteId: string;
-  latitude: number;
-  longitude: number;
+  // Opcionais desde o Epico 4 (config-aba-rastreio.jpg,
+  // "permitirRegistroComGpsDesabilitado") - so podem faltar quando essa
+  // config permite (ver checkin()/resolverLocalizacao()).
+  latitude?: number;
+  longitude?: number;
   nota?: string;
 }
 
 export interface CheckoutInput {
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   nota?: string;
 }
 
@@ -54,11 +58,6 @@ export interface ListarVisitasEquipeInput {
   limit: number;
 }
 
-// Raio maximo aceito entre a posicao do vendedor (check-in/checkout) e o
-// pin do cliente (Cliente.localizacaoLat/Lng) - extensao pos-OS-BACKEND-28,
-// decisao do usuario ("ate 50m de distancia do pin").
-const RAIO_MAXIMO_METROS = 50;
-
 // Evento deliberado do vendedor - a unica regra de negocio com multiplos
 // cenarios de verdade e' a validacao de distancia/foto no check-in (ver
 // domain/distancia-geografica.ts e domain/validar-exif-foto.ts, ja
@@ -70,6 +69,7 @@ export class VisitasService {
     private readonly prisma: PrismaService,
     private readonly fotoStorageService: VisitaFotoStorageService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
   ) {}
 
   // momentoOverride (OS-BACKEND-29): a fila de acoes offline
@@ -111,17 +111,13 @@ export class VisitasService {
       );
     }
 
-    const distanciaMetros = calcularDistanciaMetros(
+    const distanciaMetros = await this.resolverDistancia(
       input.latitude,
       input.longitude,
       cliente.localizacaoLat.toNumber(),
       cliente.localizacaoLng.toNumber(),
+      'Check-in',
     );
-    if (distanciaMetros > RAIO_MAXIMO_METROS) {
-      throw new BadRequestException(
-        `Check-in a ${Math.round(distanciaMetros)}m do cliente - fora do raio máximo de ${RAIO_MAXIMO_METROS}m`,
-      );
-    }
 
     // OS-novas-implementacoes.md Bloco 5 - "permitir check-in sem
     // agendamento". Default do vendedor e' TRUE (preserva o
@@ -220,17 +216,13 @@ export class VisitasService {
       );
     }
 
-    const distanciaMetros = calcularDistanciaMetros(
+    const distanciaMetros = await this.resolverDistancia(
       input.latitude,
       input.longitude,
       visita.cliente.localizacaoLat.toNumber(),
       visita.cliente.localizacaoLng.toNumber(),
+      'Checkout',
     );
-    if (distanciaMetros > RAIO_MAXIMO_METROS) {
-      throw new BadRequestException(
-        `Checkout a ${Math.round(distanciaMetros)}m do cliente - fora do raio máximo de ${RAIO_MAXIMO_METROS}m`,
-      );
-    }
 
     const atualizada = await this.prisma.visita.update({
       where: { id: visitaId },
@@ -476,6 +468,42 @@ export class VisitasService {
       }
       throw error;
     }
+  }
+
+  // Distancia dinamica (Epico 4, config-aba-rastreio.jpg -
+  // "Distancia máxima do cliente para registro de visita") - substitui o
+  // antigo RAIO_MAXIMO_METROS fixo de 50m. Sem lat/lng (GPS desabilitado
+  // no aparelho): permite passar direto (distancia null, sem validar) so
+  // quando "permitirRegistroComGpsDesabilitado" estiver ligado - senao
+  // rejeita pedindo localizacao. Com lat/lng: sempre valida contra o raio
+  // configurado, nao importa o toggle (o toggle e' so sobre PODER omitir,
+  // nunca sobre relaxar a distancia de quem enviou a posicao).
+  private async resolverDistancia(
+    latitude: number | undefined,
+    longitude: number | undefined,
+    clienteLat: number,
+    clienteLng: number,
+    rotulo: string,
+  ): Promise<number | null> {
+    const config = await this.configuracaoRastreioService.obter();
+
+    if (latitude === undefined || longitude === undefined) {
+      if (!config.permitirRegistroComGpsDesabilitado) {
+        throw new BadRequestException(
+          `${rotulo} sem localização (GPS) - habilite o GPS e tente novamente, ou peça ao admin para permitir registro sem GPS`,
+        );
+      }
+      return null;
+    }
+
+    const distanciaMetros = calcularDistanciaMetros(latitude, longitude, clienteLat, clienteLng);
+    const raioMaximoMetros = config.distanciaMaximaClienteRegistroVisitaMetros;
+    if (distanciaMetros > raioMaximoMetros) {
+      throw new BadRequestException(
+        `${rotulo} a ${Math.round(distanciaMetros)}m do cliente - fora do raio máximo de ${raioMaximoMetros}m`,
+      );
+    }
+    return distanciaMetros;
   }
 
   private async resolverVendedor(usuarioId: string) {

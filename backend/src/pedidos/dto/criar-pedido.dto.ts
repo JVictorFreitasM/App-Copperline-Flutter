@@ -66,6 +66,22 @@ export class CriarPedidoDto {
   @IsUUID()
   vendedorId?: string;
 
+  // Posição no momento do registro (Epico 4, config-aba-rastreio.jpg -
+  // "Distância máxima do cliente para registro de pedido") - so'
+  // validado quando essa config tem um valor definido (ver
+  // CriarPedidoService.validarDistanciaRegistro).
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

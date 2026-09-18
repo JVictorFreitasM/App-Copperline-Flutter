@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -6,10 +7,12 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AxiosError } from 'axios';
+import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoCalculoService } from '../produtos/produto-calculo.service';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { ConfiguracaoTabelaPrecoService } from '../tabelas-preco/configuracao-tabela-preco.service';
+import { calcularDistanciaMetros } from '../visitas/domain/distancia-geografica';
 import {
   construirWhereClientePorEscopo,
   type EscopoClientes,
@@ -31,6 +34,11 @@ export interface CriarPedidoInput {
   codigoTabelaPreco?: string;
   contatoId?: string;
   vendedorId?: string;
+  // Opcionais (Epico 4, config-aba-rastreio.jpg - "Distância máxima do
+  // cliente para registro de pedido") - so validados quando essa config
+  // tem um valor configurado (ver validarDistanciaRegistro()).
+  latitude?: number;
+  longitude?: number;
   itens: CriarPedidoItemInput[];
 }
 
@@ -96,6 +104,7 @@ export class CriarPedidoService {
     private readonly solicitacoesDescontoService: SolicitacoesDescontoService,
     private readonly pedidoErpClientService: PedidoErpClientService,
     private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
+    private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
   ) {}
 
   async criar(
@@ -110,6 +119,7 @@ export class CriarPedidoService {
     );
 
     const cliente = await this.buscarClienteNoEscopo(input.clienteId, escopo);
+    await this.validarDistanciaRegistro(cliente, input.latitude, input.longitude);
     const formaPagamento = await this.buscarFormaPagamento(input.formaPagamentoId);
     const condicaoPagamento = await this.buscarCondicaoPagamento(
       input.condicaoPagamentoId,
@@ -279,6 +289,50 @@ export class CriarPedidoService {
       throw new NotFoundException(`Cliente '${clienteId}' não encontrado`);
     }
     return cliente;
+  }
+
+  // Distância mínima até o pin do cliente (Epico 4, config-aba-rastreio.jpg
+  // - "Distância máxima do cliente para registro de pedido") - so' entra
+  // em ação quando o admin configurou um valor (null = sem exigência,
+  // comportamento de sempre). Mesma lógica de bypass sem GPS de
+  // VisitasService.resolverDistancia (permitirRegistroComGpsDesabilitado).
+  private async validarDistanciaRegistro(
+    cliente: { localizacaoLat: { toNumber(): number } | null; localizacaoLng: { toNumber(): number } | null },
+    latitude: number | undefined,
+    longitude: number | undefined,
+  ): Promise<void> {
+    const config = await this.configuracaoRastreioService.obter();
+    const distanciaMaxima = config.distanciaMaximaClienteRegistroPedidoMetros;
+    if (distanciaMaxima === null) {
+      return;
+    }
+
+    if (latitude === undefined || longitude === undefined) {
+      if (config.permitirRegistroComGpsDesabilitado) {
+        return;
+      }
+      throw new BadRequestException(
+        'Localização (GPS) é obrigatória para registrar este pedido - habilite o GPS e tente novamente, ou peça ao admin para permitir registro sem GPS',
+      );
+    }
+
+    if (cliente.localizacaoLat === null || cliente.localizacaoLng === null) {
+      throw new UnprocessableEntityException(
+        'Cliente sem localização (pin) definida - não é possível validar a distância exigida para registrar este pedido',
+      );
+    }
+
+    const distanciaMetros = calcularDistanciaMetros(
+      latitude,
+      longitude,
+      cliente.localizacaoLat.toNumber(),
+      cliente.localizacaoLng.toNumber(),
+    );
+    if (distanciaMetros > distanciaMaxima) {
+      throw new BadRequestException(
+        `Pedido a ${Math.round(distanciaMetros)}m do cliente - fora do raio máximo de ${distanciaMaxima}m`,
+      );
+    }
   }
 
   // So as ativas (mesmo criterio de PagamentoService.listarFormasPagamento)

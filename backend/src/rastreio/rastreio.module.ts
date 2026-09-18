@@ -1,6 +1,7 @@
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
+import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -12,8 +13,9 @@ import { RastreioService } from './rastreio.service';
 @Module({
   // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-24,
   // GET /rastreio/equipe* escopado por hierarquia) - mesmo raciocinio de
-  // ClientesModule/SolicitacoesDescontoModule.
-  imports: [PrismaModule, UsuariosModule, VendedoresModule],
+  // ClientesModule/SolicitacoesDescontoModule. ConfiguracoesModule pro
+  // filtro de precisao do GPS (Epico 4).
+  imports: [PrismaModule, UsuariosModule, VendedoresModule, ConfiguracoesModule],
   // AdminRastreioController fica protegido so por ApiKeyGuard (ver seu
   // proprio @UseGuards) - so RastreioController entra no requireAuth abaixo.
   controllers: [RastreioController, AdminRastreioController],

@@ -1,4 +1,9 @@
-import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoInput } from './criar-pedido.service';
@@ -160,7 +165,31 @@ function configuracaoTabelaPrecoServiceFake(codigo: string | null = '110') {
   return { obterCodigoSelecionado: jest.fn().mockResolvedValue(codigo) };
 }
 
-// Helper - monta os 5 argumentos do construtor com fakes padrao, so
+function configuracaoRastreioServiceFake(
+  overrides: {
+    distanciaMaximaClienteRegistroPedidoMetros?: number | null;
+    permitirRegistroComGpsDesabilitado?: boolean;
+  } = {},
+) {
+  return {
+    obter: jest.fn().mockResolvedValue({
+      desabilitarEdicaoHorarioTrabalhoAndroid: true,
+      habilitarRastreamentoSabados: false,
+      habilitarRastreamentoDomingos: false,
+      horarioInicioRastreamento: '07:30',
+      horarioTerminoRastreamento: '18:00',
+      precisaoMinimaMetrosGps: 50,
+      tempoMinimoAcordarGpsMs: 30000,
+      permitirRegistroComGpsDesabilitado: overrides.permitirRegistroComGpsDesabilitado ?? false,
+      distanciaMaximaClienteRegistroPedidoMetros:
+        overrides.distanciaMaximaClienteRegistroPedidoMetros ?? null,
+      distanciaMaximaClienteRegistroVisitaMetros: 50,
+      atualizadoEm: '2026-01-01T00:00:00.000Z',
+    }),
+  };
+}
+
+// Helper - monta os 6 argumentos do construtor com fakes padrao, so
 // sobrescrevendo o que o teste precisa (a maioria dos testes so mexe nos
 // 2-3 primeiros).
 function criarService(
@@ -169,6 +198,7 @@ function criarService(
   solicitacoesDescontoService = solicitacoesDescontoServiceFake(),
   pedidoErpClientService = pedidoErpClientServiceFake(),
   configuracaoTabelaPrecoService = configuracaoTabelaPrecoServiceFake(),
+  configuracaoRastreioService = configuracaoRastreioServiceFake(),
 ) {
   return new CriarPedidoService(
     prisma as never,
@@ -176,6 +206,7 @@ function criarService(
     solicitacoesDescontoService as never,
     pedidoErpClientService as never,
     configuracaoTabelaPrecoService as never,
+    configuracaoRastreioService as never,
   );
 }
 
@@ -790,5 +821,148 @@ describe('CriarPedidoService.criar - peso total (Bloco 3)', () => {
         }),
       }),
     );
+  });
+});
+
+function decimalFake(valor: number) {
+  return { toNumber: () => valor, toString: () => String(valor) };
+}
+
+describe('CriarPedidoService - distancia maxima pra registro de pedido (Epico 4)', () => {
+  it('sem distanciaMaximaClienteRegistroPedidoMetros configurada: nao exige nem valida lat/lng', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({ distanciaMaximaClienteRegistroPedidoMetros: null }),
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalled();
+  });
+
+  it('com distancia configurada e lat/lng dentro do raio: cria normalmente', async () => {
+    const prisma = prismaFake({
+      cliente: {
+        id: 'cliente-1',
+        idExternoErp: 'cliente-externo-1',
+        localizacaoLat: decimalFake(-23.5505),
+        localizacaoLng: decimalFake(-46.6333),
+      },
+    });
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({ distanciaMaximaClienteRegistroPedidoMetros: 500 }),
+    );
+
+    await service.criar(
+      { ...INPUT_BASE, latitude: -23.5505, longitude: -46.6333 },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalled();
+  });
+
+  it('com distancia configurada e lat/lng fora do raio: rejeita com BadRequestException', async () => {
+    const prisma = prismaFake({
+      cliente: {
+        id: 'cliente-1',
+        idExternoErp: 'cliente-externo-1',
+        localizacaoLat: decimalFake(-23.5505),
+        localizacaoLng: decimalFake(-46.6333),
+      },
+    });
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({ distanciaMaximaClienteRegistroPedidoMetros: 50 }),
+    );
+
+    await expect(
+      service.criar({ ...INPUT_BASE, latitude: -23.56, longitude: -46.6333 }, 'u1', ESCOPO_TODOS),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('distancia configurada, sem lat/lng, permitirRegistroComGpsDesabilitado ligado: passa direto', async () => {
+    const prisma = prismaFake({
+      cliente: {
+        id: 'cliente-1',
+        idExternoErp: 'cliente-externo-1',
+        localizacaoLat: decimalFake(-23.5505),
+        localizacaoLng: decimalFake(-46.6333),
+      },
+    });
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({
+        distanciaMaximaClienteRegistroPedidoMetros: 50,
+        permitirRegistroComGpsDesabilitado: true,
+      }),
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalled();
+  });
+
+  it('distancia configurada, sem lat/lng, permitirRegistroComGpsDesabilitado desligado: rejeita', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({
+        distanciaMaximaClienteRegistroPedidoMetros: 50,
+        permitirRegistroComGpsDesabilitado: false,
+      }),
+    );
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('distancia configurada, lat/lng enviados, cliente sem pin: rejeita com UnprocessableEntityException', async () => {
+    const prisma = prismaFake({
+      cliente: {
+        id: 'cliente-1',
+        idExternoErp: 'cliente-externo-1',
+        localizacaoLat: null,
+        localizacaoLng: null,
+      },
+    });
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoRastreioServiceFake({ distanciaMaximaClienteRegistroPedidoMetros: 50 }),
+    );
+
+    await expect(
+      service.criar({ ...INPUT_BASE, latitude: -23.5505, longitude: -46.6333 }, 'u1', ESCOPO_TODOS),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

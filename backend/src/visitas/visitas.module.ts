@@ -2,6 +2,7 @@ import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
@@ -16,7 +17,7 @@ import { VisitasService } from './visitas.service';
   // VendedoresModule so pra reaproveitar VendedorEscopoService (OS-WEB-26,
   // GET /visitas* escopado por hierarquia) - mesmo raciocinio de
   // ClientesModule/SolicitacoesDescontoModule/RastreioModule.
-  imports: [PrismaModule, UsuariosModule, VendedoresModule],
+  imports: [PrismaModule, UsuariosModule, VendedoresModule, ConfiguracoesModule],
   // AdminVisitasController fica protegido so por ApiKeyGuard (ver seu
   // proprio @UseGuards) - so VisitasController/AgendamentosVisitaController
   // entram no requireAuth abaixo. AgendamentosVisitaController fica aqui

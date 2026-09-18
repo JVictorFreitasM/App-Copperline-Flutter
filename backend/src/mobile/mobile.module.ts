@@ -1,6 +1,7 @@
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
+import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PedidosModule } from '../pedidos/pedidos.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -25,6 +26,7 @@ import { MobileSnapshotService } from './mobile-snapshot.service';
     VisitasModule,
     RastreioModule,
     TabelasPrecoModule,
+    ConfiguracoesModule,
   ],
   controllers: [MobileController],
   providers: [MobileSnapshotService, FilaPendenteService],

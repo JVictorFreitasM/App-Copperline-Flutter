@@ -4,11 +4,14 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoes-desconto.module';
+import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminConfiguracaoAlcadaAprovacaoController } from './admin-configuracao-alcada-aprovacao.controller';
 import { AdminConfiguracaoOrcamentoController } from './admin-configuracao-orcamento.controller';
 import { AdminConfiguracaoRastreioController } from './admin-configuracao-rastreio.controller';
 import { ConfiguracaoOrcamentoService } from './configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from './configuracao-rastreio.service';
+import { VendedorHorarioTrabalhoController } from './vendedor-horario-trabalho.controller';
+import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.service';
 
 // Tela de Configuracoes (Epico 4, OS-dashboard-configuracoes-notificacoes-
 // auditoria.md) - 3 abas, cada uma com endpoint GET/PATCH proprio, todas
@@ -18,13 +21,27 @@ import { ConfiguracaoRastreioService } from './configuracao-rastreio.service';
 // mesma regra) - so' Orcamento/Rastreio tem service+tabela genuinamente
 // novos.
 @Module({
-  imports: [PrismaModule, SolicitacoesDescontoModule],
+  imports: [PrismaModule, SolicitacoesDescontoModule, UsuariosModule],
   controllers: [
     AdminConfiguracaoAlcadaAprovacaoController,
     AdminConfiguracaoOrcamentoController,
     AdminConfiguracaoRastreioController,
+    // VendedorHorarioTrabalhoController fica FORA do requireRole('admin')
+    // abaixo, de proposito - e' o proprio vendedor editando o horario
+    // dele, nao uma tela de admin (ver seu comentario sobre por que vive
+    // neste modulo mesmo assim).
+    VendedorHorarioTrabalhoController,
   ],
-  providers: [ConfiguracaoOrcamentoService, ConfiguracaoRastreioService],
+  providers: [
+    ConfiguracaoOrcamentoService,
+    ConfiguracaoRastreioService,
+    VendedorHorarioTrabalhoService,
+  ],
+  // Exportados pra outros modulos consumirem os valores de verdade
+  // (VisitasModule/PedidosModule/RastreioModule/MobileModule le
+  // ConfiguracaoRastreioService; futuro consumo de
+  // ConfiguracaoOrcamentoService em PedidosModule).
+  exports: [ConfiguracaoOrcamentoService, ConfiguracaoRastreioService],
 })
 export class ConfiguracoesModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}
@@ -37,5 +54,9 @@ export class ConfiguracoesModule implements NestModule {
         AdminConfiguracaoOrcamentoController,
         AdminConfiguracaoRastreioController,
       );
+
+    consumer
+      .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
+      .forRoutes(VendedorHorarioTrabalhoController);
   }
 }

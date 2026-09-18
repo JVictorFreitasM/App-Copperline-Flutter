@@ -1,6 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { paraClienteResumoDto, type ClienteResumoDto } from '../clientes/dto/cliente-response.dto';
+import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
+import type { ConfiguracaoRastreioDto } from '../configuracoes/configuracao-rastreio.service';
 import type { EstoqueConsultaDto } from '../estoque/dto/estoque-response.dto';
 import { paraPedidoResumoDto, type PedidoResumoDto } from '../pedidos/dto/pedido-response.dto';
 import { paraProdutoResumoDto, type ProdutoResumoDto } from '../produtos/dto/produto-response.dto';
@@ -23,7 +25,20 @@ export interface MobileSnapshotDto {
   // em lote - ja e' leitura da tabela local SaldoEstoque (nao chama o
   // Estoque.svc), entao incluir aqui nao adiciona dependencia externa.
   estoque: EstoqueConsultaDto[];
+  // Epico 4 (config-aba-rastreio.jpg) - so os campos que o APP precisa
+  // aplicar do lado dele (janela de rastreio, precisao, intervalo
+  // minimo). As 2 distancias maximas (pedido/visita) ficam DE FORA -
+  // continuam so' enforcement de backend (VisitasService/CriarPedidoService),
+  // o app nao precisa delas pra decidir nada localmente.
+  configuracaoRastreio: ConfiguracaoRastreioParaMobileDto;
 }
+
+export type ConfiguracaoRastreioParaMobileDto = Omit<
+  ConfiguracaoRastreioDto,
+  | 'distanciaMaximaClienteRegistroPedidoMetros'
+  | 'distanciaMaximaClienteRegistroVisitaMetros'
+  | 'atualizadoEm'
+>;
 
 // Tetos de seguranca (nao paginacao real - decisao confirmada com o
 // usuario: uma resposta so, comprimida via gzip, ver main.ts). Carteira
@@ -50,6 +65,7 @@ export class MobileSnapshotService {
     private readonly prisma: PrismaService,
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly precoProdutoService: PrecoProdutoService,
+    private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
   ) {}
 
   async obter(idpUser: IdpUser, usuarioId: string): Promise<MobileSnapshotDto> {
@@ -63,7 +79,7 @@ export class MobileSnapshotService {
     const escopo = await this.vendedorEscopoService.resolverEscopoClientes(idpUser, usuarioId);
     const whereClientes = construirWhereClientePorEscopo(escopo);
 
-    const [clientes, produtos, pedidos, saldosEstoque, precosTabela] = await Promise.all([
+    const [clientes, produtos, pedidos, saldosEstoque, precosTabela, configRastreio] = await Promise.all([
       whereClientes
         ? this.prisma.cliente.findMany({
             where: whereClientes,
@@ -84,6 +100,7 @@ export class MobileSnapshotService {
       }),
       this.prisma.saldoEstoque.findMany({ take: LIMITE_SALDOS_ESTOQUE }),
       this.precoProdutoService.obterPrecosDaTabelaPadrao(),
+      this.configuracaoRastreioService.obter(),
     ]);
 
     // Junta por codigo (SaldoEstoque nao tem FK pra Produto, mesmo padrao
@@ -124,6 +141,16 @@ export class MobileSnapshotService {
       ),
       pedidos: pedidos.map((pedido) => paraPedidoResumoDto(pedido)),
       estoque,
+      configuracaoRastreio: {
+        desabilitarEdicaoHorarioTrabalhoAndroid: configRastreio.desabilitarEdicaoHorarioTrabalhoAndroid,
+        habilitarRastreamentoSabados: configRastreio.habilitarRastreamentoSabados,
+        habilitarRastreamentoDomingos: configRastreio.habilitarRastreamentoDomingos,
+        horarioInicioRastreamento: configRastreio.horarioInicioRastreamento,
+        horarioTerminoRastreamento: configRastreio.horarioTerminoRastreamento,
+        precisaoMinimaMetrosGps: configRastreio.precisaoMinimaMetrosGps,
+        tempoMinimoAcordarGpsMs: configRastreio.tempoMinimoAcordarGpsMs,
+        permitirRegistroComGpsDesabilitado: configRastreio.permitirRegistroComGpsDesabilitado,
+      },
     };
   }
 }

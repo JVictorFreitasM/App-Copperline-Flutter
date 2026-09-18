@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
+import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 
@@ -8,6 +9,9 @@ export interface PontoRastreioInput {
   latitude: number;
   longitude: number;
   timestamp: string;
+  // Precisao do GPS em metros (Position.accuracy) - opcional, ver
+  // comentario no DTO.
+  precisao?: number;
 }
 
 export interface RegistrarLoteResultadoDto {
@@ -44,9 +48,12 @@ export interface PosicaoAtualVendedorDto {
 // dominio separada (ver skill nest-endpoint, criterio de DDD).
 @Injectable()
 export class RastreioService {
+  private readonly logger = new Logger(RastreioService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
   ) {}
 
   // capturadoEm usa o timestamp do PONTO (enviado pelo dispositivo), nunca
@@ -54,23 +61,45 @@ export class RastreioService {
   // enviado offline preserva o momento real da captura). recebidoEm (com
   // default now() no schema) e' o unico campo que reflete o momento do
   // envio em si, separado de proposito.
+  //
+  // Filtro de precisao (Epico 4, config-aba-rastreio.jpg - "Precisão
+  // mínima do GPS") - descarta so os pontos com precisao PIOR (numero
+  // maior) que o minimo configurado; ponto sem `precisao` informada
+  // (cliente antigo) passa direto, nunca descartado por falta do campo.
+  // Nao filtra por dia da semana/horario aqui de proposito (ver plano) -
+  // isso fica so do lado do app (RastreioNotifier so' captura dentro da
+  // janela configurada), pra nao arriscar descartar dado historico
+  // legitimo se a config mudar depois.
   async registrarLote(
     usuarioId: string,
     pontos: PontoRastreioInput[],
   ): Promise<RegistrarLoteResultadoDto> {
     const loteId = randomUUID();
 
-    await this.prisma.localizacaoUsuario.createMany({
-      data: pontos.map((ponto) => ({
-        usuarioId,
-        latitude: ponto.latitude,
-        longitude: ponto.longitude,
-        capturadoEm: new Date(ponto.timestamp),
-        loteId,
-      })),
-    });
+    const config = await this.configuracaoRastreioService.obter();
+    const pontosValidos = pontos.filter(
+      (ponto) => ponto.precisao === undefined || ponto.precisao <= config.precisaoMinimaMetrosGps,
+    );
+    const descartados = pontos.length - pontosValidos.length;
+    if (descartados > 0) {
+      this.logger.warn(
+        `Lote ${loteId}: ${descartados} ponto(s) descartado(s) por precisao pior que ${config.precisaoMinimaMetrosGps}m`,
+      );
+    }
 
-    return { loteId, quantidade: pontos.length };
+    if (pontosValidos.length > 0) {
+      await this.prisma.localizacaoUsuario.createMany({
+        data: pontosValidos.map((ponto) => ({
+          usuarioId,
+          latitude: ponto.latitude,
+          longitude: ponto.longitude,
+          capturadoEm: new Date(ponto.timestamp),
+          loteId,
+        })),
+      });
+    }
+
+    return { loteId, quantidade: pontosValidos.length };
   }
 
   async consultarTrajeto(

@@ -8,17 +8,23 @@ export class CheckinVisitaDto {
   @IsUUID()
   clienteId!: string;
 
+  // Opcional (Epico 4, config-aba-rastreio.jpg -
+  // "permitirRegistroComGpsDesabilitado") - so pode faltar quando essa
+  // config permite; VisitasService valida e rejeita se nao permitir (ver
+  // seu comentario).
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(-90)
   @Max(90)
-  latitude!: number;
+  latitude?: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(-180)
   @Max(180)
-  longitude!: number;
+  longitude?: number;
 
   @IsOptional()
   @IsString()

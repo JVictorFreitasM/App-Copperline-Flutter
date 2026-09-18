@@ -5,8 +5,11 @@ export interface VisitaDto {
   clienteId: string;
   vendedorId: string;
   checkinEm: string;
-  checkinLat: number;
-  checkinLng: number;
+  // Nullable desde o Epico 4 (config-aba-rastreio.jpg,
+  // "permitirRegistroComGpsDesabilitado") - null quando o check-in foi
+  // registrado sem GPS.
+  checkinLat: number | null;
+  checkinLng: number | null;
   checkoutEm: string | null;
   checkoutLat: number | null;
   checkoutLng: number | null;
@@ -35,8 +38,8 @@ export function paraVisitaDto(visita: Visita): VisitaDto {
     clienteId: visita.clienteId,
     vendedorId: visita.vendedorId,
     checkinEm: visita.checkinEm.toISOString(),
-    checkinLat: visita.checkinLat.toNumber(),
-    checkinLng: visita.checkinLng.toNumber(),
+    checkinLat: visita.checkinLat ? visita.checkinLat.toNumber() : null,
+    checkinLng: visita.checkinLng ? visita.checkinLng.toNumber() : null,
     checkoutEm: visita.checkoutEm ? visita.checkoutEm.toISOString() : null,
     checkoutLat: visita.checkoutLat ? visita.checkoutLat.toNumber() : null,
     checkoutLng: visita.checkoutLng ? visita.checkoutLng.toNumber() : null,

@@ -988,6 +988,17 @@ model Vendedor {
   // vendedor, nunca fica ligada por omissao.
   permiteCheckinSemAgendamento Boolean @default(true) @map("permite_checkin_sem_agendamento")
 
+  // Horario de trabalho individual (Epico 4, config-aba-rastreio.jpg -
+  // "Desabilitar edição de horário de trabalho no Android") - null =
+  // sem customizacao, o app usa o horario GLOBAL de
+  // ConfiguracaoRastreio.horarioInicio/TerminoRastreamento como fallback.
+  // So editavel pelo proprio vendedor via PATCH /vendedores/me/horario-
+  // trabalho QUANDO ConfiguracaoRastreio.desabilitarEdicaoHorarioTrabalhoAndroid
+  // for false (ver VendedoresService) - "HH:mm", mesmo formato da config
+  // global.
+  horarioInicioTrabalho String? @map("horario_inicio_trabalho") @db.VarChar(5)
+  horarioFimTrabalho    String? @map("horario_fim_trabalho") @db.VarChar(5)
+
   usuario Usuario? @relation(fields: [usuarioId], references: [id])
 
   clientes ClienteVendedor[]
@@ -1255,8 +1266,12 @@ model Visita {
   clienteId   String    @map("cliente_id")
   vendedorId  String    @map("vendedor_id")
   checkinEm   DateTime  @map("checkin_em")
-  checkinLat  Decimal   @map("checkin_lat") @db.Decimal(9, 6)
-  checkinLng  Decimal   @map("checkin_lng") @db.Decimal(9, 6)
+  // Nullable desde o Epico 4 (config-aba-rastreio.jpg,
+  // "permitirRegistroComGpsDesabilitado") - null so quando essa config
+  // permitiu o registro sem GPS (ver VisitasService.checkin); nunca null
+  // por omissao acidental, o DTO valida isso antes.
+  checkinLat  Decimal?  @map("checkin_lat") @db.Decimal(9, 6)
+  checkinLng  Decimal?  @map("checkin_lng") @db.Decimal(9, 6)
   checkoutEm  DateTime? @map("checkout_em")
   checkoutLat Decimal?  @map("checkout_lat") @db.Decimal(9, 6)
   checkoutLng Decimal?  @map("checkout_lng") @db.Decimal(9, 6)

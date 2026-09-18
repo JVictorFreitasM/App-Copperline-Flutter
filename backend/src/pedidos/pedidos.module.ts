@@ -1,6 +1,7 @@
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
+import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { ErpClientModule } from '../erp-client/erp-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -29,6 +30,7 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
     UsuariosModule,
     VendedoresModule,
     ErpClientModule,
+    ConfiguracoesModule,
   ],
   controllers: [PedidosController],
   providers: [PedidosService, CriarPedidoService, PedidoErpClientService, RelatorioPedidosService],
