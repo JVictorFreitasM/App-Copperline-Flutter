@@ -20,6 +20,12 @@ const NIVEL_PAPEL: Record<PapelVendedor, number> = {
 export class SolicitacaoJaDecididaError extends Error {}
 export class AutoaprovacaoNaoPermitidaError extends Error {}
 export class NivelHierarquiaInsuficienteError extends Error {}
+// Desconto pedido excede ate' o teto da alcada gerencial (o topo da
+// hierarquia hoje) - ninguem no sistema tem alcada pra decidir isso,
+// entao a criacao da SolicitacaoDesconto (e do pedido que a originou)
+// falha alto em vez de gerar uma solicitacao que nenhum papel poderia
+// aprovar (Epico 4, config-aba-aprovacao.jpg).
+export class DescontoExcedeAlcadaMaximaError extends Error {}
 
 export interface AprovadorCandidato {
   id: string;
@@ -33,6 +39,21 @@ export interface SolicitacaoDescontoProps {
   status: StatusSolicitacaoDesconto;
 }
 
+// Config de alcada (ConfiguracaoDescontoService/ConfiguracaoDescontoDto) -
+// duplicado aqui como interface de dominio pra `avaliar` nao depender do
+// Prisma/service layer (DDD so' onde ha regra de negocio real, ver
+// comentario no topo do arquivo).
+export interface ConfiguracaoAlcadaAprovacao {
+  limitePercentual: number;
+  habilitarAprovacaoPorAlcada: boolean;
+  percentualAlcadaGerencial: number;
+  percentualAlcadaSupervisao: number;
+}
+
+export type ResultadoAvaliacaoAlcada =
+  | { necessitaAprovacao: false }
+  | { necessitaAprovacao: true; papelExigido: PapelVendedor };
+
 export class SolicitacaoDesconto {
   constructor(private readonly props: SolicitacaoDescontoProps) {}
 
@@ -40,13 +61,55 @@ export class SolicitacaoDesconto {
     return this.props.status;
   }
 
-  // >, nao >= : desconto EXATAMENTE no limite ainda e' aplicado direto
-  // (criterio de aceite: "ate 20%... acima de 20%").
-  static necessitaAprovacao(
+  // Decisao unica de aprovacao (Epico 4, config-aba-aprovacao.jpg) -
+  // substitui os antigos necessitaAprovacao()/calcularPapelExigido()
+  // separados (o segundo so olhava o papel de quem pedia, nunca o
+  // percentual - por isso nao dava pra ter 2 tetos distintos por alcada).
+  //
+  // habilitarAprovacaoPorAlcada=false: aprovacao desligada por completo,
+  // decisao confirmada com o usuario (nao "volta pro limite unico", e'
+  // "ninguem precisa aprovar nada").
+  //
+  // habilitarAprovacaoPorAlcada=true, 3 faixas por VALOR do desconto
+  // (>, nao >=: exatamente no teto ainda e' liberado direto, mesmo
+  // criterio de sempre):
+  //   <= limitePercentual              -> sem aprovacao
+  //   <= percentualAlcadaSupervisao    -> exige (pelo menos) SUPERVISOR
+  //   <= percentualAlcadaGerencial     -> exige (pelo menos) GERENTE
+  //   >  percentualAlcadaGerencial     -> bloqueado (DescontoExcedeAlcadaMaximaError)
+  // O papel exigido final e' o MAIOR entre a faixa do percentual e "um
+  // nivel acima de quem pediu" (mesma regra de auto-aprovacao de sempre:
+  // um SUPERVISOR pedindo desconto dentro da propria alcada ainda escala
+  // pra GERENTE, porque nao pode aprovar a propria solicitacao).
+  static avaliar(
     percentualSolicitado: number,
-    limitePercentual: number,
-  ): boolean {
-    return percentualSolicitado > limitePercentual;
+    papelSolicitante: PapelVendedor,
+    config: ConfiguracaoAlcadaAprovacao,
+  ): ResultadoAvaliacaoAlcada {
+    if (!config.habilitarAprovacaoPorAlcada) {
+      return { necessitaAprovacao: false };
+    }
+
+    if (percentualSolicitado <= config.limitePercentual) {
+      return { necessitaAprovacao: false };
+    }
+
+    if (percentualSolicitado > config.percentualAlcadaGerencial) {
+      throw new DescontoExcedeAlcadaMaximaError(
+        `Desconto de ${percentualSolicitado}% excede o teto da alcada gerencial (${config.percentualAlcadaGerencial}%) - nenhum papel no sistema pode aprovar este percentual`,
+      );
+    }
+
+    const papelPorPercentual: PapelVendedor =
+      percentualSolicitado <= config.percentualAlcadaSupervisao ? 'SUPERVISOR' : 'GERENTE';
+    const papelAcimaSolicitante = SolicitacaoDesconto.calcularPapelExigido(papelSolicitante);
+
+    const papelExigido: PapelVendedor =
+      NIVEL_PAPEL[papelPorPercentual] >= NIVEL_PAPEL[papelAcimaSolicitante]
+        ? papelPorPercentual
+        : papelAcimaSolicitante;
+
+    return { necessitaAprovacao: true, papelExigido };
   }
 
   // Um nivel acima de quem solicita. GERENTE e' o topo da hierarquia hoje
@@ -54,7 +117,9 @@ export class SolicitacaoDesconto {
   // GERENTE) - nesse caso o proprio papelExigido fica GERENTE, exigindo
   // OUTRO gerente pra decidir (autoaprovacao continua bloqueada por
   // validarDecisao, entao um GERENTE nunca aprova a propria solicitacao,
-  // mesmo sem nivel acima dele).
+  // mesmo sem nivel acima dele). Usado tanto diretamente (fallback antigo,
+  // ainda testado isoladamente) quanto como piso minimo dentro de
+  // avaliar() acima.
   static calcularPapelExigido(papelSolicitante: PapelVendedor): PapelVendedor {
     if (papelSolicitante === 'VENDEDOR') {
       return 'SUPERVISOR';

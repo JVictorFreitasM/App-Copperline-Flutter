@@ -10,8 +10,23 @@ function decimalFake(valor: number) {
   return { toNumber: () => valor, toString: () => String(valor) };
 }
 
-function configuracaoDescontoServiceFake(limitePercentual = 20) {
-  return { obterLimitePercentual: jest.fn().mockResolvedValue(limitePercentual) };
+function configuracaoDescontoServiceFake(
+  overrides: {
+    limitePercentual?: number;
+    habilitarAprovacaoPorAlcada?: boolean;
+    percentualAlcadaSupervisao?: number;
+    percentualAlcadaGerencial?: number;
+  } = {},
+) {
+  return {
+    obter: jest.fn().mockResolvedValue({
+      limitePercentual: overrides.limitePercentual ?? 20,
+      habilitarAprovacaoPorAlcada: overrides.habilitarAprovacaoPorAlcada ?? true,
+      percentualAlcadaSupervisao: overrides.percentualAlcadaSupervisao ?? 30,
+      percentualAlcadaGerencial: overrides.percentualAlcadaGerencial ?? 50,
+      atualizadoEm: '2026-01-01T00:00:00.000Z',
+    }),
+  };
 }
 
 function vendedorEscopoServiceFake(
@@ -106,10 +121,12 @@ function prismaFake(overrides: {
 
 describe('SolicitacoesDescontoService.avaliarDesconto', () => {
   it('nao cria solicitacao quando o percentual esta dentro do limite', async () => {
-    const prisma = prismaFake();
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: 'sup1' }],
+    });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -129,7 +146,7 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
     });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -162,7 +179,7 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
     });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -179,7 +196,7 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
     const prisma = prismaFake();
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -191,6 +208,76 @@ describe('SolicitacoesDescontoService.avaliarDesconto', () => {
       }),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('nunca necessita aprovacao quando habilitarAprovacaoPorAlcada esta desligado (Epico 4)', async () => {
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: 'sup1' }],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake({ habilitarAprovacaoPorAlcada: false }) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.avaliarDesconto({
+      vendedorSolicitanteId: 'v1',
+      pedidoId: null,
+      percentualSolicitado: 90,
+    });
+
+    expect(resultado).toEqual({ necessitaAprovacao: false });
+    expect(prisma.solicitacaoDesconto.create).not.toHaveBeenCalled();
+  });
+
+  it('lanca UnprocessableEntityException quando o desconto excede o teto da alcada gerencial (Epico 4)', async () => {
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: 'sup1' }],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake({
+        limitePercentual: 20,
+        percentualAlcadaSupervisao: 30,
+        percentualAlcadaGerencial: 50,
+      }) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await expect(
+      service.avaliarDesconto({
+        vendedorSolicitanteId: 'v1',
+        pedidoId: null,
+        percentualSolicitado: 60,
+      }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.solicitacaoDesconto.create).not.toHaveBeenCalled();
+  });
+
+  it('papel exigido segue a faixa do percentual (alcada gerencial) quando acima da alcada de supervisao', async () => {
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: 'sup1' }],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      configuracaoDescontoServiceFake({
+        limitePercentual: 20,
+        percentualAlcadaSupervisao: 30,
+        percentualAlcadaGerencial: 50,
+      }) as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.avaliarDesconto({
+      vendedorSolicitanteId: 'v1',
+      pedidoId: 'p1',
+      percentualSolicitado: 40,
+    });
+
+    expect(resultado.necessitaAprovacao).toBe(true);
+    if (resultado.necessitaAprovacao) {
+      expect(resultado.solicitacao.papelExigido).toBe('GERENTE');
+    }
+  });
 });
 
 describe('SolicitacoesDescontoService.simular', () => {
@@ -198,10 +285,12 @@ describe('SolicitacoesDescontoService.simular', () => {
   // cria SolicitacaoDesconto nem dispara notificacao (usada em tempo real
   // enquanto o vendedor ainda monta o pedido, sem pedidoId nenhum ainda).
   it('nao cria nada quando o percentual esta dentro do limite', async () => {
-    const prisma = prismaFake();
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', papel: 'VENDEDOR', supervisorId: 'sup1' }],
+    });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -227,7 +316,7 @@ describe('SolicitacoesDescontoService.simular', () => {
     });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -250,7 +339,7 @@ describe('SolicitacoesDescontoService.simular', () => {
     });
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 
@@ -263,7 +352,7 @@ describe('SolicitacoesDescontoService.simular', () => {
     const prisma = prismaFake();
     const service = new SolicitacoesDescontoService(
       prisma as never,
-      configuracaoDescontoServiceFake(20) as never,
+      configuracaoDescontoServiceFake({ limitePercentual: 20 }) as never,
       vendedorEscopoServiceFake() as never,
     );
 

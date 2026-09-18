@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoInput } from './criar-pedido.service';
@@ -646,6 +646,34 @@ describe('CriarPedidoService.criar', () => {
     await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
       'Radar: produto sem saldo suficiente',
     );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
+  });
+
+  it('desconto excede a alcada gerencial: propaga o erro, nao persiste nada local nem chama o ERP (Epico 4)', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake();
+    const solicitacoesDescontoService = {
+      avaliarDesconto: jest
+        .fn()
+        .mockRejectedValue(
+          new UnprocessableEntityException(
+            'Desconto de 60% excede o teto da alcada gerencial (50%)',
+          ),
+        ),
+    };
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
+    );
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+    expect(pedidoErpClientService.criar).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma._tx.pedido.create).not.toHaveBeenCalled();
   });

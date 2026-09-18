@@ -11,8 +11,10 @@ import { registrarEventoNotificacao } from '../notificacoes/evento-notificacao.s
 import { PrismaService } from '../prisma/prisma.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
+import type { ConfiguracaoDescontoDto } from './configuracao-desconto.service';
 import {
   AutoaprovacaoNaoPermitidaError,
+  DescontoExcedeAlcadaMaximaError,
   NivelHierarquiaInsuficienteError,
   SolicitacaoDesconto,
   SolicitacaoJaDecididaError,
@@ -132,17 +134,7 @@ export class SolicitacoesDescontoService {
   async avaliarDesconto(
     input: AvaliarDescontoInput,
   ): Promise<AvaliarDescontoResultado> {
-    const limitePercentual =
-      await this.configuracaoDescontoService.obterLimitePercentual();
-
-    if (
-      !SolicitacaoDesconto.necessitaAprovacao(
-        input.percentualSolicitado,
-        limitePercentual,
-      )
-    ) {
-      return { necessitaAprovacao: false };
-    }
+    const config = await this.configuracaoDescontoService.obter();
 
     const solicitante = await this.prisma.vendedor.findUnique({
       where: { id: input.vendedorSolicitanteId },
@@ -151,6 +143,15 @@ export class SolicitacoesDescontoService {
       throw new NotFoundException(
         `Vendedor ${input.vendedorSolicitanteId} nao encontrado`,
       );
+    }
+
+    const avaliacao = avaliarComTratamento(
+      input.percentualSolicitado,
+      solicitante.papel,
+      config,
+    );
+    if (!avaliacao.necessitaAprovacao) {
+      return { necessitaAprovacao: false };
     }
 
     // Hierarquia e' configurada manualmente pelo admin (ver
@@ -164,9 +165,7 @@ export class SolicitacoesDescontoService {
       );
     }
 
-    const papelExigido = SolicitacaoDesconto.calcularPapelExigido(
-      solicitante.papel,
-    );
+    const papelExigido = avaliacao.papelExigido;
 
     const criada = await this.prisma.$transaction(async (tx) => {
       const registro = await tx.solicitacaoDesconto.create({
@@ -207,17 +206,7 @@ export class SolicitacoesDescontoService {
     vendedorSolicitanteId: string;
     percentualSolicitado: number;
   }): Promise<SimularDescontoResultado> {
-    const limitePercentual =
-      await this.configuracaoDescontoService.obterLimitePercentual();
-
-    if (
-      !SolicitacaoDesconto.necessitaAprovacao(
-        input.percentualSolicitado,
-        limitePercentual,
-      )
-    ) {
-      return { necessitaAprovacao: false };
-    }
+    const config = await this.configuracaoDescontoService.obter();
 
     const solicitante = await this.prisma.vendedor.findUnique({
       where: { id: input.vendedorSolicitanteId },
@@ -228,6 +217,16 @@ export class SolicitacoesDescontoService {
         `Vendedor ${input.vendedorSolicitanteId} nao encontrado`,
       );
     }
+
+    const avaliacao = avaliarComTratamento(
+      input.percentualSolicitado,
+      solicitante.papel,
+      config,
+    );
+    if (!avaliacao.necessitaAprovacao) {
+      return { necessitaAprovacao: false };
+    }
+
     if (!solicitante.supervisorId || !solicitante.supervisor) {
       throw new UnprocessableEntityException(
         `Vendedor ${solicitante.id} sem hierarquia configurada - configure via PATCH /admin/vendedores/${solicitante.id}/hierarquia antes de solicitar desconto acima do limite`,
@@ -358,6 +357,25 @@ export class SolicitacoesDescontoService {
     });
 
     return paraDto(atualizada);
+  }
+}
+
+// Wrapper de SolicitacaoDesconto.avaliar() (dominio puro) que traduz
+// DescontoExcedeAlcadaMaximaError pra UnprocessableEntityException - usado
+// tanto por avaliarDesconto() (persiste) quanto simular() (pura), mesmo
+// tratamento de erro nos dois.
+function avaliarComTratamento(
+  percentualSolicitado: number,
+  papelSolicitante: PapelVendedor,
+  config: ConfiguracaoDescontoDto,
+): ReturnType<typeof SolicitacaoDesconto.avaliar> {
+  try {
+    return SolicitacaoDesconto.avaliar(percentualSolicitado, papelSolicitante, config);
+  } catch (error) {
+    if (error instanceof DescontoExcedeAlcadaMaximaError) {
+      throw new UnprocessableEntityException(error.message);
+    }
+    throw error;
   }
 }
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface ConfiguracaoDescontoDto {
@@ -39,6 +39,29 @@ export class ConfiguracaoDescontoService {
     input: AtualizarConfiguracaoDescontoInput,
   ): Promise<ConfiguracaoDescontoDto> {
     const existente = await this.obterOuCriarLinha();
+
+    // Validacao cruzada (Epico 4) - so faz sentido escalar de alcada em
+    // alcada se cada teto for >= o nivel abaixo dele. So valida os pares
+    // onde os dois lados do par estao presentes nesta chamada OU ja
+    // existiam na linha atual (permite atualizar um campo por vez, como
+    // o endpoint ops faz com limitePercentual sozinho).
+    const limitePercentual = input.limitePercentual ?? existente.limitePercentual.toNumber();
+    const percentualAlcadaSupervisao =
+      input.percentualAlcadaSupervisao ?? existente.percentualAlcadaSupervisao.toNumber();
+    const percentualAlcadaGerencial =
+      input.percentualAlcadaGerencial ?? existente.percentualAlcadaGerencial.toNumber();
+
+    if (percentualAlcadaSupervisao < limitePercentual) {
+      throw new BadRequestException(
+        'percentualAlcadaSupervisao nao pode ser menor que limitePercentual (percentual maximo pra vendedores)',
+      );
+    }
+    if (percentualAlcadaGerencial < percentualAlcadaSupervisao) {
+      throw new BadRequestException(
+        'percentualAlcadaGerencial nao pode ser menor que percentualAlcadaSupervisao',
+      );
+    }
+
     const atualizado = await this.prisma.configuracaoDesconto.update({
       where: { id: existente.id },
       data: {
@@ -57,13 +80,6 @@ export class ConfiguracaoDescontoService {
       },
     });
     return paraDto(atualizado);
-  }
-
-  // Uso interno do SolicitacoesDescontoService - le so o numero, sem passar
-  // pelo DTO de apresentacao.
-  async obterLimitePercentual(): Promise<number> {
-    const config = await this.obterOuCriarLinha();
-    return config.limitePercentual.toNumber();
   }
 
   private async obterOuCriarLinha() {

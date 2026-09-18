@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ConfiguracaoDescontoService } from './configuracao-desconto.service';
 
 function decimalFake(valor: number) {
@@ -104,10 +105,41 @@ describe('ConfiguracaoDescontoService', () => {
     });
   });
 
-  it('obterLimitePercentual() devolve so o numero', async () => {
+  it('atualizar() rejeita quando percentualAlcadaSupervisao fica menor que limitePercentual', async () => {
     const prisma = prismaFake(linhaPadrao());
     const service = new ConfiguracaoDescontoService(prisma as never);
 
-    expect(await service.obterLimitePercentual()).toBe(20);
+    await expect(
+      service.atualizar({ limitePercentual: 20, percentualAlcadaSupervisao: 15 }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.configuracaoDesconto.update).not.toHaveBeenCalled();
+  });
+
+  it('atualizar() rejeita quando percentualAlcadaGerencial fica menor que percentualAlcadaSupervisao', async () => {
+    const prisma = prismaFake(linhaPadrao());
+    const service = new ConfiguracaoDescontoService(prisma as never);
+
+    await expect(
+      service.atualizar({ percentualAlcadaSupervisao: 40, percentualAlcadaGerencial: 30 }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.configuracaoDesconto.update).not.toHaveBeenCalled();
+  });
+
+  it('atualizar() valida contra os valores JA existentes quando so um campo e informado', async () => {
+    const prisma = prismaFake(
+      linhaPadrao({
+        limitePercentual: decimalFake(20),
+        percentualAlcadaSupervisao: decimalFake(30),
+        percentualAlcadaGerencial: decimalFake(50),
+      }),
+    );
+    const service = new ConfiguracaoDescontoService(prisma as never);
+
+    // So manda limitePercentual, mas o novo valor (60) ficaria MAIOR que
+    // percentualAlcadaSupervisao (30, ja existente) - tem que rejeitar
+    // mesmo sem o PATCH tocar em percentualAlcadaSupervisao.
+    await expect(service.atualizar({ limitePercentual: 60 })).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });
