@@ -18,6 +18,8 @@ esse nível de detalhe, o código-fonte é a fonte de verdade.
 5. [Autenticação e controle de acesso](05-autenticacao-e-acesso.md) — como o
    login funciona e como o acesso é restrito por perfil.
 6. [Infraestrutura](06-infraestrutura.md) — como o sistema roda em produção.
+7. [Instalação — do zero](07-instalacao.md) — guia técnico para clonar o
+   repositório e rodar tudo localmente (backend, frontend, mobile, IdP).
 
 Ver também [casos-de-uso-ia.md](casos-de-uso-ia.md) — análise de onde IA
 (LLM) já está aplicada no sistema e onde faria ou não sentido aplicar.
