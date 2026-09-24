@@ -38,4 +38,13 @@ export const PEDIDO_DETALHE_INCLUDE = {
     include: { produto: true, decididoPor: true },
     orderBy: { numero: 'asc' },
   },
+  // Notas fiscais vinculadas (N:N via NotaFiscalPedido) - pedido pode ter
+  // mais de uma (faturamento parcial: fatura o que tem disponivel, emite
+  // a nota, e emite outra depois pro restante quando produzir - confirmado
+  // com o usuario, 2026-09-23). Usado pra exibir/baixar o PDF na tela de
+  // detalhe (ver NotasFiscaisController.obterPdf).
+  notasFiscais: {
+    include: { notaFiscal: true },
+    orderBy: { notaFiscal: { dataEmissao: 'asc' } },
+  },
 } satisfies Prisma.PedidoInclude;

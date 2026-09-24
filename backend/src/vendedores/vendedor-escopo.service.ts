@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,6 +64,62 @@ export function construirWherePedidoPorEscopo(
       };
     case 'NENHUM':
       return null;
+  }
+}
+
+// Mesmo escopo, mas para NotaFiscal - NotaFiscal nao tem FK direta pra
+// Cliente/Vendedor (so pra Pedido, N:N via NotaFiscalPedido), entao o
+// escopo chega por 2 saltos: NotaFiscal -> Pedido -> Cliente -> Vendedor.
+// TODOS retorna {} direto (nunca envolve em `pedidos.some`, que exigiria a
+// nota TER pelo menos um pedido vinculado - filtro diferente de "sem
+// filtro"). null = "nenhuma nota nunca bate" (escopo NENHUM), mesmo
+// criterio das duas funcoes acima.
+export function construirWhereNotaFiscalPorEscopo(
+  escopo: EscopoClientes,
+): Prisma.NotaFiscalWhereInput | null {
+  const wherePedido = construirWherePedidoPorEscopo(escopo);
+  if (wherePedido === null) {
+    return null;
+  }
+  if (escopo.tipo === 'TODOS') {
+    return {};
+  }
+  return { pedidos: { some: { pedido: wherePedido } } };
+}
+
+// Filtro "Equipe" do painel (OS-dashboard-configuracoes-notificacoes-
+// auditoria.md, Epico 1.2) - usuario escolhe "toda a equipe" (omite
+// vendedorId) ou UM vendedor especifico pra ver so os dados dele.
+// Substitui o escopo automatico pelo vendedor escolhido, depois de validar
+// que ele esta DENTRO do escopo que o usuario ja teria (mesmo padrao ja
+// usado em RelatorioPedidosService.obter) - nunca confia no vendedorId cru
+// vindo da query string sem essa checagem, senao um supervisor poderia
+// filtrar por um vendedor de FORA da propria equipe.
+export function restringirEscopoPorVendedorId(
+  escopo: EscopoClientes,
+  vendedorId: string | undefined,
+): EscopoClientes {
+  if (!vendedorId) {
+    return escopo;
+  }
+
+  switch (escopo.tipo) {
+    case 'TODOS':
+      // Admin pode filtrar por qualquer vendedor - sem lista pra validar
+      // contra.
+      return { tipo: 'PROPRIO', vendedorId };
+    case 'EQUIPE':
+      if (!escopo.vendedorIds.includes(vendedorId)) {
+        throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado`);
+      }
+      return { tipo: 'PROPRIO', vendedorId };
+    case 'PROPRIO':
+      if (escopo.vendedorId !== vendedorId) {
+        throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado`);
+      }
+      return escopo;
+    case 'NENHUM':
+      throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado`);
   }
 }
 

@@ -216,9 +216,10 @@ describe('PedidosService.listar', () => {
   });
 
   it.each([
-    ['NAO_INTEGRADO', { idExternoErp: null }],
+    ['NAO_INTEGRADO', { idExternoErp: null, statusLocal: { not: 'ORCAMENTO' } }],
     ['AGUARDANDO_APROVACAO', { statusLocal: 'AGUARDANDO_APROVACAO' }],
     ['ENVIADO', { OR: [{ statusLocal: 'ENVIADO' }, { idExternoErp: { not: null } }] }],
+    ['ORCAMENTO', { statusLocal: 'ORCAMENTO' }],
   ] as const)('filtra por statusAprovacao=%s', async (valor, condicaoEsperada) => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);
@@ -254,33 +255,34 @@ describe('PedidosService.listar', () => {
 });
 
 describe('PedidosService.contarPorStatusAprovacao', () => {
-  function prismaContadoresFake(naoIntegrados: number, aguardandoAprovacao: number) {
+  function prismaContadoresFake(naoIntegrados: number, aguardandoAprovacao: number, orcamentos = 0) {
     const count = jest
       .fn()
       .mockResolvedValueOnce(naoIntegrados)
-      .mockResolvedValueOnce(aguardandoAprovacao);
+      .mockResolvedValueOnce(aguardandoAprovacao)
+      .mockResolvedValueOnce(orcamentos);
     return {
       pedido: { count },
       $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     };
   }
 
-  it('retorna os dois contadores dos atalhos rapidos da listagem', async () => {
-    const prisma = prismaContadoresFake(68, 5599);
+  it('retorna os tres contadores dos atalhos rapidos da listagem', async () => {
+    const prisma = prismaContadoresFake(68, 5599, 12);
     const service = new PedidosService(prisma as never);
 
     const resultado = await service.contarPorStatusAprovacao(ESCOPO_TODOS);
 
-    expect(resultado).toEqual({ naoIntegrados: 68, aguardandoAprovacao: 5599 });
+    expect(resultado).toEqual({ naoIntegrados: 68, aguardandoAprovacao: 5599, orcamentos: 12 });
   });
 
-  it('escopo NENHUM retorna zero pros dois sem consultar o banco', async () => {
-    const prisma = prismaContadoresFake(999, 999);
+  it('escopo NENHUM retorna zero pros tres sem consultar o banco', async () => {
+    const prisma = prismaContadoresFake(999, 999, 999);
     const service = new PedidosService(prisma as never);
 
     const resultado = await service.contarPorStatusAprovacao(ESCOPO_NENHUM);
 
-    expect(resultado).toEqual({ naoIntegrados: 0, aguardandoAprovacao: 0 });
+    expect(resultado).toEqual({ naoIntegrados: 0, aguardandoAprovacao: 0, orcamentos: 0 });
     expect(prisma.pedido.count).not.toHaveBeenCalled();
   });
 });

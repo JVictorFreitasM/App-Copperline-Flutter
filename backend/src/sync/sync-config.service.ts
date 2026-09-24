@@ -19,10 +19,17 @@ import type { SyncScheduling, SyncStrategy } from './sync-strategy.interface';
 // filtro por data de EMISSAO, nao "alterado desde" (ver
 // NotaFiscalSyncStrategy); saldo_estoque/Estoque.svc nao suporta filtro
 // incremental neste ambiente (confirmado empiricamente na OS de
-// sincronizacao de saldo). Setar INCREMENTAL puro pra essas entidades
-// prometeria um comportamento (so o que mudou) que o fetch() delas nao
-// entrega - por isso a API rejeita em vez de aceitar silenciosamente.
-const ENTIDADES_SEM_CURSOR_INCREMENTAL = new Set(['nota-fiscal', 'saldo_estoque']);
+// sincronizacao de saldo); estoque_lote/Executivo.svc e' full refresh do
+// catalogo inteiro por natureza (CodProdutos="" sempre, ver
+// EstoqueLoteSyncStrategy) - mesmo motivo. Setar INCREMENTAL puro pra
+// essas entidades prometeria um comportamento (so o que mudou) que o
+// fetch() delas nao entrega - por isso a API rejeita em vez de aceitar
+// silenciosamente.
+const ENTIDADES_SEM_CURSOR_INCREMENTAL = new Set([
+  'nota-fiscal',
+  'saldo_estoque',
+  'estoque_lote',
+]);
 
 // Cadencia padrao de cada entidade SEM ConfiguracaoSync salva - espelha os
 // @Cron fixos de sync.scheduler.ts (EVERY_30_MINUTES, '0 0 * * *',

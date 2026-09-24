@@ -117,14 +117,14 @@ export function PainelRastreioEquipe({ posicoes }: { posicoes: PosicaoAtualVende
               onClick={() => buscarDetalhesVendedor(posicao.vendedorId, data)}
               className={`rounded-card p-3 text-left text-sm transition ${
                 vendedorSelecionadoId === posicao.vendedorId
-                  ? "bg-ink text-white"
+                  ? "bg-solid text-on-solid"
                   : "bg-background text-ink hover:opacity-80"
               }`}
             >
               <p className="font-medium">{posicao.vendedorNome ?? "Vendedor não identificado"}</p>
               <p
                 className={`text-xs ${
-                  vendedorSelecionadoId === posicao.vendedorId ? "text-white/70" : "text-muted"
+                  vendedorSelecionadoId === posicao.vendedorId ? "text-on-solid/70" : "text-muted"
                 }`}
               >
                 Última posição: {formatarDataHora(posicao.capturadoEm)}

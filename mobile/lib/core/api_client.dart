@@ -184,6 +184,19 @@ class ApiClient implements ApiJsonClient {
     }
   }
 
+  // DELETE /pedidos/:id (Épico 4 - cancelar orçamento) - sem corpo, sem
+  // resposta esperada (204 No Content).
+  Future<void> delete(String path) async {
+    try {
+      await _dio.delete<void>(path);
+    } on DioException catch (erro) {
+      throw ApiException(
+        _mensagemErro(erro),
+        statusCode: erro.response?.statusCode,
+      );
+    }
+  }
+
   // POST multipart/form-data (foto + campos de texto) - só o check-in de
   // visita usa isso hoje (OS-MOBILE-21, ver VisitasController.checkin no
   // backend, que exige FileInterceptor('foto')). `campos` vira FormData com

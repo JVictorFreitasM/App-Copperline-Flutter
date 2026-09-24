@@ -12,6 +12,9 @@ typedef PedidosParametros = ({
   String? situacao,
   String? dataInicial,
   String? dataFinal,
+  // Épico 4 (config-aba-orcamento.jpg) - "ORCAMENTO" pra listar só os
+  // rascunhos (ver pedidos_screen.dart).
+  String? statusAprovacao,
 });
 
 final pedidosProvider = FutureProvider.family<
@@ -28,6 +31,8 @@ final pedidosProvider = FutureProvider.family<
     if (params.dataInicial != null && params.dataInicial!.isNotEmpty)
       'dataInicial': params.dataInicial!,
     if (params.dataFinal != null && params.dataFinal!.isNotEmpty) 'dataFinal': params.dataFinal!,
+    if (params.statusAprovacao != null && params.statusAprovacao!.isNotEmpty)
+      'statusAprovacao': params.statusAprovacao!,
   };
   try {
     final json = await apiClient.getJson('/pedidos?${Uri(queryParameters: query).query}');
@@ -48,7 +53,10 @@ final pedidosProvider = FutureProvider.family<
           (params.clienteNome == null || params.clienteNome!.isEmpty || (p.tituloCliente.toLowerCase().contains(params.clienteNome!.toLowerCase()))) &&
           (params.situacao == null || params.situacao!.isEmpty || p.situacao == params.situacao) &&
           (params.dataInicial == null || params.dataInicial!.isEmpty || (p.dataHoraUltimaAlteracao != null && p.dataHoraUltimaAlteracao!.compareTo(params.dataInicial!) >= 0)) &&
-          (params.dataFinal == null || params.dataFinal!.isEmpty || (p.dataHoraUltimaAlteracao != null && p.dataHoraUltimaAlteracao!.compareTo(params.dataFinal!) <= 0)),
+          (params.dataFinal == null || params.dataFinal!.isEmpty || (p.dataHoraUltimaAlteracao != null && p.dataHoraUltimaAlteracao!.compareTo(params.dataFinal!) <= 0)) &&
+          (params.statusAprovacao == null ||
+              params.statusAprovacao!.isEmpty ||
+              p.statusAprovacaoBucket == params.statusAprovacao),
     );
   }
 });
@@ -83,16 +91,20 @@ class CriarPedidoService {
     return ResultadoCalculoQuantidade.fromJson(json);
   }
 
-  // Resposta (CriarPedidoResultadoDto) só é usada pelo `id` do pedido
-  // criado, pra navegar direto pro detalhe (mesmo padrão do web,
-  // `criar-pedido-form.tsx`) - sem model próprio pra isso.
+  // Resposta (CriarPedidoResultadoDto) - devolve pedidoId E status (Épico
+  // 4: antes só extraía o pedidoId, mas agora a tela precisa diferenciar
+  // ENVIADO/AGUARDANDO_APROVACAO/ORCAMENTO pra mostrar a mensagem certa,
+  // ver criar_pedido_screen.dart).
   //
   // latitude/longitude opcionais (Épico 4, config-aba-rastreio.jpg -
   // "Distância máxima do cliente para registro de pedido") - o app manda
   // best-effort quando consegue a posição (ver criar_pedido_screen.dart);
   // o backend só exige de verdade quando essa config tiver um valor
   // configurado (senão ignora).
-  Future<String> criar({
+  //
+  // salvarComoOrcamento (Épico 4, config-aba-orcamento.jpg) - salva como
+  // rascunho em vez de enviar ao ERP.
+  Future<({String pedidoId, String status})> criar({
     required String clienteId,
     required double percentualDesconto,
     required String formaPagamentoId,
@@ -100,6 +112,7 @@ class CriarPedidoService {
     required List<Map<String, dynamic>> itens,
     double? latitude,
     double? longitude,
+    bool? salvarComoOrcamento,
   }) async {
     final json = await _apiClient.postJson('/pedidos', {
       'clienteId': clienteId,
@@ -109,7 +122,31 @@ class CriarPedidoService {
       'itens': itens,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (salvarComoOrcamento != null) 'salvarComoOrcamento': salvarComoOrcamento,
     });
-    return json['pedidoId'] as String;
+    return (pedidoId: json['pedidoId'] as String, status: json['status'] as String);
+  }
+
+  // Épico 4 - "transformar um Orçamento em Pedido". Mesmas 3 saídas de
+  // criar() (ENVIADO/AGUARDANDO_APROVACAO), nunca ORCAMENTO de volta.
+  Future<({String pedidoId, String status})> transformarEmPedido(String pedidoId) async {
+    final json = await _apiClient.postJson(
+      '/pedidos/${Uri.encodeComponent(pedidoId)}/transformar-em-pedido',
+      {},
+    );
+    return (pedidoId: json['pedidoId'] as String, status: json['status'] as String);
+  }
+
+  // Épico 4 - cancela (apaga) um orçamento que nunca chegou no ERP.
+  Future<void> cancelarOrcamento(String pedidoId) {
+    return _apiClient.delete('/pedidos/${Uri.encodeComponent(pedidoId)}');
+  }
+
+  // Épico 4 - "Permitir alteração de vendedor de um orçamento criado",
+  // só pra usuário gerencial (checado no backend).
+  Future<void> alterarVendedorOrcamento(String pedidoId, String novoVendedorId) {
+    return _apiClient.patchJson('/pedidos/${Uri.encodeComponent(pedidoId)}/vendedor', {
+      'vendedorId': novoVendedorId,
+    });
   }
 }

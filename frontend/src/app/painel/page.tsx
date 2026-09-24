@@ -6,6 +6,7 @@ import type {
   ComparativoVendedorDto,
   EstoqueCriticoDashboardDto,
   FunilPedidosDashboardDto,
+  KpisDashboardDto,
   MapaCalorVendasDto,
   NotasFiscaisDashboardDto,
   RankingDashboardDto,
@@ -18,7 +19,8 @@ import { nomeMesAbreviado, rotuloAnoMes } from "@/lib/dashboard";
 import { GraficoBarrasComparativo } from "@/components/design/grafico-barras-comparativo";
 import { MapaCalorVendasWrapper } from "@/components/design/mapa-calor-vendas-wrapper";
 import type { VendedorEquipeDto } from "@/lib/vendedores";
-import { formatarData, formatarMoeda } from "@/lib/formatacao";
+import { formatarData, formatarMoeda, formatarNumero, formatarQuantidade } from "@/lib/formatacao";
+import { KpiHeaderCard } from "@/components/design/kpi-header-card";
 import { configSituacaoPedido } from "@/lib/pedidos";
 import { clienteDaNotaFiscal, configStatusNfe, rotuloTipoNotaFiscal } from "@/lib/notas-fiscais";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
@@ -26,7 +28,7 @@ import { ListItem } from "@/components/design/list-item";
 import { Card } from "@/components/design/card";
 import { Badge } from "@/components/badge";
 import { PrimaryButton } from "@/components/design/button";
-import { FiltroForm, CampoFiltro } from "@/components/filtro";
+import { FiltroForm, CampoFiltro, SelectFiltro } from "@/components/filtro";
 import { GraficoBarras } from "@/components/design/grafico-barras";
 import { GraficoRadar } from "@/components/design/grafico-radar";
 import { CarrosselGraficos, type PainelCarrossel } from "@/components/design/carrossel-graficos";
@@ -59,14 +61,26 @@ const MAX_VENDEDORES_COMPARATIVO = 4;
 export default async function PainelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dataInicial?: string; dataFinal?: string; vendedorIds?: string }>;
+  searchParams: Promise<{
+    dataInicial?: string;
+    dataFinal?: string;
+    vendedorIds?: string;
+    vendedorId?: string;
+  }>;
 }) {
   await exigirUsuarioAutenticado("/painel");
-  const { dataInicial, dataFinal, vendedorIds } = await searchParams;
+  const { dataInicial, dataFinal, vendedorIds, vendedorId } = await searchParams;
 
+  // Filtro "Equipe" (Epico 1.2) - `vendedorId` (singular) propaga pra
+  // TODOS os graficos que aceitam periodo, via queryPeriodo (mesma
+  // querystring reaproveitada em quase toda chamada abaixo). Distinto de
+  // `vendedorIds` (plural, 2-4 selecionados) do card "Comparativo de
+  // vendedores" - esse continua com seu proprio seletor, nao reaproveita
+  // este filtro.
   const queryPeriodo = new URLSearchParams({
     ...(dataInicial && { dataInicial }),
     ...(dataFinal && { dataFinal }),
+    ...(vendedorId && { vendedorId }),
   }).toString();
 
   const vendedorIdsSelecionados = (vendedorIds ?? "").split(",").filter(Boolean);
@@ -77,6 +91,7 @@ export default async function PainelPage({
   // propria mensagem de erro.
   const [
     resumoResultado,
+    kpisResultado,
     vendasResultado,
     rankingResultado,
     notasFiscaisResultado,
@@ -89,6 +104,7 @@ export default async function PainelPage({
     vendasVsFaturadoResultado,
   ] = await Promise.allSettled([
     apiFetch<ResumoDashboardDto>("/dashboard/resumo", { cache: "no-store" }),
+    apiFetch<KpisDashboardDto>("/dashboard/kpis", { cache: "no-store" }),
     apiFetch<VendasDashboardDto>(`/dashboard/vendas?${queryPeriodo}`, { cache: "no-store" }),
     apiFetch<RankingDashboardDto>(`/dashboard/ranking?${queryPeriodo}`, { cache: "no-store" }),
     apiFetch<NotasFiscaisDashboardDto>(`/dashboard/notas-fiscais?${queryPeriodo}`, {
@@ -102,9 +118,10 @@ export default async function PainelPage({
     apiFetch<MapaCalorVendasDto>(`/dashboard/mapa-calor-vendas?${queryPeriodo}`, {
       cache: "no-store",
     }),
-    apiFetch<ComparativoMensalDashboardDto>("/dashboard/comparativo-mensal", {
-      cache: "no-store",
-    }),
+    apiFetch<ComparativoMensalDashboardDto>(
+      `/dashboard/comparativo-mensal${vendedorId ? `?vendedorId=${encodeURIComponent(vendedorId)}` : ""}`,
+      { cache: "no-store" },
+    ),
     apiFetch<VendasPorEstadoDashboardDto>(`/dashboard/vendas-por-estado?${queryPeriodo}`, {
       cache: "no-store",
     }),
@@ -122,6 +139,7 @@ export default async function PainelPage({
   }
 
   const [resumo, erroResumo] = extrair(resumoResultado);
+  const [kpis, erroKpis] = extrair(kpisResultado);
   const [vendas, erroVendas] = extrair(vendasResultado);
   const [ranking, erroRanking] = extrair(rankingResultado);
   const [notasFiscais, erroNotasFiscais] = extrair(notasFiscaisResultado);
@@ -373,9 +391,56 @@ export default async function PainelPage({
     <main className="flex flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-bold text-ink">Painel</h1>
 
+      {/* Epico 1.1 - 3 cards de KPI do topo (referência `dash.jpg`), sem
+          filtro de período (mesmo critério de /dashboard/resumo: contagem
+          do estado ATUAL, não de uma janela de tempo). */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {kpis ? (
+          <>
+            <KpiHeaderCard
+              titulo="Orçamentos Abertos"
+              valor={formatarNumero(kpis.orcamentosAbertos.quantidade)}
+              corValor="vermelho"
+              subtitulo={`${formatarMoeda(kpis.orcamentosAbertos.valorTotal)} em orçamentos`}
+            />
+            <KpiHeaderCard
+              titulo={`Clientes há mais de ${kpis.clientesSemPedidoRecente.diasSemPedido} dias sem pedido`}
+              valor={formatarNumero(kpis.clientesSemPedidoRecente.quantidade)}
+              corValor="vermelho"
+              subtitulo={`${formatarMoeda(kpis.clientesSemPedidoRecente.valorPotencial)} em potencial de vendas`}
+            />
+            <KpiHeaderCard
+              titulo="Ticket médio de vendas"
+              valor={formatarMoeda(kpis.ticketMedioVendas.valor)}
+            />
+          </>
+        ) : (
+          <Card className="sm:col-span-3">
+            <ErroConexao mensagem={erroKpis!} />
+          </Card>
+        )}
+      </div>
+
       <FiltroForm rota="/painel">
         <CampoFiltro label="De" name="dataInicial" defaultValue={dataInicial} type="date" />
         <CampoFiltro label="Até" name="dataFinal" defaultValue={dataFinal} type="date" />
+        {/* Epico 1.2 - so aparece pra quem tem equipe pra filtrar
+            (supervisor/gerente); GET /vendedores/equipe da 403 pra
+            vendedor comum (erroEquipe), tratado aqui como "sem seletor",
+            nunca como erro da tela (o vendedor comum ja so ve a propria
+            carteira por padrao, sem precisar escolher). */}
+        {equipe && equipe.length > 0 && (
+          <SelectFiltro
+            label="Equipe"
+            name="vendedorId"
+            defaultValue={vendedorId}
+            opcaoPadrao="Toda a equipe"
+            opcoes={equipe.map((vendedor) => ({
+              value: vendedor.id,
+              label: vendedor.nome ?? "—",
+            }))}
+          />
+        )}
       </FiltroForm>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -521,7 +586,7 @@ export default async function PainelPage({
                 href={`/produtos/${produto.produtoId}`}
                 titulo={produto.nome ?? produto.codigo}
                 subtitulo={`Código ${produto.codigo} · ${produto.quantidadePedidosPendentes} pedido(s) pendente(s)`}
-                valor={`${produto.quantidadeDisponivel} disponível`}
+                valor={`${formatarQuantidade(produto.quantidadeDisponivel)} disponível`}
                 tag={<Badge enfase>Crítico</Badge>}
               />
             ))}

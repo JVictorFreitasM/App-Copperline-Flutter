@@ -65,25 +65,29 @@ export class PedidosService {
 
   // Contadores dos atalhos rapidos da listagem (layout de referencia:
   // "Nao integrados (N)" / "Aguardando aprovacao (N)") - mesmos buckets de
-  // statusAprovacao, sem paginacao (so a contagem).
+  // statusAprovacao, sem paginacao (so a contagem). `orcamentos` (Epico 4)
+  // acrescentado sem quebrar os 2 campos ja existentes.
   async contarPorStatusAprovacao(
     escopo: EscopoClientes,
-  ): Promise<{ naoIntegrados: number; aguardandoAprovacao: number }> {
+  ): Promise<{ naoIntegrados: number; aguardandoAprovacao: number; orcamentos: number }> {
     const whereEscopo = construirWherePedidoPorEscopo(escopo);
     if (whereEscopo === null) {
-      return { naoIntegrados: 0, aguardandoAprovacao: 0 };
+      return { naoIntegrados: 0, aguardandoAprovacao: 0, orcamentos: 0 };
     }
 
-    const [naoIntegrados, aguardandoAprovacao] = await this.prisma.$transaction([
+    const [naoIntegrados, aguardandoAprovacao, orcamentos] = await this.prisma.$transaction([
       this.prisma.pedido.count({
         where: mesclarWhereEscopo(whereEscopo, whereStatusAprovacao('NAO_INTEGRADO')),
       }),
       this.prisma.pedido.count({
         where: mesclarWhereEscopo(whereEscopo, whereStatusAprovacao('AGUARDANDO_APROVACAO')),
       }),
+      this.prisma.pedido.count({
+        where: mesclarWhereEscopo(whereEscopo, whereStatusAprovacao('ORCAMENTO')),
+      }),
     ]);
 
-    return { naoIntegrados, aguardandoAprovacao };
+    return { naoIntegrados, aguardandoAprovacao, orcamentos };
   }
 
   async buscarPorId(id: string, escopo: EscopoClientes): Promise<PedidoDetalheDto> {
@@ -303,15 +307,20 @@ function mesclarWhereEscopo(
 
 // Bucket derivado do fluxo local de criacao - ver comentario na DTO
 // (listar-pedidos-query.dto.ts) pra semantica completa de cada valor.
+// NAO_INTEGRADO exclui ORCAMENTO explicitamente (Epico 4) - antes do
+// orcamento virar um status real, "idExternoErp null" cobria as duas
+// coisas misturadas; agora orcamento tem bucket proprio.
 function whereStatusAprovacao(
-  valor: 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO',
+  valor: 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO' | 'ORCAMENTO',
 ): Prisma.PedidoWhereInput {
   switch (valor) {
     case 'NAO_INTEGRADO':
-      return { idExternoErp: null };
+      return { idExternoErp: null, statusLocal: { not: 'ORCAMENTO' } };
     case 'AGUARDANDO_APROVACAO':
       return { statusLocal: 'AGUARDANDO_APROVACAO' };
     case 'ENVIADO':
       return { OR: [{ statusLocal: 'ENVIADO' }, { idExternoErp: { not: null } }] };
+    case 'ORCAMENTO':
+      return { statusLocal: 'ORCAMENTO' };
   }
 }

@@ -26,8 +26,16 @@ function prismaFake(overrides: {
       findFirst: jest.fn().mockResolvedValue(overrides.produtoExistente ?? null),
     },
     eventoNotificacao: {
-      create: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'evento-1',
+        ...data,
+      })),
     },
+    // registrarEventoNotificacao tambem resolve destinatario do inbox web
+    // (NotificacaoUsuario, Epico 5) na mesma transacao - PRODUTO_REABASTECIDO
+    // e' so pra quem favoritou, sem favorito nenhum nesses testes.
+    produtoFavorito: { findMany: jest.fn().mockResolvedValue([]) },
+    notificacaoUsuario: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
   return {
     tx,

@@ -97,7 +97,7 @@ export function Sidebar({
 
       <aside
         onMouseLeave={() => !fixada && setSobreposta(false)}
-        className={`flex h-screen flex-col border-r border-black/5 bg-surface transition-transform duration-200 ease-out ${
+        className={`flex h-screen flex-col border-r border-ink/5 bg-surface transition-transform duration-200 ease-out ${
           fixada
             ? "sticky top-0 w-64 shrink-0"
             : `fixed top-0 left-0 z-40 w-64 shadow-2xl ${
@@ -156,7 +156,7 @@ export function Sidebar({
           ))}
         </nav>
 
-        <div className="border-t border-black/5 px-6 py-4 text-xs text-muted">
+        <div className="border-t border-ink/5 px-6 py-4 text-xs text-muted">
           Logado como <span className="font-medium text-ink">{nomeUsuario}</span>
         </div>
       </aside>

@@ -28,6 +28,8 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
   final _clienteNomeController = TextEditingController();
   String? _clienteNome;
   String? _situacao;
+  // Épico 4 (config-aba-orcamento.jpg) - filtro rápido "Só orçamentos".
+  bool _soOrcamentos = false;
 
   @override
   void dispose() {
@@ -50,6 +52,7 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
       situacao: _situacao,
       dataInicial: null,
       dataFinal: null,
+      statusAprovacao: _soOrcamentos ? 'ORCAMENTO' : null,
     );
     final resultadoAsync = ref.watch(pedidosProvider(params));
 
@@ -95,6 +98,16 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
                     }),
                   ),
                   const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Só orçamentos'),
+                    value: _soOrcamentos,
+                    activeThumbColor: AppColors.primary,
+                    onChanged: (valor) => setState(() {
+                      _pagina = 1;
+                      _soOrcamentos = valor;
+                    }),
+                  ),
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton(onPressed: _aplicarFiltro, child: const Text('Filtrar')),
@@ -124,10 +137,18 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
                                     'Pedido ${pedido.numero ?? "—"} · '
                                     '${formatarData(pedido.dataHoraUltimaAlteracao)}',
                                 valor: formatarMoeda(pedido.valorTotal),
-                                tag: AppBadge(
-                                  texto: situacaoConfig.rotulo,
-                                  enfase: situacaoConfig.enfase,
-                                ),
+                                tag: pedido.isOrcamento
+                                    ? const AppBadge(texto: 'Orçamento', enfase: true)
+                                    : AppBadge(
+                                        texto: situacaoConfig.rotulo,
+                                        enfase: situacaoConfig.enfase,
+                                      ),
+                                // Épico 4 (config-aba-orcamento.jpg) -
+                                // "Transformar em pedido"/"Cancelar" só
+                                // aparecem pra linha que É um orçamento.
+                                trailingAction: pedido.isOrcamento
+                                    ? _MenuOrcamento(pedido: pedido)
+                                    : null,
                                 onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => PedidoDetalheScreen(id: pedido.id),
@@ -151,5 +172,85 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
         ),
       ),
     );
+  }
+}
+
+// Épico 4 (config-aba-orcamento.jpg) - ações de linha só pra orçamento:
+// "Transformar em pedido" (avalia desconto/envia ao ERP igual um pedido
+// novo, ver CriarPedidoService.transformarEmPedido no backend) e
+// "Cancelar" (apaga - orçamento nunca chegou no ERP). Alteração de
+// vendedor (só usuário gerencial) fica fora desta tela por enquanto -
+// endpoint já existe (PATCH /pedidos/:id/vendedor), sem UI mobile ainda.
+class _MenuOrcamento extends ConsumerWidget {
+  const _MenuOrcamento({required this.pedido});
+
+  final PedidoResumo pedido;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      onSelected: (acao) async {
+        if (acao == 'transformar') {
+          await _transformar(context, ref);
+        } else if (acao == 'cancelar') {
+          await _cancelar(context, ref);
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'transformar', child: Text('Transformar em pedido')),
+        PopupMenuItem(value: 'cancelar', child: Text('Cancelar orçamento')),
+      ],
+    );
+  }
+
+  Future<void> _transformar(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(criarPedidoServiceProvider).transformarEmPedido(pedido.id);
+      ref.invalidate(pedidosProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Orçamento transformado em pedido.')));
+      }
+    } catch (erro) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$erro')));
+      }
+    }
+  }
+
+  Future<void> _cancelar(BuildContext context, WidgetRef ref) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar orçamento'),
+        content: const Text('Esse orçamento será apagado. Essa ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Voltar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cancelar orçamento'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    try {
+      await ref.read(criarPedidoServiceProvider).cancelarOrcamento(pedido.id);
+      ref.invalidate(pedidosProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Orçamento cancelado.')));
+      }
+    } catch (erro) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$erro')));
+      }
+    }
   }
 }

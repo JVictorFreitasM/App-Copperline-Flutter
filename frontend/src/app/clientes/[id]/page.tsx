@@ -19,6 +19,7 @@ import { StatCard } from "@/components/design/stat-card";
 import { Timeline } from "@/components/design/timeline";
 import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
 import { TabelasPrecoCliente } from "./tabelas-preco-cliente";
+import { ResumoVisitas } from "./resumo-visitas";
 
 // Opções fixas de período (OS-WEB-31, critério de aceite explícito: "1 e 6
 // meses") - 12 meses mantido como terceira opção (era o único valor antes
@@ -251,6 +252,13 @@ export default async function ClienteDetalhePage({
                   codigosIniciais={codigosTabelaPreco}
                   podeEditar={usuario.role === "admin"}
                 />
+              </Card>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-ink">Resumo de visitas (IA)</h2>
+              <Card>
+                <ResumoVisitas clienteId={cliente.id} />
               </Card>
             </section>
 

@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AxiosError } from 'axios';
+import { ConfiguracaoOrcamentoService } from '../configuracoes/configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoCalculoService } from '../produtos/produto-calculo.service';
@@ -15,6 +16,7 @@ import { ConfiguracaoTabelaPrecoService } from '../tabelas-preco/configuracao-ta
 import { calcularDistanciaMetros } from '../visitas/domain/distancia-geografica';
 import {
   construirWhereClientePorEscopo,
+  construirWherePedidoPorEscopo,
   type EscopoClientes,
 } from '../vendedores/vendedor-escopo.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
@@ -39,11 +41,16 @@ export interface CriarPedidoInput {
   // tem um valor configurado (ver validarDistanciaRegistro()).
   latitude?: number;
   longitude?: number;
+  // Epico 4 (config-aba-orcamento.jpg) - salva como rascunho em vez de
+  // enviar ao ERP (ver comentario em criar()).
+  salvarComoOrcamento?: boolean;
+  // Observacoes do PEDIDO inteiro (2026-09-21) - ver CriarPedidoDto.
+  observacoes?: string;
   itens: CriarPedidoItemInput[];
 }
 
 export interface CriarPedidoResultadoDto {
-  status: 'ENVIADO' | 'AGUARDANDO_APROVACAO';
+  status: 'ENVIADO' | 'AGUARDANDO_APROVACAO' | 'ORCAMENTO';
   pedidoId: string;
   valorTotal: number;
   idExternoErp: string | null;
@@ -61,6 +68,23 @@ interface ItemCalculado {
   valorTotal: number;
   percentualDesconto: number;
   observacoes?: string;
+}
+
+const METROS_POR_KM = 1000;
+
+// 2026-09-21 - item.quantidade (ItemCalculado) fica SEMPRE em METROS pra
+// item METRO (retalho) - precisa continuar assim porque calcularPesoTotal
+// multiplica Produto.pesoLiquidoKg/pesoBrutoKg (kg POR METRO pra produto
+// retalho) por esse valor (decisao ja confirmada, ver comentario em
+// calcularPesoTotal). MAS a quantidade que o WK Radar espera em
+// quantidadeVenda (e que persistimos em PedidoItem.quantidadeVenda) e' em
+// KM pra esse mesmo tipo de produto - confirmado cruzando
+// itens_tabela_preco.preco com PedidoItem.quantidadeVenda de pedidos REAIS
+// ja sincronizados (valores tipo 0.05-2.2, nunca inteiros grandes tipo
+// "1000"). Item PECA (rolo/peca fechada) nao converte - quantidade ja e'
+// contagem de pecas nos dois sentidos.
+function quantidadeVendaExterna(item: ItemCalculado): number {
+  return item.unidade === 'METRO' ? item.quantidade / METROS_POR_KM : item.quantidade;
 }
 
 // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - null quando
@@ -105,6 +129,7 @@ export class CriarPedidoService {
     private readonly pedidoErpClientService: PedidoErpClientService,
     private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
     private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
+    private readonly configuracaoOrcamentoService: ConfiguracaoOrcamentoService,
   ) {}
 
   async criar(
@@ -112,6 +137,8 @@ export class CriarPedidoService {
     usuarioId: string,
     escopo: EscopoClientes,
   ): Promise<CriarPedidoResultadoDto> {
+    await this.validarItensSemDuplicata(input.itens);
+
     const vendedorAlvo = await this.resolverVendedorAlvo(
       input.vendedorId,
       usuarioId,
@@ -154,15 +181,47 @@ export class CriarPedidoService {
     );
     const produtosPorId = await this.buscarDadosProdutos(itensCalculados);
     const pesoTotal = calcularPesoTotal(itensCalculados, produtosPorId);
-
-    // Gate de aprovacao continua 1 por PEDIDO (nao por item) - decisao
-    // confirmada com o usuario: o MAIOR desconto entre os itens decide se
-    // o pedido inteiro precisa de aprovacao. pedidoId:null - ainda nao
-    // criamos o Pedido local (so criamos DEPOIS de decidir o caminho, ver
-    // comentario da classe).
+    // Gate de aprovacao (via avaliarDesconto, mais abaixo) E o rascunho
+    // de orcamento (branch logo abaixo) usam o mesmo criterio: o MAIOR
+    // desconto entre os itens - decisao confirmada com o usuario.
     const maiorPercentualDesconto = Math.max(
       ...itensCalculados.map((item) => item.percentualDesconto),
     );
+
+    // Orcamento (Epico 4, config-aba-orcamento.jpg) - rascunho local,
+    // pula avaliacao de desconto E envio ao ERP por completo; as duas
+    // coisas so acontecem quando o orcamento e' "transformado" num
+    // pedido de verdade (ver transformarEmPedido() abaixo).
+    if (input.salvarComoOrcamento) {
+      const configOrcamento = await this.configuracaoOrcamentoService.obter();
+      if (!configOrcamento.habilitarCriacaoOrcamento) {
+        throw new UnprocessableEntityException(
+          'Criação de orçamento está desabilitada - fale com o admin para habilitar em Configurações > Orçamento.',
+        );
+      }
+      const pedido = await this.persistirOrcamento(
+        vendedorAlvo.id,
+        cliente.id,
+        maiorPercentualDesconto,
+        valorComDesconto,
+        pesoTotal,
+        itensCalculados,
+        usuarioId,
+        formaPagamento.id,
+        condicaoPagamento.id,
+        input.codigoTabelaPreco ?? null,
+        contatoId,
+        input.observacoes ?? null,
+      );
+      return {
+        status: 'ORCAMENTO',
+        pedidoId: pedido.id,
+        valorTotal: valorComDesconto,
+        idExternoErp: null,
+        solicitacaoDescontoId: null,
+      };
+    }
+
     const avaliacao = await this.solicitacoesDescontoService.avaliarDesconto({
       vendedorSolicitanteId: vendedorAlvo.id,
       pedidoId: null,
@@ -193,6 +252,7 @@ export class CriarPedidoService {
         condicaoPagamento.id,
         input.codigoTabelaPreco ?? null,
         contatoId,
+        input.observacoes ?? null,
       );
       return {
         status: 'ENVIADO',
@@ -216,6 +276,7 @@ export class CriarPedidoService {
       condicaoPagamento.id,
       input.codigoTabelaPreco ?? null,
       contatoId,
+      input.observacoes ?? null,
     );
     return {
       status: 'AGUARDANDO_APROVACAO',
@@ -335,6 +396,32 @@ export class CriarPedidoService {
     }
   }
 
+  // Guarda de dados (pedido explicito do usuario, 2026-09-23; configuravel
+  // desde 2026-09-24 via ConfiguracaoOrcamento.permitirItensRepetidos, aba
+  // "Orcamento" da tela de Configuracoes - default BLOQUEADO, mesmo
+  // comportamento de sempre) - o mesmo produto duas vezes no MESMO pedido
+  // nao tem leitura de negocio clara (qual dos dois desconto/observacao
+  // vale?) e o web ja evita isso na UI por padrao (abre o item existente
+  // pra edicao em vez de duplicar) - aqui e' a ultima linha de defesa pra
+  // QUALQUER client (mobile, chamada direta a API), rejeitando cedo antes
+  // de calcular preco/enviar ao ERP - SE a config nao tiver liberado.
+  private async validarItensSemDuplicata(itens: CriarPedidoItemInput[]): Promise<void> {
+    const { permitirItensRepetidos } = await this.configuracaoOrcamentoService.obter();
+    if (permitirItensRepetidos) {
+      return;
+    }
+
+    const vistos = new Set<string>();
+    for (const item of itens) {
+      if (vistos.has(item.produtoId)) {
+        throw new BadRequestException(
+          `Produto '${item.produtoId}' informado mais de uma vez no mesmo pedido - some as quantidades num único item em vez de repetir o produto.`,
+        );
+      }
+      vistos.add(item.produtoId);
+    }
+  }
+
   // So as ativas (mesmo criterio de PagamentoService.listarFormasPagamento)
   // - nunca deixa criar pedido com uma forma que o Radar ja desativou.
   private async buscarFormaPagamento(formaPagamentoId: string) {
@@ -449,10 +536,17 @@ export class CriarPedidoService {
       return {
         produtoIdExterno: produto.idExternoErp,
         idTabelaPreco: tabela.idVendaProdutoExterno as string,
-        quantidade: item.quantidade,
+        // Em KM pra item METRO (retalho), nao os metros usados
+        // internamente - ver comentario de quantidadeVendaExterna.
+        quantidade: quantidadeVendaExterna(item),
         // SEM desconto (preco de tabela puro) - ver comentario abaixo
-        // sobre o percentual blendado.
-        valorUnitario: item.valorUnitarioBruto,
+        // sobre o percentual blendado. Arredondado a 2 casas (2026-09-21) -
+        // o Radar rejeita ValorUnitario com mais de 2 decimais
+        // ("nao permite mais de 2 casas decimais"); precoVenda por metro
+        // (ver ProdutoCalculoService.resolverPrecoVenda, preco por KM
+        // convertido) pode ter ate 6 casas internamente, mas o payload do
+        // ERP precisa da versao arredondada pra moeda.
+        valorUnitario: arredondarMoeda(item.valorUnitarioBruto),
       };
     });
 
@@ -509,6 +603,7 @@ export class CriarPedidoService {
     condicaoPagamentoId: string,
     codigoTabelaPreco: string | null,
     contatoId: string | null,
+    observacoes: string | null,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -526,6 +621,7 @@ export class CriarPedidoService {
           condicaoPagamentoId,
           codigoTabelaPreco,
           contatoId,
+          observacoes,
           statusLocal: 'ENVIADO',
           incompleto: false,
           sincronizadoEm,
@@ -559,6 +655,7 @@ export class CriarPedidoService {
     condicaoPagamentoId: string,
     codigoTabelaPreco: string | null,
     contatoId: string | null,
+    observacoes: string | null,
   ) {
     const sincronizadoEm = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -574,6 +671,7 @@ export class CriarPedidoService {
           condicaoPagamentoId,
           codigoTabelaPreco,
           contatoId,
+          observacoes,
           statusLocal: 'AGUARDANDO_APROVACAO',
           incompleto: false,
           sincronizadoEm,
@@ -595,6 +693,271 @@ export class CriarPedidoService {
       return pedido;
     });
   }
+
+  // Orcamento (Epico 4) - mesma forma de persistirPedidoAguardandoAprovacao,
+  // mas sem SolicitacaoDesconto nenhuma vinculada (rascunho ainda nao
+  // passou por avaliacao de desconto).
+  private async persistirOrcamento(
+    vendedorId: string,
+    clienteId: string,
+    percentualDescontoSolicitado: number,
+    valorTotal: number,
+    pesoTotal: PesoTotalPedido,
+    itens: ItemCalculado[],
+    usuarioId: string,
+    formaPagamentoId: string,
+    condicaoPagamentoId: string,
+    codigoTabelaPreco: string | null,
+    contatoId: string | null,
+    observacoes: string | null,
+  ) {
+    const sincronizadoEm = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const pedido = await tx.pedido.create({
+        data: {
+          clienteId,
+          vendedorId,
+          percentualDescontoSolicitado,
+          valorTotal,
+          pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
+          pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
+          formaPagamentoId,
+          condicaoPagamentoId,
+          codigoTabelaPreco,
+          contatoId,
+          observacoes,
+          statusLocal: 'ORCAMENTO',
+          incompleto: false,
+          sincronizadoEm,
+        },
+      });
+      await criarItensPedido(tx, pedido.id, itens, sincronizadoEm);
+      await tx.pedidoHistoricoStatus.create({
+        data: {
+          pedidoId: pedido.id,
+          statusAnterior: null,
+          statusNovo: 'ORCAMENTO',
+          alteradoPor: usuarioId,
+        },
+      });
+      return pedido;
+    });
+  }
+
+  // Transforma um orcamento (rascunho) num pedido de verdade (Epico 4,
+  // "Permitir ao Vendedor transformar um Orçamento em Pedido... no
+  // Aplicativo Móvel") - so' AGORA avalia desconto e (se aprovado sem
+  // necessidade de aprovacao) chama o ERP, exatamente como criar()
+  // avalia um pedido novo; reaproveita enviarAoErp() sem duplicar a
+  // logica de montagem do payload.
+  async transformarEmPedido(
+    pedidoId: string,
+    usuarioId: string,
+    escopo: EscopoClientes,
+  ): Promise<CriarPedidoResultadoDto> {
+    const configOrcamento = await this.configuracaoOrcamentoService.obter();
+    if (!configOrcamento.permitirVendedorTransformarEmPedido) {
+      throw new ForbiddenException(
+        'Conversão de orçamento em pedido está desabilitada - fale com o admin para habilitar em Configurações > Orçamento.',
+      );
+    }
+
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    const pedido = whereEscopo
+      ? await this.prisma.pedido.findFirst({
+          where: { id: pedidoId, statusLocal: 'ORCAMENTO', ...whereEscopo },
+          include: { itens: true, cliente: true, vendedor: true, formaPagamento: true, condicaoPagamento: true },
+        })
+      : null;
+    if (
+      !pedido ||
+      !pedido.vendedor ||
+      !pedido.cliente ||
+      !pedido.formaPagamento ||
+      !pedido.condicaoPagamento
+    ) {
+      throw new NotFoundException(`Orçamento '${pedidoId}' não encontrado`);
+    }
+
+    // quantidadeVenda persistido ja' esta' na unidade EXTERNA (KM pra
+    // METRO/retalho, ver quantidadeVendaExterna) - reconstroi de volta pra
+    // METROS aqui (unidade INTERNA usada por calcularPesoTotal/subtotalBruto
+    // dentro de enviarAoErp), usando o `unidade` congelado no item (nao
+    // reconsultado do produto - ver comentario no schema.prisma).
+    const itensCalculados: ItemCalculado[] = pedido.itens.map((item) => {
+      const quantidadeExterna = item.quantidadeVenda?.toNumber() ?? 0;
+      const unidade = item.unidade ?? '';
+      return {
+        produtoId: item.produtoId!,
+        quantidade: unidade === 'METRO' ? quantidadeExterna * METROS_POR_KM : quantidadeExterna,
+        unidade,
+        valorUnitarioBruto: item.valorUnitarioBruto?.toNumber() ?? 0,
+        valorTotal: item.valorTotal?.toNumber() ?? 0,
+        percentualDesconto: item.percentualDesconto?.toNumber() ?? 0,
+        observacoes: item.observacoes ?? undefined,
+      };
+    });
+    const valorComDesconto = arredondarMoeda(
+      itensCalculados.reduce((soma, item) => soma + item.valorTotal, 0),
+    );
+    const produtosPorId = await this.buscarDadosProdutos(itensCalculados);
+    const maiorPercentualDesconto = Math.max(
+      ...itensCalculados.map((item) => item.percentualDesconto),
+    );
+    const vendedorAlvo: VendedorAlvo = {
+      id: pedido.vendedor.id,
+      idExternoErp: pedido.vendedor.idExternoErp,
+    };
+
+    // pedidoId JA preenchido (diferente de criar(), onde o Pedido ainda
+    // nao existe nesse ponto) - a SolicitacaoDesconto ja nasce vinculada,
+    // sem precisar do update de backfill que persistirPedidoAguardandoAprovacao
+    // faz pro caminho de criacao nova.
+    const avaliacao = await this.solicitacoesDescontoService.avaliarDesconto({
+      vendedorSolicitanteId: vendedorAlvo.id,
+      pedidoId: pedido.id,
+      percentualSolicitado: maiorPercentualDesconto,
+    });
+
+    if (!avaliacao.necessitaAprovacao) {
+      const resultadoErp = await this.enviarAoErp(
+        pedido.cliente,
+        vendedorAlvo,
+        pedido.codigoTabelaPreco ?? undefined,
+        valorComDesconto,
+        itensCalculados,
+        produtosPorId,
+        pedido.formaPagamento,
+        pedido.condicaoPagamento,
+      );
+      const atualizado = await this.prisma.$transaction(async (tx) => {
+        const novo = await tx.pedido.update({
+          where: { id: pedido.id },
+          data: {
+            idExternoErp: resultadoErp.idExterno,
+            codigoIntegrador: resultadoErp.codigoIntegrador,
+            statusLocal: 'ENVIADO',
+            sincronizadoEm: new Date(),
+          },
+        });
+        await tx.pedidoHistoricoStatus.create({
+          data: {
+            pedidoId: pedido.id,
+            statusAnterior: 'ORCAMENTO',
+            statusNovo: 'ENVIADO',
+            alteradoPor: usuarioId,
+          },
+        });
+        return novo;
+      });
+      return {
+        status: 'ENVIADO',
+        pedidoId: atualizado.id,
+        valorTotal: valorComDesconto,
+        idExternoErp: atualizado.idExternoErp,
+        solicitacaoDescontoId: null,
+      };
+    }
+
+    const atualizado = await this.prisma.$transaction(async (tx) => {
+      const novo = await tx.pedido.update({
+        where: { id: pedido.id },
+        data: { statusLocal: 'AGUARDANDO_APROVACAO', sincronizadoEm: new Date() },
+      });
+      await tx.pedidoHistoricoStatus.create({
+        data: {
+          pedidoId: pedido.id,
+          statusAnterior: 'ORCAMENTO',
+          statusNovo: 'AGUARDANDO_APROVACAO',
+          alteradoPor: usuarioId,
+        },
+      });
+      return novo;
+    });
+    return {
+      status: 'AGUARDANDO_APROVACAO',
+      pedidoId: atualizado.id,
+      valorTotal: valorComDesconto,
+      idExternoErp: null,
+      solicitacaoDescontoId: avaliacao.solicitacao.id,
+    };
+  }
+
+  // Cancela (apaga) um orcamento (Epico 4, tela-notificacao... texto da
+  // OS: "...ou cancelem o orçamento") - nunca chegou no ERP, entao
+  // cancelar e' apagar de vez, mesmo espirito de "sem deixar registro
+  // orfao" ja usado pro envio que falha (ver comentario da classe).
+  // PedidoItem/PedidoHistoricoStatus cascateiam via onDelete: Cascade no
+  // schema - so precisa apagar o Pedido.
+  async cancelarOrcamento(pedidoId: string, escopo: EscopoClientes): Promise<void> {
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    const pedido = whereEscopo
+      ? await this.prisma.pedido.findFirst({
+          where: { id: pedidoId, statusLocal: 'ORCAMENTO', ...whereEscopo },
+          select: { id: true },
+        })
+      : null;
+    if (!pedido) {
+      throw new NotFoundException(`Orçamento '${pedidoId}' não encontrado`);
+    }
+    await this.prisma.pedido.delete({ where: { id: pedidoId } });
+  }
+
+  // Alteracao de vendedor de um orcamento (Epico 4, "Permitir alteração
+  // de vendedor de um orçamento criado") - so' usuario com papel
+  // gerencial (escopo EQUIPE/TODOS, mesmo vocabulario do resto do
+  // modulo: supervisor/gerente/admin) pode reatribuir, e so' pra um
+  // vendedor DENTRO da propria equipe (mesmo criterio anti-IDOR de
+  // resolverVendedorAlvo).
+  async alterarVendedorOrcamento(
+    pedidoId: string,
+    novoVendedorId: string,
+    escopo: EscopoClientes,
+  ): Promise<void> {
+    if (escopo.tipo !== 'TODOS' && escopo.tipo !== 'EQUIPE') {
+      throw new ForbiddenException(
+        'Só um usuário com papel gerencial (supervisor/gerente) pode alterar o vendedor de um orçamento',
+      );
+    }
+
+    const configOrcamento = await this.configuracaoOrcamentoService.obter();
+    if (!configOrcamento.permitirAlteracaoVendedorOrcamentoCriado) {
+      throw new ForbiddenException(
+        'Alteração de vendedor de orçamento está desabilitada - fale com o admin para habilitar em Configurações > Orçamento.',
+      );
+    }
+
+    const autorizado = escopo.tipo === 'TODOS' || escopo.vendedorIds.includes(novoVendedorId);
+    if (!autorizado) {
+      throw new ForbiddenException(
+        'Vendedor informado está fora da sua equipe - não é possível reatribuir o orçamento a ele',
+      );
+    }
+
+    const novoVendedor = await this.prisma.vendedor.findUnique({
+      where: { id: novoVendedorId },
+      select: { id: true, inativo: true },
+    });
+    if (!novoVendedor || novoVendedor.inativo) {
+      throw new NotFoundException(`Vendedor '${novoVendedorId}' não encontrado ou inativo`);
+    }
+
+    const whereEscopo = construirWherePedidoPorEscopo(escopo);
+    const pedido = whereEscopo
+      ? await this.prisma.pedido.findFirst({
+          where: { id: pedidoId, statusLocal: 'ORCAMENTO', ...whereEscopo },
+          select: { id: true },
+        })
+      : null;
+    if (!pedido) {
+      throw new NotFoundException(`Orçamento '${pedidoId}' não encontrado`);
+    }
+
+    await this.prisma.pedido.update({
+      where: { id: pedidoId },
+      data: { vendedorId: novoVendedorId },
+    });
+  }
 }
 
 // Tipo do client de transacao do Prisma (this.prisma.$transaction(tx => ...))
@@ -611,12 +974,17 @@ async function criarItensPedido(
       pedidoId,
       numero: indice + 1,
       produtoId: item.produtoId,
-      quantidadeVenda: item.quantidade,
+      // Em KM pra item METRO (retalho) - ver comentario de
+      // quantidadeVendaExterna. valorUnitario abaixo continua dividindo
+      // por item.quantidade (metros), NAO pela quantidade convertida -
+      // e' o preco liquido POR METRO, mesma unidade de valorUnitarioBruto.
+      quantidadeVenda: quantidadeVendaExterna(item),
       valorUnitario: item.quantidade > 0 ? item.valorTotal / item.quantidade : 0,
       valorUnitarioBruto: item.valorUnitarioBruto,
       valorTotal: item.valorTotal,
       percentualDesconto: item.percentualDesconto,
       observacoes: item.observacoes ?? null,
+      unidade: item.unidade,
       sincronizadoEm,
     })),
   });

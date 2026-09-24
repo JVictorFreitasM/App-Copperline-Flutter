@@ -46,7 +46,7 @@ export function UploadDocumentoForm() {
             name="arquivo"
             required
             accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.csv"
-            className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+            className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-solid file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-solid"
           />
         </label>
         <PrimaryButton type="submit" disabled={pending}>

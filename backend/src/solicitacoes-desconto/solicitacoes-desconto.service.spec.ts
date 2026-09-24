@@ -74,11 +74,26 @@ function prismaFake(overrides: {
         decididoEm: null,
         criadoEm: new Date('2026-01-01T00:00:00.000Z'),
       })),
+      // registrarEventoNotificacao tambem resolve destinatario do inbox web
+      // (NotificacaoUsuario, Epico 5) na mesma transacao - le vendedorSolicitante/
+      // aprovadorEsperado (usuarioId) via `select` de relacao, que este mock nao
+      // resolve automaticamente (diferente do Prisma de verdade) - enriquecido
+      // aqui a partir de *_Id + `vendedores`, mesma fonte usada no resto do fake.
       findUnique: jest
         .fn()
-        .mockImplementation(async ({ where: { id } }: { where: { id: string } }) =>
-          solicitacoes.find((s) => s.id === id) ?? null,
-        ),
+        .mockImplementation(async ({ where: { id } }: { where: { id: string } }) => {
+          const solicitacao = solicitacoes.find((s) => s.id === id);
+          if (!solicitacao) return null;
+          const buscarVendedor = (vendedorId: unknown) =>
+            vendedores.find((v) => v.id === vendedorId) ?? null;
+          return {
+            ...solicitacao,
+            vendedorSolicitante: buscarVendedor(solicitacao.vendedorSolicitanteId),
+            aprovadorEsperado: solicitacao.aprovadorEsperadoId
+              ? buscarVendedor(solicitacao.aprovadorEsperadoId)
+              : null,
+          };
+        }),
       findMany: jest.fn().mockImplementation(
         async ({
           where,
@@ -107,13 +122,18 @@ function prismaFake(overrides: {
       create: jest.fn().mockResolvedValue(undefined),
     },
     eventoNotificacao: {
-      create: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'evento-1',
+        ...data,
+      })),
     },
+    notificacaoUsuario: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     $transaction(callback: (tx: unknown) => unknown) {
       return callback({
         solicitacaoDesconto: this.solicitacaoDesconto,
         pedidoHistoricoStatus: this.pedidoHistoricoStatus,
         eventoNotificacao: this.eventoNotificacao,
+        notificacaoUsuario: this.notificacaoUsuario,
       });
     },
   };

@@ -11,6 +11,12 @@ export function formatarMoeda(valor: string | null): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numero);
 }
 
+// Epico 1.1 (cards de KPI do painel) - quantidade inteira com separador de
+// milhar pt-BR (ex: 1.377), sem casas decimais.
+export function formatarNumero(valor: number): string {
+  return new Intl.NumberFormat("pt-BR").format(valor);
+}
+
 export function formatarData(valorIso: string | null): string {
   if (valorIso === null) {
     return "—";
@@ -33,6 +39,24 @@ export function formatarPeso(valorKg: string | null): string {
     return "—";
   }
   return `${new Intl.NumberFormat("pt-BR").format(numero)} kg`;
+}
+
+// Estoque (soma de lotes, disponivel, quantidade por lote) - Decimal do
+// Prisma/WK BI chega como string com ponto decimal e ate 4 casas fixas
+// (ex: "240.8000") - exibir cru confundiria usuario BR, que le ponto como
+// separador de MILHAR ("240.8000" pareceria "240800,0", 1000x maior que o
+// valor real). new Intl.NumberFormat("pt-BR") converte pro formato
+// correto (virgula decimal) e corta zero a direita sem significado
+// (240.8000 -> "240,8").
+export function formatarQuantidade(valor: string | null): string {
+  if (valor === null) {
+    return "—";
+  }
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) {
+    return "—";
+  }
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(numero);
 }
 
 // Contato de cliente (ContatoCliente.telefoneDdd/telefoneNumero) - "—"

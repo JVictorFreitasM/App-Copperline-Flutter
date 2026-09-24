@@ -14,6 +14,7 @@ interface BotaoProps {
   type?: "button" | "submit";
   disabled?: boolean;
   className?: string;
+  onClick?: () => void;
 }
 
 const BASE =
@@ -25,8 +26,9 @@ export function PrimaryButton({
   type = "button",
   disabled,
   className = "",
+  onClick,
 }: BotaoProps) {
-  const classes = `${BASE} bg-ink text-white hover:opacity-90 ${className}`;
+  const classes = `${BASE} bg-solid text-on-solid hover:opacity-90 ${className}`;
   if (href) {
     return (
       <Link href={href} className={classes}>
@@ -35,7 +37,7 @@ export function PrimaryButton({
     );
   }
   return (
-    <button type={type} disabled={disabled} className={classes}>
+    <button type={type} disabled={disabled} onClick={onClick} className={classes}>
       {children}
     </button>
   );
@@ -47,6 +49,7 @@ export function SecondaryButton({
   type = "button",
   disabled,
   className = "",
+  onClick,
 }: BotaoProps) {
   const classes = `${BASE} bg-surface text-ink shadow-sm hover:opacity-80 ${className}`;
   if (href) {
@@ -57,7 +60,7 @@ export function SecondaryButton({
     );
   }
   return (
-    <button type={type} disabled={disabled} className={classes}>
+    <button type={type} disabled={disabled} onClick={onClick} className={classes}>
       {children}
     </button>
   );

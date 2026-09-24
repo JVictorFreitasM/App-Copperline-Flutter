@@ -27,13 +27,17 @@ const ROTA_NOTA_FISCAL = '/comercial/v1/nota-fiscal';
 const CAMPOS_NOTA_FISCAL = [
   'id',
   'codigoIntegrador',
-  'chave',
   'tipo',
   'numero',
   'serie',
   'dataEmissao',
   'pedidos.id',
   'nfe.status',
+  // nfe.chaveAcesso (44 digitos, SEFAZ) - achado 2026-09-23, ver comentario
+  // em nota-fiscal.types.ts. O campo top-level `chave` foi removido daqui
+  // de proposito (nunca era a chave de acesso, era outro codigo interno
+  // do WK Radar sem uso no sistema).
+  'nfe.chaveAcesso',
   'nfse.nfseGerada',
   'nfse.nfseCancelada',
   'total.valorTotalNotaFiscal',
@@ -146,7 +150,10 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
     return {
       idExternoErp: bruto.id,
       codigoIntegrador: bruto.codigoIntegrador ?? null,
-      chave: bruto.chave ?? null,
+      // nfe.chaveAcesso (44 digitos, SEFAZ) - NUNCA bruto.chave (achado
+      // 2026-09-23, ver comentario em nota-fiscal.types.ts). null quando a
+      // nota so tem NFS-e (sem bloco nfe) - esperado, nao inventar.
+      chave: bruto.nfe?.chaveAcesso ?? null,
       tipo: bruto.tipo ? MAPA_TIPO[bruto.tipo] : null,
       numero: bruto.numero ?? null,
       serie: bruto.serie ?? null,

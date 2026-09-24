@@ -60,8 +60,11 @@ export function GraficoRadar({
   return (
     <ResponsiveContainer width="100%" height={altura}>
       <RadarChart data={dados} outerRadius="70%">
-        <PolarGrid stroke="#E2E8F0" />
-        <PolarAngleAxis dataKey="eixo" tick={{ fontSize: 12, fill: "#475569" }} />
+        <PolarGrid stroke="var(--color-muted)" strokeOpacity={0.3} />
+        <PolarAngleAxis
+          dataKey="eixo"
+          tick={{ fontSize: 12, fill: "var(--color-muted)" }}
+        />
         {series.map((serie, indice) => (
           <Radar
             key={serie.nome}
@@ -74,7 +77,16 @@ export function GraficoRadar({
           />
         ))}
         <Legend />
-        <Tooltip formatter={(_valor, nome, item) => [item.payload[`${nome}__bruto`], nome]} />
+        <Tooltip
+          formatter={(_valor, nome, item) => [item.payload[`${nome}__bruto`], nome]}
+          contentStyle={{
+            borderRadius: 12,
+            border: "none",
+            boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
+            backgroundColor: "var(--color-surface)",
+            color: "var(--color-ink)",
+          }}
+        />
       </RadarChart>
     </ResponsiveContainer>
   );

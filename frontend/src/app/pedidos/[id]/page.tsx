@@ -6,10 +6,12 @@ import {
   configSituacaoPedido,
   rotuloStatusAprovacaoPedido,
   type EnderecoClientePedidoDto,
+  type NotaFiscalResumoPedidoDto,
   type PedidoDetalheDto,
   type PedidoItemDto,
 } from "@/lib/pedidos";
-import { formatarDataHora, formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
+import { configStatusNfe } from "@/lib/notas-fiscais";
+import { formatarData, formatarDataHora, formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { AprovarReprovarTudo } from "./aprovar-reprovar-tudo";
@@ -20,9 +22,11 @@ import { ItemAprovacaoBotoes } from "./item-aprovacao-botoes";
 // baseada em Card+ListItem) pra seguir o mesmo layout denso em colunas da
 // referencia. Varios campos da referencia NAO existem no nosso modelo hoje
 // (origem de venda, horario do envio, tabela de precos do pedido, forma/
-// condicao de pagamento, observacao livre, preco de tabela e %margem por
-// item) - aparecem aqui como "—", nunca inventados; documentados em
-// OS-pendentes-claude-code.md, secao "Pendente — Web".
+// condicao de pagamento, preco de tabela e %margem por item) - aparecem
+// aqui como "—", nunca inventados; documentados em
+// OS-pendentes-claude-code.md, secao "Pendente — Web". Observacoes
+// (Pedido.observacoes, 2026-09-21) NAO faz mais parte dessa lista -
+// campo real agora, preenchido na criacao (POST /pedidos).
 export default async function PedidoDetalhePage({
   params,
 }: {
@@ -76,6 +80,14 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
   // aceitar/recusar item (nem em lote) depois disso (pedido do usuário,
   // 2026-09-17).
   const faturado = pedido.situacao === "FATURADO";
+  // Pedido FATURADO ou PARCIALMENTE_FATURADO deve ter nota fiscal
+  // disponível pra visualização/PDF/impressão (pedido do usuário,
+  // 2026-09-23) - pode ter mais de uma (faturamento parcial: fatura o
+  // que tem, emite a nota, e emite outra depois pro restante). Mostra a
+  // seção mesmo sem nenhuma nota vinculada ainda, pra deixar claro que
+  // algo está pendente em vez de simplesmente não aparecer nada.
+  const esperaNotaFiscal =
+    pedido.situacao === "FATURADO" || pedido.situacao === "PARCIALMENTE_FATURADO";
 
   return (
     <>
@@ -127,7 +139,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
             <div className="flex gap-6">
               <Campo
                 label="Nr. do Pedido / Nr. no ERP"
-                value={`${pedido.numero ?? pedido.id.slice(0, 8)} / ${pedido.idExternoErp ?? "N/A"}`}
+                value={`${pedido.idExternoErp ?? "N/A"} / ${pedido.numero ?? pedido.id.slice(0, 8)}`}
               />
             </div>
             <Campo label="Origem de venda" value="—" />
@@ -188,9 +200,10 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
               <p className="text-xs text-muted">Observações</p>
               <textarea
                 disabled
+                readOnly
+                value={pedido.observacoes ?? ""}
                 placeholder="Nenhuma observação"
-                title="Recurso ainda não implementado - ver OS-pendentes-claude-code.md"
-                className="mt-1 w-full cursor-not-allowed rounded-2xl bg-background px-4 py-3 text-sm text-muted opacity-80"
+                className="mt-1 w-full cursor-not-allowed rounded-2xl bg-background px-4 py-3 text-sm text-ink opacity-80"
                 rows={3}
               />
             </div>
@@ -199,7 +212,62 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
       </div>
 
       <TabelaItens pedidoId={pedido.id} itens={pedido.itens} faturado={faturado} />
+
+      {esperaNotaFiscal && <NotasFiscaisSecao notasFiscais={pedido.notasFiscais} />}
     </>
+  );
+}
+
+function NotasFiscaisSecao({ notasFiscais }: { notasFiscais: NotaFiscalResumoPedidoDto[] }) {
+  return (
+    <div className="rounded-card bg-surface p-6 shadow-sm">
+      <p className="mb-4 text-sm font-semibold text-ink">Notas fiscais</p>
+      {notasFiscais.length === 0 ? (
+        <p className="text-sm text-muted">
+          Nenhuma nota fiscal vinculada a este pedido ainda.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {notasFiscais.map((nota) => {
+            const status = configStatusNfe(nota.statusNfe);
+            return (
+              <div
+                key={nota.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-background px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink">
+                    NF-e {nota.numero ?? "—"}
+                    {nota.serie && ` · Série ${nota.serie}`}
+                  </p>
+                  <p className="text-xs text-muted">
+                    Emitida em {formatarData(nota.dataEmissao)} ·{" "}
+                    {formatarMoeda(nota.valorTotalNotaFiscal)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge enfase={status.enfase}>{status.rotulo}</Badge>
+                  {nota.chave ? (
+                    <a
+                      href={`/api/notas-fiscais/${nota.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      Ver PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted" title="Sem chave de NF-e sincronizada">
+                      PDF indisponível
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -256,8 +324,17 @@ function TabelaItens({
         </thead>
         <tbody>
           {itens.map((item) => {
-            const pesoLiquidoItem = calcularPesoItem(item.produto?.pesoLiquidoKg, item.quantidadeVenda);
-            const pesoBrutoItem = calcularPesoItem(item.produto?.pesoBrutoKg, item.quantidadeVenda);
+            // Produto.pesoLiquidoKg/pesoBrutoKg e' peso POR METRO pra item
+            // METRO (retalho) - quantidadeVenda desse item vem em KM (ver
+            // pedido-response.dto.ts), precisa voltar pra metros aqui antes
+            // de multiplicar (mesmo criterio de calcularPesoTotal no
+            // backend, criar-pedido.service.ts).
+            const quantidadeEmMetros =
+              item.unidade === "METRO" && item.quantidadeVenda !== null
+                ? String(Number(item.quantidadeVenda) * 1000)
+                : item.quantidadeVenda;
+            const pesoLiquidoItem = calcularPesoItem(item.produto?.pesoLiquidoKg, quantidadeEmMetros);
+            const pesoBrutoItem = calcularPesoItem(item.produto?.pesoBrutoKg, quantidadeEmMetros);
             return (
               <tr key={item.id} className="border-b border-line last:border-0">
                 <td className="px-4 py-3">
@@ -270,7 +347,13 @@ function TabelaItens({
                   )}
                 </td>
                 <td className="px-4 py-3 text-muted">{item.produto?.codigo ?? "—"}</td>
-                <td className="px-4 py-3 text-muted">{item.quantidadeVenda ?? "—"}</td>
+                <td className="px-4 py-3 text-muted">
+                  {item.quantidadeVenda === null
+                    ? "—"
+                    : item.unidade === "METRO"
+                      ? `${item.quantidadeVenda} km`
+                      : item.quantidadeVenda}
+                </td>
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.produto?.nome ?? "—"}</p>
                   {(pesoBrutoItem || pesoLiquidoItem) && (
@@ -279,6 +362,9 @@ function TabelaItens({
                       {pesoBrutoItem && pesoLiquidoItem && " · "}
                       {pesoLiquidoItem && `Peso Líquido: ${pesoLiquidoItem}`}
                     </p>
+                  )}
+                  {item.observacoes && (
+                    <p className="text-xs text-muted">Obs: {item.observacoes}</p>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right text-ink">{formatarMoeda(item.valorUnitario)}</td>

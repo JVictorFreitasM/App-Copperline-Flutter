@@ -65,6 +65,7 @@ class PushService {
     if (token == null) {
       return;
     }
+    debugPrint('Token FCM: $token'); // TODO remover apos testar push
     final plataforma = Platform.isIOS ? 'IOS' : 'ANDROID';
     await _apiClient.postJson('/dispositivos', {'token': token, 'plataforma': plataforma});
   }

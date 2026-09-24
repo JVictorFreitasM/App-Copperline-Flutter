@@ -16,6 +16,7 @@ import { ClienteTimelineService } from './cliente-timeline.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
+import { VisitaResumoLlmService } from './visita-resumo-llm.service';
 import { ClientesController } from './clientes.controller';
 import { ClientesService } from './clientes.service';
 
@@ -41,6 +42,7 @@ import { ClientesService } from './clientes.service';
   providers: [
     ClientesService,
     ClienteResumoLlmService,
+    VisitaResumoLlmService,
     ClienteEstatisticasService,
     ClienteLocalizacaoService,
     ClienteFinanceiroService,

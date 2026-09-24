@@ -135,7 +135,17 @@ function prismaFake(pedidoExistente: { id: string; situacao: string | null } | n
       })),
     },
     pedidoItem: { upsert: jest.fn().mockResolvedValue(undefined) },
-    eventoNotificacao: { create: jest.fn().mockResolvedValue(undefined) },
+    eventoNotificacao: {
+      create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'evento-1',
+        ...data,
+      })),
+    },
+    // registrarEventoNotificacao tambem resolve destinatario do inbox web
+    // (NotificacaoUsuario, Epico 5) na mesma transacao - PEDIDO_SITUACAO_ALTERADA
+    // e' broadcast (tx.usuario.findMany), sem usuario cadastrado nesses testes.
+    usuario: { findMany: jest.fn().mockResolvedValue([]) },
+    notificacaoUsuario: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
   return {
     tx,

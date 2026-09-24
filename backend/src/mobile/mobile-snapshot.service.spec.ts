@@ -171,15 +171,9 @@ describe('MobileSnapshotService.obter', () => {
       {
         produtoId: 'p1',
         codigo: 'COD-1',
-        itens: [
-          {
-            localCodigo: null,
-            localNome: null,
-            lote: null,
-            fabricadoEm: null,
-            quantidade: '42',
-          },
-        ],
+        itens: [],
+        quantidadeFisicaTotal: null,
+        quantidadeDisponivel: '42',
         atualizadoEm: '2026-09-01T00:00:00.000Z',
       },
     ]);

@@ -73,6 +73,43 @@ export class CoberturaTemporariaService {
       paraDto(c, c.vendedorOriginal.nome, c.vendedorSubstituto.nome),
     );
   }
+
+  // GET /coberturas/minha-ativa - so' existe GET /admin/coberturas (lista
+  // TUDO, ApiKeyGuard) e GET /coberturas/:id/resumo (precisa ja saber o
+  // id); sem isso o substituto nao tinha como DESCOBRIR o id da propria
+  // cobertura ativa pra abrir o resumo de handoff. "Ativa" = dataInicio <=
+  // agora <= dataFim (mesmo criterio de `ativa` em CoberturaTemporariaDto);
+  // se houver mais de uma sobreposta (nao deveria, mas o schema nao
+  // impede), pega a de inicio mais recente.
+  async obterAtivaParaSubstituto(
+    usuarioId: string,
+  ): Promise<CoberturaTemporariaDto | null> {
+    const vendedor = await this.prisma.vendedor.findFirst({
+      where: { usuarioId },
+      select: { id: true },
+    });
+    if (!vendedor) {
+      return null;
+    }
+
+    const agora = new Date();
+    const cobertura = await this.prisma.coberturaTemporaria.findFirst({
+      where: {
+        vendedorSubstitutoId: vendedor.id,
+        dataInicio: { lte: agora },
+        dataFim: { gte: agora },
+      },
+      orderBy: { dataInicio: 'desc' },
+      include: {
+        vendedorOriginal: { select: { nome: true } },
+        vendedorSubstituto: { select: { nome: true } },
+      },
+    });
+    if (!cobertura) {
+      return null;
+    }
+    return paraDto(cobertura, cobertura.vendedorOriginal.nome, cobertura.vendedorSubstituto.nome);
+  }
 }
 
 function paraDto(

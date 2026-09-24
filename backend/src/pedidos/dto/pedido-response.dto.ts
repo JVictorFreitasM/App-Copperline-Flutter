@@ -3,6 +3,8 @@ import type {
   CondicaoPagamento,
   ContatoCliente,
   FormaPagamento,
+  NotaFiscal,
+  NotaFiscalPedido,
   Pedido,
   PedidoHistoricoStatus,
   PedidoItem,
@@ -57,18 +59,24 @@ export interface PedidoResumoDto {
   statusAprovacaoBucket: StatusAprovacaoPedido;
 }
 
-export type StatusAprovacaoPedido = 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO';
+export type StatusAprovacaoPedido =
+  | 'NAO_INTEGRADO'
+  | 'AGUARDANDO_APROVACAO'
+  | 'ENVIADO'
+  | 'ORCAMENTO';
 
 // Mesma semantica de whereStatusAprovacao em pedidos.service.ts, so que
 // classificando um registro ja carregado em vez de filtrar no banco - as
-// duas fica com a MESMA prioridade (AGUARDANDO_APROVACAO antes de
-// NAO_INTEGRADO) porque um pedido local recem-criado com desconto pendente
-// tem statusLocal=AGUARDANDO_APROVACAO E idExternoErp=null ao mesmo tempo -
-// o status mais especifico (aguardando decisao) e' o que importa mostrar.
+// duas fica com a MESMA prioridade (ORCAMENTO > AGUARDANDO_APROVACAO >
+// NAO_INTEGRADO) - um orcamento (Epico 4) tambem tem idExternoErp null,
+// mas statusLocal=ORCAMENTO e' o mais especifico, checado primeiro.
 export function calcularStatusAprovacaoPedido(pedido: {
   idExternoErp: string | null;
   statusLocal: string | null;
 }): StatusAprovacaoPedido {
+  if (pedido.statusLocal === 'ORCAMENTO') {
+    return 'ORCAMENTO';
+  }
   if (pedido.statusLocal === 'AGUARDANDO_APROVACAO') {
     return 'AGUARDANDO_APROVACAO';
   }
@@ -107,6 +115,15 @@ export interface PedidoItemDto {
   statusAprovacao: string;
   decididoPor: { id: string; nome: string } | null;
   decididoEm: Date | null;
+  // 'METRO' (quantidadeVenda em KM) | 'PECA' (contagem) | null pra item
+  // sincronizado do Radar (nunca passa por CriarPedidoService, ver
+  // PedidoItem.unidade no schema).
+  unidade: string | null;
+  // So' preenchido pra item criado localmente (CriarPedidoService) - null
+  // pra item sincronizado do Radar. Existia no schema/service desde
+  // OS-pendentes-claude-code.md mas nunca tinha sido exposto aqui (bug:
+  // gravado no Postgres, nunca voltava no GET).
+  observacoes: string | null;
 }
 
 export interface ContatoClientePedidoDto {
@@ -141,6 +158,23 @@ export interface CondicaoPagamentoResumoPedidoDto {
   nome: string | null;
 }
 
+// Notas fiscais vinculadas ao pedido (N:N via NotaFiscalPedido) - um
+// pedido FATURADO/PARCIALMENTE_FATURADO pode ter mais de uma (faturamento
+// parcial, ver comentario em PEDIDO_DETALHE_INCLUDE). `chave` exposto so
+// pra o front decidir se mostra o link de PDF sem precisar tentar a
+// chamada primeiro (null = nota sem NF-e sincronizada, ex: so NFS-e - fora
+// de escopo, ver resolverCaminhoPdfNotaFiscal) - nunca usado pra montar o
+// caminho do arquivo no front, isso e' sempre resolvido no backend.
+export interface NotaFiscalResumoPedidoDto {
+  id: string;
+  numero: number | null;
+  serie: string | null;
+  chave: string | null;
+  dataEmissao: Date | null;
+  statusNfe: string | null;
+  valorTotalNotaFiscal: string | null;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
@@ -173,6 +207,13 @@ export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   // PedidoHistoricoStatus (ver comentario em PEDIDO_DETALHE_INCLUDE). null
   // pra pedido sincronizado do Radar ou ainda AGUARDANDO_APROVACAO.
   horarioEnvio: Date | null;
+  // Observacoes do pedido (2026-09-21) - null pra pedido sincronizado do
+  // Radar (nao expoe observacao livre, ver Pedido.observacoes no schema).
+  observacoes: string | null;
+  // Notas fiscais vinculadas (ver NotaFiscalResumoPedidoDto acima) -
+  // ordenadas por dataEmissao (mais antiga primeiro), sempre lista (nunca
+  // null) - vazia quando nao ha nenhuma nota vinculada ainda.
+  notasFiscais: NotaFiscalResumoPedidoDto[];
 }
 
 export function paraClienteResumoPedidoDto(
@@ -235,6 +276,7 @@ function paraPedidoItemDto(
     idItemGrade2: item.idItemGrade2,
     idItemGrade3: item.idItemGrade3,
     quantidadeVenda: item.quantidadeVenda?.toString() ?? null,
+    unidade: item.unidade,
     valorUnitario: item.valorUnitario?.toString() ?? null,
     valorTotal: item.valorTotal?.toString() ?? null,
     situacao: item.situacao,
@@ -252,6 +294,7 @@ function paraPedidoItemDto(
       ? { id: item.decididoPor.id, nome: item.decididoPor.nome }
       : null,
     decididoEm: item.decididoEm,
+    observacoes: item.observacoes,
   };
 }
 
@@ -265,6 +308,7 @@ export function paraPedidoDetalheDto(
     contato?: ContatoCliente | null;
     historicoStatus?: PedidoHistoricoStatus[];
     itens: (PedidoItem & { produto: Produto | null; decididoPor: Usuario | null })[];
+    notasFiscais?: (NotaFiscalPedido & { notaFiscal: NotaFiscal })[];
   },
   temSolicitacaoDescontoPendente = false,
 ): PedidoDetalheDto {
@@ -301,6 +345,16 @@ export function paraPedidoDetalheDto(
     vendedorResponsavel: pedido.vendedor
       ? { id: pedido.vendedor.id, nome: pedido.vendedor.nome }
       : null,
+    observacoes: pedido.observacoes,
     itens: pedido.itens.map(paraPedidoItemDto),
+    notasFiscais: (pedido.notasFiscais ?? []).map(({ notaFiscal }) => ({
+      id: notaFiscal.id,
+      numero: notaFiscal.numero,
+      serie: notaFiscal.serie,
+      chave: notaFiscal.chave,
+      dataEmissao: notaFiscal.dataEmissao,
+      statusNfe: notaFiscal.statusNfe,
+      valorTotalNotaFiscal: notaFiscal.valorTotalNotaFiscal?.toString() ?? null,
+    })),
   };
 }

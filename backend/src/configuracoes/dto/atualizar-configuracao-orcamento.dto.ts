@@ -12,4 +12,7 @@ export class AtualizarConfiguracaoOrcamentoDto {
 
   @IsBoolean()
   permitirAlteracaoVendedorOrcamentoCriado!: boolean;
+
+  @IsBoolean()
+  permitirItensRepetidos!: boolean;
 }

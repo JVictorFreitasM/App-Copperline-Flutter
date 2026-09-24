@@ -57,6 +57,8 @@ export function GraficoBarrasComparativo({
               borderRadius: 12,
               border: "none",
               boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
+              backgroundColor: "var(--color-surface)",
+              color: "var(--color-ink)",
             }}
           />
           <Legend

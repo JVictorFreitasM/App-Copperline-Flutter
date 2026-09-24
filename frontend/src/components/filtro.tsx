@@ -51,3 +51,39 @@ export function CampoFiltro({
     </label>
   );
 }
+
+// Variante dropdown de CampoFiltro (Epico 1.2, filtro "Equipe" do painel) -
+// mesmo <FiltroForm>, so um <select> em vez de <input>. `opcaoPadrao`
+// (ex: "Toda a equipe") sempre com value="" - omitir o campo da query
+// string equivale a "sem filtro" no backend (ver painel/page.tsx).
+export function SelectFiltro({
+  label,
+  name,
+  defaultValue,
+  opcaoPadrao,
+  opcoes,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string;
+  opcaoPadrao: string;
+  opcoes: { value: string; label: string }[];
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-sm text-muted">
+      {label}
+      <select
+        name={name}
+        defaultValue={defaultValue ?? ""}
+        className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+      >
+        <option value="">{opcaoPadrao}</option>
+        {opcoes.map((opcao) => (
+          <option key={opcao.value} value={opcao.value}>
+            {opcao.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}

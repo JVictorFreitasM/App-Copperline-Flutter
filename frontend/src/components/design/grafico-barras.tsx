@@ -73,6 +73,8 @@ export function GraficoBarras({
                 borderRadius: 12,
                 border: "none",
                 boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
+                backgroundColor: "var(--color-surface)",
+                color: "var(--color-ink)",
               }}
             />
             {/* Cor única (sem destaque pra maior barra) e maxBarSize maior
@@ -109,6 +111,8 @@ export function GraficoBarras({
               borderRadius: 12,
               border: "none",
               boxShadow: "0 1px 8px rgba(0,0,0,0.08)",
+              backgroundColor: "var(--color-surface)",
+              color: "var(--color-ink)",
             }}
           />
           <Bar dataKey="valor" radius={[8, 8, 0, 0]} maxBarSize={48}>

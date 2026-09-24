@@ -30,13 +30,15 @@ export async function consultarEstoque(
       { cache: "no-store" },
     );
 
-    // Estoque.svc (fonte atual, ver comentário em lib/estoque.ts) retorna
-    // saldo CONSOLIDADO por produto - um item com quantidade "0" ainda
-    // conta como item (linha existe no banco), mas pro usuário isso é
-    // exatamente "sem saldo", não uma localização com saldo zerado.
-    const temSaldoReal = resultado.itens.some((item) => Number(item.quantidade) > 0);
+    // "Sem saldo" só quando NENHUMA das duas fontes tem algo a mostrar -
+    // ver comentário em lib/estoque.ts, são métricas diferentes (lote
+    // físico vs. disponível líquido de comprometido), então basta uma
+    // delas ter dado positivo pra já valer mostrar a tela com saldo.
+    const temLoteFisico = resultado.itens.some((item) => Number(item.quantidade) > 0);
+    const temDisponivel =
+      resultado.quantidadeDisponivel !== null && Number(resultado.quantidadeDisponivel) !== 0;
 
-    return !temSaldoReal
+    return !temLoteFisico && !temDisponivel
       ? { status: "sem-saldo", identificador }
       : { status: "com-saldo", identificador, resultado };
   } catch (error) {

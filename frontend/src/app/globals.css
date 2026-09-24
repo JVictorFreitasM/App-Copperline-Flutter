@@ -1,16 +1,19 @@
 @import "tailwindcss";
 
 /*
- * Tokens do design system do projeto (ver skill design-system) - paleta
- * fixa, sem alternância claro/escuro (fora do escopo da skill hoje, por
- * isso sem @media prefers-color-scheme aqui, diferente do template padrão
- * do create-next-app).
+ * Tokens do design system do projeto (ver skill design-system). Paleta
+ * clara (Constructive) como padrão + tema escuro como alternativa via
+ * toggle (ver theme-toggle.tsx) - NÃO troca automaticamente com
+ * prefers-color-scheme sozinho (o script inline em layout.tsx só usa a
+ * preferência do SO como valor INICIAL na primeira visita, sem tema salvo;
+ * depois disso, a escolha do usuário em localStorage manda). Os valores de
+ * cor abaixo são referenciados por nome (--color-*) para que os utilitários
+ * Tailwind (bg-background, text-ink, ...) mudem sozinhos quando o atributo
+ * data-theme muda - nenhum componente precisa saber qual tema está ativo.
  */
 @theme {
   /* Tokens extraídos da referência "Constructive" (ver skill
-     design-system) - substituem a leitura visual anterior (outra
-     referência, sidebar escura) que ficou desatualizada depois que o
-     projeto passou a seguir esta imagem. */
+     design-system) - tema claro, padrão do sistema. */
   --color-background: #f5f6fa;
   --color-surface: #ffffff;
   --color-ink: #12141d;
@@ -18,16 +21,27 @@
   --color-primary: #4a6cf7;
   --color-primary-light: #e7ecfe;
 
-  /* Casca do app (sidebar + topbar) - BRANCA na referência, não escura
-     (correção: uma versão anterior usava sidebar escura, que não existe
-     na imagem "Constructive"). Reaproveita surface/ink/muted/primary-light
-     acima, sem precisar de tokens "sidebar-*" separados. */
+  /* Casca do app (sidebar + topbar) - BRANCA na referência clara, não
+     escura. Reaproveita surface/ink/muted/primary-light acima, sem
+     precisar de tokens "sidebar-*" separados. */
   --color-badge: #f0f1f5;
+
+  /* Fundo sólido de botão/pill de ênfase (PrimaryButton, badge enfase,
+     botão de confirmação de modal) - INDEPENDENTE de `ink`: `ink` é cor de
+     TEXTO e inverte de escuro->claro no tema escuro, mas o botão sólido
+     precisa continuar de alto contraste contra `background` nos dois temas
+     (não pode virar um botão quase-branco em cima de fundo já claro, nem
+     quase-preto em cima de fundo já preto). */
+  --color-solid: #12141d;
+  --color-on-solid: #ffffff;
 
   /* Acentos de KPI/status do painel (donut rings, barras de estatística,
      chip de ícone dos cards de evento) - cada card de KPI tem sua PRÓPRIA
      cor (não é semântica fixa tipo sucesso/erro), só usados em
-     visualização de dado, nunca em UI genérica (botão, link, texto). */
+     visualização de dado, nunca em UI genérica (botão, link, texto). Cores
+     "cheias" (accent-orange/red/green, primary) são fixas nos dois temas -
+     só as variantes "-light" (trilho/fundo de chip) mudam, ver overrides
+     de tema escuro abaixo. */
   --color-accent-orange: #ffa53e;
   --color-accent-orange-light: #ffead2;
   --color-accent-red: #ff6b6b;
@@ -39,6 +53,37 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Tema escuro - PRETO verdadeiro (#000), não azul-marinho/cinza-azulado
+ * (pedido explícito, pra não repetir o visual "sidebar escura" antigo que
+ * a skill design-system já registrou como referência abandonada). Cor de
+ * ação continua AZUL (`primary` não muda) - só a "casca" (fundo/superfície/
+ * texto) inverte. Ativado via [data-theme="dark"] na tag <html>, aplicado
+ * pelo script inline em layout.tsx antes da hidratação (evita flash de
+ * tema errado) e alternado em runtime por theme-toggle.tsx.
+ */
+:root[data-theme="dark"] {
+  /* background um pouco acima de preto puro (não #000) - contrasta melhor
+     com `surface` dos cards (ajuste pedido pelo usuário, 2026-09-21); ainda
+     lido como "preto", só não achatado contra o cinza-escuro dos cards. */
+  --color-background: #0d0d0f;
+  --color-surface: #1a1a1d;
+  --color-ink: #f2f2f4;
+  --color-muted: #9a9aa3;
+  --color-badge: #26262a;
+
+  --color-solid: #f2f2f4;
+  --color-on-solid: #0a0a0a;
+
+  /* Pastel sólido (#ffe1e1 etc) fica "gritante" sobre preto - vira
+     translúcido sobre a cor cheia correspondente, mesmo efeito visual de
+     "trilho claro"/"chip de fundo suave" adaptado a fundo escuro. */
+  --color-primary-light: rgb(74 108 247 / 18%);
+  --color-accent-orange-light: rgb(255 165 62 / 18%);
+  --color-accent-red-light: rgb(255 107 107 / 18%);
+  --color-accent-green-light: rgb(46 212 122 / 18%);
 }
 
 body {

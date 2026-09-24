@@ -33,6 +33,8 @@ class ResultadoEstoque {
     required this.produtoId,
     required this.codigo,
     required this.itens,
+    required this.quantidadeFisicaTotal,
+    required this.quantidadeDisponivel,
     required this.atualizadoEm,
   });
 
@@ -44,15 +46,28 @@ class ResultadoEstoque {
           .cast<Map<String, dynamic>>()
           .map(EstoqueItem.fromJson)
           .toList(),
+      quantidadeFisicaTotal: json['quantidadeFisicaTotal'] as String?,
+      quantidadeDisponivel: json['quantidadeDisponivel'] as String?,
       atualizadoEm: json['atualizadoEm'] as String?,
     );
   }
 
   final String produtoId;
   final String codigo;
+  // Lotes reais por local de estocagem (consulta pontual, tempo real) -
+  // sempre vazio quando este resultado vem do snapshot offline (ver
+  // MobileSnapshotService, backend) - buscar lote produto por produto nao
+  // escala pro volume do snapshot.
   final List<EstoqueItem> itens;
-  // Momento da ultima sincronizacao (nao da consulta em si) - null quando
-  // o produto existe mas nunca teve saldo sincronizado.
+  // Soma de itens[].quantidade - null quando itens esta vazio (nao
+  // inventar soma sem os lotes reais).
+  final String? quantidadeFisicaTotal;
+  // Saldo liquido de pedido comprometido em aberto - metrica DIFERENTE de
+  // quantidadeFisicaTotal, pode ser bem menor (ou negativa). Null quando o
+  // produto existe mas nunca teve saldo sincronizado.
+  final String? quantidadeDisponivel;
+  // Momento da ultima sincronizacao de quantidadeDisponivel (nao da
+  // consulta em si) - null quando nunca sincronizado.
   final String? atualizadoEm;
 }
 

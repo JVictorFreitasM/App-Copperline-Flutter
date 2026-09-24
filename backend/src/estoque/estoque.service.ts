@@ -1,19 +1,31 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { WkBiClientService } from '../wk-bi-client/wk-bi-client.service';
+import { buildSaldoEstoqueLotesConfig } from '../wk-bi-client/build-saldo-estoque-lotes-config';
+import { mapearLotesWkBi, somarQuantidadeFisicaTotal } from './mapear-lotes-wk-bi';
 import type { EstoqueConsultaDto } from './dto/estoque-response.dto';
 import type { ProdutoMaisPedidoDto } from './dto/estoque-mais-pedidos.dto';
 
-// So leitura sobre dado ja sincronizado (validacao do produto + saldo, ver
-// SaldoEstoqueSyncStrategy) - sem regra de negocio nossa, sem entidade de
-// dominio (ver skill nest-endpoint, criterio de DDD). Ate a sincronizacao
-// de saldo de estoque, este service consultava o WK BI (Executivo.svc) em
-// tempo real a cada requisicao - trocado por leitura da tabela local
-// (SaldoEstoque) pra eliminar a dependencia sincrona do servico legado a
-// cada consulta do app comercial. A validacao de existencia do produto
-// abaixo NAO mudou nesta troca (pedido explicito da OS de sync de saldo).
+// Combina duas fontes DIFERENTES de estoque, que nao devem ser confundidas
+// (ver skill wk-radar-bi-client, achados de teste real): saldo LIQUIDO de
+// pedido comprometido, ja sincronizado na tabela local SaldoEstoque
+// (Estoque.svc, ver SaldoEstoqueSyncStrategy); e lotes/local de estocagem,
+// consultados em TEMPO REAL a cada requisicao (Executivo.svc, Padrao 1 da
+// skill - sem sync ainda, ver OS-pendentes-claude-code.md). Sem entidade
+// de dominio (ver skill nest-endpoint, criterio de DDD) - so combina dado
+// de duas fontes externas, nenhuma regra de negocio nossa aqui.
 @Injectable()
 export class EstoqueService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly wkBiEmpresa: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wkBiClientService: WkBiClientService,
+    private readonly configService: ConfigService,
+  ) {
+    this.wkBiEmpresa = this.configService.getOrThrow<string>('WK_BI_EMPRESA');
+  }
 
   async consultarPorIdentificador(
     identificador: string,
@@ -30,38 +42,45 @@ export class EstoqueService {
 
     if (!produto.codigo) {
       // Caso raro: stub incompleto criado por PedidoSyncStrategy (OS 07)
-      // ainda sem codigo real - Estoque.svc so identifica produto por
-      // CodigoProduto, sem ele nao ha o que buscar.
+      // ainda sem codigo real - nenhuma das duas fontes de estoque
+      // identifica produto por outra coisa alem do CodigoProduto.
       throw new NotFoundException(
         `Produto '${identificador}' ainda não possui código sincronizado`,
       );
     }
 
-    const saldo = await this.prisma.saldoEstoque.findUnique({
-      where: { codigoProduto: produto.codigo },
-    });
-
-    if (!saldo) {
-      // Produto existe mas nunca teve saldo sincronizado (fora do filtro
-      // Estoque Proprio, ou a sincronizacao ainda nao rodou pra ele) -
-      // itens vazio, nao erro (mesmo contrato ja usado pra "sem saldo").
-      return { produtoId: produto.id, codigo: produto.codigo, itens: [], atualizadoEm: null };
-    }
+    const [saldo, itens] = await Promise.all([
+      this.prisma.saldoEstoque.findUnique({
+        where: { codigoProduto: produto.codigo },
+      }),
+      this.buscarLotes(produto.codigo),
+    ]);
 
     return {
       produtoId: produto.id,
       codigo: produto.codigo,
-      itens: [
-        {
-          localCodigo: null,
-          localNome: null,
-          lote: null,
-          fabricadoEm: null,
-          quantidade: saldo.quantidadeDisponivel.toString(),
-        },
-      ],
-      atualizadoEm: saldo.atualizadoEm.toISOString(),
+      itens,
+      quantidadeFisicaTotal: somarQuantidadeFisicaTotal(itens),
+      // Produto existe mas nunca teve saldo sincronizado (fora do filtro
+      // Estoque Proprio, ou a sincronizacao ainda nao rodou pra ele) -
+      // null, nao erro (mesmo contrato ja usado antes desta mudanca).
+      quantidadeDisponivel: saldo ? saldo.quantidadeDisponivel.toString() : null,
+      atualizadoEm: saldo ? saldo.atualizadoEm.toISOString() : null,
     };
+  }
+
+  // CodProdutos so aceita UM codigo valido por chamada (lista ou codigo
+  // invalido nao filtram nada, devolvem o catalogo inteiro - ver skill
+  // wk-radar-bi-client) - codigo aqui SEMPRE vem de Produto.codigo, ja
+  // validado contra o cadastro pela query acima, nunca do que o usuario
+  // digitou direto.
+  private async buscarLotes(codigoProduto: string) {
+    const config = buildSaldoEstoqueLotesConfig({
+      empresa: this.wkBiEmpresa,
+      codigoProduto,
+    });
+    const linhas = await this.wkBiClientService.buscarRelatorioExportacaoAutomatica(config);
+    return mapearLotesWkBi(linhas);
   }
 
   // Top produtos mais pedidos (pedido do usuario: "estoque deve mostrar os

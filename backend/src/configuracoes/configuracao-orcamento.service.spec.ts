@@ -7,6 +7,7 @@ function linhaPadrao(overrides: Record<string, unknown> = {}) {
     permitirVendedorTransformarEmPedido: true,
     criarPedidoSugeridoComoOrcamento: true,
     permitirAlteracaoVendedorOrcamentoCriado: true,
+    permitirItensRepetidos: false,
     atualizadoEm: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -42,11 +43,12 @@ describe('ConfiguracaoOrcamentoService', () => {
       permitirVendedorTransformarEmPedido: true,
       criarPedidoSugeridoComoOrcamento: true,
       permitirAlteracaoVendedorOrcamentoCriado: true,
+      permitirItensRepetidos: false,
       atualizadoEm: '2026-01-01T00:00:00.000Z',
     });
   });
 
-  it('atualizar() grava os 4 campos', async () => {
+  it('atualizar() grava os 5 campos', async () => {
     const prisma = prismaFake(linhaPadrao());
     const service = new ConfiguracaoOrcamentoService(prisma as never);
 
@@ -55,6 +57,7 @@ describe('ConfiguracaoOrcamentoService', () => {
       permitirVendedorTransformarEmPedido: false,
       criarPedidoSugeridoComoOrcamento: true,
       permitirAlteracaoVendedorOrcamentoCriado: false,
+      permitirItensRepetidos: true,
     });
 
     expect(prisma.configuracaoOrcamento.update).toHaveBeenCalledWith({
@@ -64,6 +67,7 @@ describe('ConfiguracaoOrcamentoService', () => {
         permitirVendedorTransformarEmPedido: false,
         criarPedidoSugeridoComoOrcamento: true,
         permitirAlteracaoVendedorOrcamentoCriado: false,
+        permitirItensRepetidos: true,
       },
     });
     expect(config.habilitarCriacaoOrcamento).toBe(false);

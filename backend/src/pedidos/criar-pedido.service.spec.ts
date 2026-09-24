@@ -52,11 +52,25 @@ function prismaFake(overrides: {
   const solicitacaoDescontoUpdate = jest.fn().mockResolvedValue(undefined);
   const pedidoHistoricoStatusCreate = jest.fn().mockResolvedValue(undefined);
 
+  // Guarda de regressao: desconto de estoque acontece em OUTRA etapa do
+  // fluxo da empresa (fora deste sistema), nunca aqui - ver teste dedicado
+  // "nunca toca em SaldoEstoque/EstoqueLote" abaixo. Espioes explicitos
+  // (em vez de deixar as chaves ausentes) pra falhar com mensagem clara
+  // ("expected... not to have been called") se algum dia alguem tentar
+  // decrementar estoque na criacao de pedido, em vez de um TypeError
+  // criptico de "undefined nao e uma funcao".
+  const saldoEstoqueUpdate = jest.fn();
+  const saldoEstoqueUpsert = jest.fn();
+  const estoqueLoteUpdate = jest.fn();
+  const estoqueLoteUpsert = jest.fn();
+
   const tx = {
     pedido: { create: pedidoCreate },
     pedidoItem: { createMany: pedidoItemCreateMany },
     solicitacaoDesconto: { update: solicitacaoDescontoUpdate },
     pedidoHistoricoStatus: { create: pedidoHistoricoStatusCreate },
+    saldoEstoque: { update: saldoEstoqueUpdate, upsert: saldoEstoqueUpsert },
+    estoqueLote: { update: estoqueLoteUpdate, upsert: estoqueLoteUpsert },
   };
 
   return {
@@ -192,6 +206,27 @@ function configuracaoRastreioServiceFake(
 // Helper - monta os 6 argumentos do construtor com fakes padrao, so
 // sobrescrevendo o que o teste precisa (a maioria dos testes so mexe nos
 // 2-3 primeiros).
+function configuracaoOrcamentoServiceFake(
+  overrides: {
+    habilitarCriacaoOrcamento?: boolean;
+    permitirVendedorTransformarEmPedido?: boolean;
+    permitirAlteracaoVendedorOrcamentoCriado?: boolean;
+    permitirItensRepetidos?: boolean;
+  } = {},
+) {
+  return {
+    obter: jest.fn().mockResolvedValue({
+      habilitarCriacaoOrcamento: overrides.habilitarCriacaoOrcamento ?? true,
+      permitirVendedorTransformarEmPedido: overrides.permitirVendedorTransformarEmPedido ?? true,
+      criarPedidoSugeridoComoOrcamento: true,
+      permitirAlteracaoVendedorOrcamentoCriado:
+        overrides.permitirAlteracaoVendedorOrcamentoCriado ?? true,
+      permitirItensRepetidos: overrides.permitirItensRepetidos ?? false,
+      atualizadoEm: '2026-01-01T00:00:00.000Z',
+    }),
+  };
+}
+
 function criarService(
   prisma: ReturnType<typeof prismaFake>,
   produtoCalculoService = produtoCalculoServiceFake(),
@@ -199,6 +234,7 @@ function criarService(
   pedidoErpClientService = pedidoErpClientServiceFake(),
   configuracaoTabelaPrecoService = configuracaoTabelaPrecoServiceFake(),
   configuracaoRastreioService = configuracaoRastreioServiceFake(),
+  configuracaoOrcamentoService = configuracaoOrcamentoServiceFake(),
 ) {
   return new CriarPedidoService(
     prisma as never,
@@ -207,6 +243,7 @@ function criarService(
     pedidoErpClientService as never,
     configuracaoTabelaPrecoService as never,
     configuracaoRastreioService as never,
+    configuracaoOrcamentoService as never,
   );
 }
 
@@ -218,6 +255,55 @@ const INPUT_BASE: CriarPedidoInput = {
 };
 
 describe('CriarPedidoService.criar', () => {
+  // Guarda de dados (pedido explicito do usuario, 2026-09-23): o web ja
+  // evita duplicata na UI (abre o item existente pra edicao), mas a API
+  // tem que rejeitar de qualquer client (mobile, chamada direta). Roda
+  // ANTES de qualquer consulta ao banco - rejeita cedo, sem gastar
+  // trabalho com um pedido que ja sabe que vai falhar.
+  it('lanca BadRequestException quando o mesmo produto aparece duas vezes no pedido, sem consultar o vendedor antes', async () => {
+    const prisma = prismaFake();
+    const service = criarService(prisma);
+    const inputComDuplicata: CriarPedidoInput = {
+      ...INPUT_BASE,
+      itens: [
+        { produtoId: 'produto-1', metrosDesejados: 90, percentualDesconto: 10 },
+        { produtoId: 'produto-1', metrosDesejados: 50, percentualDesconto: 0 },
+      ],
+    };
+
+    await expect(
+      service.criar(inputComDuplicata, 'u1', ESCOPO_TODOS),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.vendedor.findFirst).not.toHaveBeenCalled();
+  });
+
+  // 2026-09-24 - ConfiguracaoOrcamento.permitirItensRepetidos ligado
+  // (aba "Orcamento" da tela de Configuracoes) pula a guarda acima por
+  // completo, aceitando o mesmo produtoId mais de uma vez.
+  it('nao lanca excecao de duplicata quando permitirItensRepetidos esta ligado', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      configuracaoOrcamentoServiceFake({ permitirItensRepetidos: true }),
+    );
+    const inputComDuplicata: CriarPedidoInput = {
+      ...INPUT_BASE,
+      itens: [
+        { produtoId: 'produto-1', metrosDesejados: 90, percentualDesconto: 10 },
+        { produtoId: 'produto-1', metrosDesejados: 50, percentualDesconto: 0 },
+      ],
+    };
+
+    await expect(
+      service.criar(inputComDuplicata, 'u1', ESCOPO_TODOS),
+    ).resolves.toBeDefined();
+  });
+
   it('lanca ForbiddenException quando o usuario autenticado nao e um vendedor cadastrado (sem vendedorId)', async () => {
     const prisma = prismaFake({ vendedor: null });
     const service = criarService(prisma);
@@ -451,6 +537,36 @@ describe('CriarPedidoService.criar', () => {
     });
   });
 
+  // Guarda de regressao (pedido explicito do usuario, 2026-09-22): o
+  // desconto de saldo em estoque acontece em OUTRA etapa do fluxo da
+  // empresa (fora deste sistema) - CriarPedidoService NUNCA deve escrever
+  // em SaldoEstoque/EstoqueLote, nem no caminho de sucesso (ENVIADO) nem
+  // quando cai em aprovacao (AGUARDANDO_APROVACAO). As duas tabelas so
+  // sao escritas pelas sync strategies (SaldoEstoqueSyncStrategy/
+  // EstoqueLoteSyncStrategy), nunca por um fluxo de pedido.
+  it('nunca toca em SaldoEstoque/EstoqueLote ao criar pedido - desconto de estoque e outra etapa do fluxo, fora deste sistema', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake();
+    const solicitacoesDescontoService = solicitacoesDescontoServiceFake({
+      necessitaAprovacao: true,
+      solicitacao: { id: 'solicitacao-1' },
+    });
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoService,
+      pedidoErpClientService,
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(prisma._tx.saldoEstoque.update).not.toHaveBeenCalled();
+    expect(prisma._tx.saldoEstoque.upsert).not.toHaveBeenCalled();
+    expect(prisma._tx.estoqueLote.update).not.toHaveBeenCalled();
+    expect(prisma._tx.estoqueLote.upsert).not.toHaveBeenCalled();
+  });
+
   it('persiste codigoTabelaPreco e contatoId escolhidos na criacao', async () => {
     const prisma = prismaFake();
     const service = criarService(prisma);
@@ -539,6 +655,119 @@ describe('CriarPedidoService.criar', () => {
         }),
       ],
     });
+  });
+
+  // 2026-09-21 - WK Radar rejeitou ValorUnitario com mais de 2 casas
+  // decimais ("nao permite mais de 2 casas decimais"); precoVenda por
+  // metro (ver ProdutoCalculoService.resolverPrecoVenda, preco por KM
+  // convertido) pode chegar aqui com ate 6 casas.
+  it('arredonda valorUnitario a 2 casas decimais no payload do ERP', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake({
+      quantidade: 3,
+      unidade: 'METRO',
+      valorUnitario: 3.079998,
+      valorFinal: 8.32,
+    });
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientService,
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(pedidoErpClientService.criar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // 3 metros -> 0.003 km no payload do ERP (ver teste dedicado
+        // abaixo pra um caso mais realista, 1000 metros -> 1 km).
+        itens: [expect.objectContaining({ quantidade: 0.003, valorUnitario: 3.08 })],
+      }),
+    );
+  });
+
+  // 2026-09-21 - achado a partir do bug reportado pelo usuario ("quantidade
+  // aparece em metros, deveria ser km"): quantidadeVenda persistido E o
+  // payload do ERP precisam estar em KM pra item METRO/retalho (confirmado
+  // cruzando dados reais do Radar - quantidadeVenda de pedidos sincronizados
+  // vem sempre fracionario pequeno, nunca inteiro grande tipo "1000") -
+  // internamente item.quantidade continua em METROS (calculo de peso,
+  // subtotal bruto), só a conversao pro externo (ERP + coluna
+  // quantidadeVenda) que muda.
+  it('converte quantidade de metros pra KM no quantidadeVenda persistido e no payload do ERP (item METRO)', async () => {
+    const prisma = prismaFake();
+    const produtoCalculoService = produtoCalculoServiceFake({
+      quantidade: 1000, // 1km convertido pra metros na chamada do calculo
+      unidade: 'METRO',
+      valorUnitario: 3.08,
+      valorFinal: 3079.98,
+    });
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      produtoCalculoService,
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientService,
+    );
+
+    await service.criar(
+      { ...INPUT_BASE, itens: [{ produtoId: 'produto-1', metrosDesejados: 1000, percentualDesconto: 0 }] },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(pedidoErpClientService.criar).toHaveBeenCalledWith(
+      expect.objectContaining({ itens: [expect.objectContaining({ quantidade: 1 })] }),
+    );
+    expect(prisma._tx.pedidoItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ quantidadeVenda: 1, unidade: 'METRO' })],
+    });
+  });
+
+  it('NAO converte quantidade de item PECA (contagem de pecas, nao metros)', async () => {
+    const prisma = prismaFake();
+    const service = criarService(prisma); // default fake: unidade PECA, quantidade 3
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(prisma._tx.pedidoItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ quantidadeVenda: 3, unidade: 'PECA' })],
+    });
+  });
+
+  // 2026-09-21 - observacoes agora e' campo do PEDIDO (nao mais so por
+  // item, ver CriarPedidoItemDto.observacoes/PedidoItem.observacoes,
+  // conceito separado ja existente).
+  it('persiste observacoes no PEDIDO (nao so por item)', async () => {
+    const prisma = prismaFake();
+    const service = criarService(prisma);
+
+    await service.criar(
+      { ...INPUT_BASE, observacoes: 'entregar pela manha' },
+      'u1',
+      ESCOPO_TODOS,
+    );
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ observacoes: 'entregar pela manha' }),
+      }),
+    );
+  });
+
+  it('observacoes omitido: persiste null no pedido', async () => {
+    const prisma = prismaFake();
+    const service = criarService(prisma);
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(prisma._tx.pedido.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ observacoes: null }),
+      }),
+    );
   });
 
   it('sem tabela de preco selecionada: falha antes de chamar o ERP', async () => {

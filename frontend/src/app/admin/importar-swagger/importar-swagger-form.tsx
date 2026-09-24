@@ -60,7 +60,7 @@ export function ImportarSwaggerForm() {
           {/* Aviso proeminente e não ignorável (criterio de aceite explicito
               da OS) - bloco de destaque total (bg-ink), nao um rodape
               discreto. */}
-          <div className="rounded-card bg-ink p-4 text-sm font-semibold text-white">
+          <div className="rounded-card bg-solid p-4 text-sm font-semibold text-on-solid">
             ⚠ Isto é um RASCUNHO gerado automaticamente. Revise campo a campo antes de
             aplicar — nunca cole isto em produção sem revisão humana (cursor incremental,
             chave de dedup e campos aninhados/array nunca são inferidos sozinhos).

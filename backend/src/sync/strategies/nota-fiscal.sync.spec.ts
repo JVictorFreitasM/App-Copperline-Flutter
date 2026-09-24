@@ -13,13 +13,16 @@ describe('NotaFiscalSyncStrategy.map', () => {
     const bruto: WkRadarNotaFiscal = {
       id: '321',
       codigoIntegrador: null,
-      chave: '35260812345678000199550010000001231234567890',
+      // Campo top-level `chave` presente mas IGNORADO de proposito (nao e'
+      // a chave de acesso, ver comentario em nota-fiscal.types.ts) - so
+      // pra garantir que o mapeamento nao usa esse valor por engano.
+      chave: '0126-000321',
       tipo: 'Saida',
       numero: 123,
       serie: '1',
       dataEmissao: '2026-08-15T10:00:00',
       pedidos: [{ id: 'pedido-1' }, { id: 'pedido-2' }, { id: null }],
-      nfe: { status: 'Autorizada' },
+      nfe: { status: 'Autorizada', chaveAcesso: '35260812345678000199550010000001231234567890' },
       nfse: { nfseGerada: false, nfseCancelada: false },
       total: { valorTotalNotaFiscal: 500 },
     };
@@ -40,6 +43,19 @@ describe('NotaFiscalSyncStrategy.map', () => {
       valorTotalNotaFiscal: 500,
       pedidosExternoIds: ['pedido-1', 'pedido-2'],
     });
+  });
+
+  it('chave fica null quando a nota so tem NFS-e (sem bloco nfe)', () => {
+    const bruto: WkRadarNotaFiscal = {
+      id: '322',
+      chave: '0126-000322',
+      nfe: null,
+      nfse: { nfseGerada: true, nfseCancelada: false },
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.chave).toBeNull();
   });
 });
 
@@ -124,7 +140,17 @@ function prismaFake(notaExistente: { statusNfe: string | null } | null) {
       create: jest.fn().mockResolvedValue(undefined),
     },
     pedido: { upsert: jest.fn().mockResolvedValue({ id: 'pedido-1', incompleto: false }) },
-    eventoNotificacao: { create: jest.fn().mockResolvedValue(undefined) },
+    eventoNotificacao: {
+      create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'evento-1',
+        ...data,
+      })),
+    },
+    // registrarEventoNotificacao tambem resolve destinatario do inbox web
+    // (NotificacaoUsuario, Epico 5) na mesma transacao - NOTA_FISCAL_REJEITADA
+    // e' broadcast (tx.usuario.findMany), sem usuario cadastrado nesses testes.
+    usuario: { findMany: jest.fn().mockResolvedValue([]) },
+    notificacaoUsuario: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
   return {
     tx,

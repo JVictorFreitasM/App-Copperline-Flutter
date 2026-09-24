@@ -17,6 +17,8 @@ export interface OpcoesCalculo {
   percentualDesconto?: number;
 }
 
+const METROS_POR_KM = 1000;
+
 // OS-novas-implementacoes.md Bloco 1 - valorFinal e' valorTotal (base) com
 // percentualDesconto aplicado (igual a valorTotal quando sem desconto).
 // margemLucro fica SEMPRE null por enquanto - formula pendente de
@@ -110,6 +112,18 @@ export class ProdutoCalculoService {
   // especificamente, um preco de outra fonte seria enganoso. Sem
   // codigoTabela, comportamento original: tabela selecionada globalmente,
   // com fallback pro precoVenda cru sincronizado do Radar.
+  //
+  // Conversao por 1000 (2026-09-21, bug reportado pelo usuario: "1km
+  // entendido como muito mais que 1km"): tanto o preco da tabela quanto
+  // Produto.precoVenda cru vem do WK Radar em preco POR KM, nao por
+  // metro - confirmado cruzando itens_tabela_preco.preco com o
+  // PedidoItem.valorUnitario de pedidos reais ja sincronizados (mesma
+  // ordem de grandeza, e PedidoItem.quantidadeVenda desses pedidos vem
+  // sempre fracionario pequeno tipo 0.05-2.2, o que so faz sentido como
+  // km - "0,05 metro" de cabo nao e um corte vendavel, "0,05km"=50m e).
+  // calcularQuantidadePedido (dominio) trabalha em METROS e preco POR
+  // METRO - a conversao acontece aqui, na borda onde o preco entra no
+  // sistema, pra o dominio nao precisar saber de onde o preco veio.
   private async resolverPrecoVenda(
     produto: { codigo: string | null; precoVenda: { toNumber(): number } | null },
     codigoTabela?: string,
@@ -120,14 +134,15 @@ export class ProdutoCalculoService {
         codigoTabela,
         produto.codigo,
       );
-      return preco ? Number(preco) : null;
+      return preco ? Number(preco) / METROS_POR_KM : null;
     }
 
     const precoTabela = produto.codigo
       ? await this.precoProdutoService.obterPrecoPorCodigo(produto.codigo)
       : null;
-    if (precoTabela) return Number(precoTabela);
-    return produto.precoVenda?.toNumber() ?? null;
+    if (precoTabela) return Number(precoTabela) / METROS_POR_KM;
+    const precoVendaCru = produto.precoVenda?.toNumber() ?? null;
+    return precoVendaCru !== null ? precoVendaCru / METROS_POR_KM : null;
   }
 }
 

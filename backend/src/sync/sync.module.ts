@@ -5,8 +5,10 @@ import { ErpClientModule } from '../erp-client/erp-client.module';
 import { EstoqueSvcClientModule } from '../estoque-svc-client/estoque-svc-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
+import { WkBiClientModule } from '../wk-bi-client/wk-bi-client.module';
 import { ClienteSyncStrategy } from './strategies/cliente.sync';
 import { CondicaoPagamentoSyncStrategy } from './strategies/condicao-pagamento.sync';
+import { EstoqueLoteSyncStrategy } from './strategies/estoque-lote.sync';
 import { FormaPagamentoSyncStrategy } from './strategies/forma-pagamento.sync';
 import { NotaFiscalSyncStrategy } from './strategies/nota-fiscal.sync';
 import { PedidoSyncStrategy } from './strategies/pedido.sync';
@@ -29,6 +31,7 @@ import { SyncService } from './sync.service';
     EstoqueSvcClientModule,
     EmpresarialSvcClientModule,
     TabelasPrecoModule,
+    WkBiClientModule,
   ],
   providers: [
     ClienteSyncStrategy,
@@ -36,6 +39,7 @@ import { SyncService } from './sync.service';
     PedidoSyncStrategy,
     NotaFiscalSyncStrategy,
     SaldoEstoqueSyncStrategy,
+    EstoqueLoteSyncStrategy,
     VendedorSyncStrategy,
     TabelaPrecoSyncStrategy,
     FormaPagamentoSyncStrategy,
@@ -56,6 +60,7 @@ import { SyncService } from './sync.service';
         pedido: PedidoSyncStrategy,
         notaFiscal: NotaFiscalSyncStrategy,
         saldoEstoque: SaldoEstoqueSyncStrategy,
+        estoqueLote: EstoqueLoteSyncStrategy,
         vendedor: VendedorSyncStrategy,
         tabelaPreco: TabelaPrecoSyncStrategy,
         formaPagamento: FormaPagamentoSyncStrategy,
@@ -66,6 +71,7 @@ import { SyncService } from './sync.service';
         pedido,
         notaFiscal,
         saldoEstoque,
+        estoqueLote,
         vendedor,
         tabelaPreco,
         formaPagamento,
@@ -77,6 +83,7 @@ import { SyncService } from './sync.service';
         PedidoSyncStrategy,
         NotaFiscalSyncStrategy,
         SaldoEstoqueSyncStrategy,
+        EstoqueLoteSyncStrategy,
         VendedorSyncStrategy,
         TabelaPrecoSyncStrategy,
         FormaPagamentoSyncStrategy,

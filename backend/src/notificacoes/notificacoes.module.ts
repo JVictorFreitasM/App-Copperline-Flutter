@@ -11,6 +11,8 @@ import { DispositivosService } from './dispositivos.service';
 import { FavoritosService } from './favoritos.service';
 import { NOTIFICACAO_QUEUE } from './notificacao.constants';
 import { NotificacaoDispatchService } from './notificacao-dispatch.service';
+import { NotificacaoUsuarioService } from './notificacao-usuario.service';
+import { NotificacoesController } from './notificacoes.controller';
 import { NotificacaoProcessor } from './notificacao.processor';
 import { NotificacaoScheduler } from './notificacao.scheduler';
 
@@ -21,7 +23,7 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     PushNotificationClientModule,
     BullModule.registerQueue({ name: NOTIFICACAO_QUEUE }),
   ],
-  controllers: [DispositivosController],
+  controllers: [DispositivosController, NotificacoesController],
   providers: [
     DispositivosService,
     // FavoritosService exportado pra ProdutosController (as rotas de
@@ -29,6 +31,7 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     // ordem de match de rota contra GET /produtos/:id).
     FavoritosService,
     NotificacaoDispatchService,
+    NotificacaoUsuarioService,
     NotificacaoProcessor,
     NotificacaoScheduler,
   ],
@@ -40,6 +43,6 @@ export class NotificacoesModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
-      .forRoutes(DispositivosController);
+      .forRoutes(DispositivosController, NotificacoesController);
   }
 }

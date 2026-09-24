@@ -36,7 +36,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
       <div
@@ -46,7 +46,7 @@ export function Modal({
         onClick={(evento) => evento.stopPropagation()}
         className={`flex max-h-[90vh] w-full ${largura} flex-col rounded-card bg-surface shadow-sm`}
       >
-        <div className="flex items-center justify-between gap-4 border-b border-line p-6 pb-4">
+        <div className="flex items-center justify-between gap-4 border-b border-ink/10 p-6 pb-4">
           {title && <h2 className="text-lg font-semibold text-ink">{title}</h2>}
           <button
             type="button"
@@ -58,7 +58,7 @@ export function Modal({
           </button>
         </div>
         <div className="overflow-y-auto p-6 pt-4">{children}</div>
-        {footer && <div className="border-t border-line p-6 pt-4">{footer}</div>}
+        {footer && <div className="border-t border-ink/10 p-6 pt-4">{footer}</div>}
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ export function ModalFooter({
         type="button"
         onClick={onConfirmar}
         disabled={confirmarDesabilitado}
-        className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+        className="inline-flex items-center justify-center gap-2 rounded-full bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
       >
         {rotuloConfirmar}
       </button>

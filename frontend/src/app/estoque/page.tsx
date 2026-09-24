@@ -3,24 +3,16 @@ import { exigirUsuarioAutenticado } from "@/lib/auth";
 import type { ProdutoMaisPedidoDto } from "@/lib/estoque";
 import { ListItem } from "@/components/design/list-item";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
+import { formatarQuantidade } from "@/lib/formatacao";
 import { BuscaEstoque } from "./busca-estoque";
 
 // Quarta tela de negocio (OS-WEB-14) - unica que nao e uma listagem
-// paginada de dado sincronizado, e sim uma busca pontual em tempo real
+// paginada de dado ja sincronizado, e sim uma busca pontual em tempo real
 // (endpoint on-demand da OS-BACKEND-12). Server Component so pra garantir
 // autenticacao antes de renderizar (mesmo padrao das telas anteriores) - a
 // interacao de busca em si vive no Client Component BuscaEstoque.
-// `identificador` (query string) permite chegar aqui com um codigo ja
-// preenchido - usado pelo atalho "Ver estoque" na tela de detalhe do
-// produto, pra nao precisar digitar o codigo de novo.
-export default async function EstoquePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ identificador?: string }>;
-}) {
+export default async function EstoquePage() {
   await exigirUsuarioAutenticado("/estoque");
-
-  const { identificador } = await searchParams;
 
   let maisPedidos: ProdutoMaisPedidoDto[] | null = null;
   let erroMaisPedidos: string | null = null;
@@ -47,12 +39,15 @@ export default async function EstoquePage({
             {maisPedidos.map((produto) => (
               <ListItem
                 key={produto.produtoId}
-                href={`/produtos/${produto.produtoId}`}
+                // Tela DEDICADA de estoque por produto (pedido explicito
+                // do usuario, 2026-09-23) - nunca a busca geral desta
+                // mesma pagina, ver estoque/[identificador]/page.tsx.
+                href={`/estoque/${encodeURIComponent(produto.codigo)}`}
                 titulo={produto.nome ?? produto.codigo}
-                subtitulo={`Código ${produto.codigo} · ${produto.quantidadeTotalPedida} unidade(s) pedida(s)`}
+                subtitulo={`Código ${produto.codigo} · ${formatarQuantidade(String(produto.quantidadeTotalPedida))} unidade(s) pedida(s)`}
                 valor={
                   produto.quantidadeDisponivel !== null
-                    ? `${produto.quantidadeDisponivel} em estoque`
+                    ? `${formatarQuantidade(produto.quantidadeDisponivel)} em estoque`
                     : "Sem saldo sincronizado"
                 }
               />
@@ -61,7 +56,7 @@ export default async function EstoquePage({
         )}
       </section>
 
-      <BuscaEstoque identificadorInicial={identificador} />
+      <BuscaEstoque />
     </main>
   );
 }

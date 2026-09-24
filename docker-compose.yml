@@ -85,12 +85,19 @@ services:
       # IDP_REDIRECT_URI/API_PUBLIC_URL acima - muda junto se o IP mudar.
       FRONTEND_PUBLIC_URL: http://192.168.2.202:3020
       ADMIN_API_KEY: ${ADMIN_API_KEY}
+      # AES-256-GCM (32 bytes em hex) - cifra/decifra segredos gravados em
+      # runtime no Postgres (hoje so ConfiguracaoLlm.apiKey, ver
+      # SegredoCryptoService). Trocar invalida qualquer segredo ja gravado.
+      SEGREDO_CRYPTO_KEY: ${SEGREDO_CRYPTO_KEY}
       WK_RADAR_API_URL: ${WK_RADAR_API_URL}
       WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}
       WK_RADAR_USUARIO: ${WK_RADAR_USUARIO}
       WK_RADAR_SENHA: ${WK_RADAR_SENHA}
       WK_RADAR_ID_INTEGRADOR: ${WK_RADAR_ID_INTEGRADOR}
-      WK_RADAR_REQUEST_TIMEOUT_MS: 30000
+      # Temporariamente 90s (padrao 30s) - 2026-09-24, backfill historico de
+      # pedido (reset manual do cursor) estourou timeout numa janela de 2h
+      # com volume alto de dados. Reverter pra 30000 depois do backfill.
+      WK_RADAR_REQUEST_TIMEOUT_MS: 90000
       WK_RADAR_JANELA_CLIENTE_MS: 86400000
       WK_RADAR_JANELA_PRODUTO_MS: 21600000
       WK_RADAR_MIN_REQUEST_INTERVAL_MS: 300
@@ -100,6 +107,7 @@ services:
       WK_RADAR_PRODUTO_DATA_INICIO_CARGA: ${WK_RADAR_PRODUTO_DATA_INICIO_CARGA}
       WK_RADAR_PEDIDO_DATA_INICIO_CARGA: ${WK_RADAR_PEDIDO_DATA_INICIO_CARGA}
       WK_RADAR_SALDO_ESTOQUE_DATA_INICIO_CARGA: ${WK_RADAR_SALDO_ESTOQUE_DATA_INICIO_CARGA}
+      WK_RADAR_ESTOQUE_LOTE_DATA_INICIO_CARGA: ${WK_RADAR_ESTOQUE_LOTE_DATA_INICIO_CARGA}
       WK_RADAR_VENDEDOR_DATA_INICIO_CARGA: ${WK_RADAR_VENDEDOR_DATA_INICIO_CARGA}
       WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA: ${WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA}
       WK_RADAR_TABELA_PRECO_DATA_INICIO_CARGA: ${WK_RADAR_TABELA_PRECO_DATA_INICIO_CARGA}
@@ -111,7 +119,7 @@ services:
       WK_BI_BASE: ${WK_BI_BASE}
       WK_BI_USUARIO: ${WK_BI_USUARIO}
       WK_BI_SENHA: ${WK_BI_SENHA}
-      WK_BI_HASH_SALDO_ESTOQUE: ${WK_BI_HASH_SALDO_ESTOQUE}
+      WK_BI_EMPRESA: ${WK_BI_EMPRESA}
       WK_BI_REQUEST_TIMEOUT_MS: ${WK_BI_REQUEST_TIMEOUT_MS}
       # Estoque.svc (SOAP/WCF) - sincronizacao periodica de saldo de
       # estoque, reaproveita as credenciais WK_BI_* acima.
@@ -138,12 +146,25 @@ services:
       # Imagem de produto (pedido do usuario, admin-only via web) - mesmo
       # padrao de disco local + volume persistente.
       PRODUTOS_IMAGENS_DIR: /workspace/backend/uploads/produtos-imagens
+      # Pasta compartilhada de rede com os PDFs de NF-e (2026-09-23) -
+      # DIFERENTE dos 3 diretorios acima: nao e disco nosso. Hoje montada
+      # como bind mount de uma copia LOCAL de teste (ver volumes abaixo) -
+      # "sera compartilhada logo mais" (rede real, confirmado com o
+      # usuario), quando isso existir troca o bind mount abaixo pro
+      # caminho de rede real (SMB/CIFS ou equivalente), sem precisar mudar
+      # esta env var (caminho DENTRO do container fica o mesmo).
+      NOTAS_FISCAIS_PDF_DIR: ${NOTAS_FISCAIS_PDF_DIR}
     ports:
       - "3010:3000"
     volumes:
       - copperline-visitas-fotos:/workspace/backend/uploads/visitas
       - copperline-documentos:/workspace/backend/uploads/documentos
       - copperline-produtos-imagens:/workspace/backend/uploads/produtos-imagens
+      # Copia local de TESTE (pasta com nome do CNPJ na raiz do repo, ja
+      # no .gitignore - dados fiscais reais de cliente, nunca versionar) -
+      # :ro (read-only) porque o backend so LE PDF, nunca escreve nessa
+      # pasta.
+      - ./07127994000150:/workspace/notas-fiscais-teste:ro
     depends_on:
       postgres:
         condition: service_healthy

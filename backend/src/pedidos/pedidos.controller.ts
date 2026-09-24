@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -18,6 +21,7 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoResultadoDto } from './criar-pedido.service';
+import { AlterarVendedorOrcamentoDto } from './dto/alterar-vendedor-orcamento.dto';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
 import { SimularDescontoDto } from './dto/simular-desconto.dto';
 import { PedidosService } from './pedidos.service';
@@ -73,7 +77,7 @@ export class PedidosController {
   @Get('contadores')
   async contadores(
     @CurrentUser() idpUser: IdpUser,
-  ): Promise<{ naoIntegrados: number; aguardandoAprovacao: number }> {
+  ): Promise<{ naoIntegrados: number; aguardandoAprovacao: number; orcamentos: number }> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.pedidosService.contarPorStatusAprovacao(escopo);
   }
@@ -194,6 +198,44 @@ export class PedidosController {
       usuario.id,
     );
     return this.criarPedidoService.criar(dto, usuario.id, escopo);
+  }
+
+  // Epico 4 (config-aba-orcamento.jpg) - "transformar um Orçamento em
+  // Pedido... no Aplicativo Móvel". Mesmo escopo de criar()/buscarPorId
+  // (VendedorEscopoService) - so' transforma orcamento de cliente dentro
+  // do escopo de quem chama.
+  @Post(':id/transformar-em-pedido')
+  async transformarEmPedido(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<CriarPedidoResultadoDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.criarPedidoService.transformarEmPedido(id, usuario.id, escopo);
+  }
+
+  // Epico 4 - cancelar (apagar) um orcamento que nunca chegou no ERP
+  // ("...ou cancelem o orçamento", texto da OS).
+  @Delete(':id')
+  @HttpCode(204)
+  async cancelarOrcamento(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<void> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.criarPedidoService.cancelarOrcamento(id, escopo);
+  }
+
+  // Epico 4 - "Permitir alteração de vendedor de um orçamento criado",
+  // so' pra usuario gerencial (checado dentro do service via escopo).
+  @Patch(':id/vendedor')
+  async alterarVendedorOrcamento(
+    @Param('id') id: string,
+    @Body() dto: AlterarVendedorOrcamentoDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<void> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.criarPedidoService.alterarVendedorOrcamento(id, dto.vendedorId, escopo);
   }
 
   // Achado critico da auditoria de seguranca: listar/buscarPorId/

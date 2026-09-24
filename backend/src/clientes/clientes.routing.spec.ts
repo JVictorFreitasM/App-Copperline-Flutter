@@ -12,6 +12,7 @@ import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
 import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
+import { VisitaResumoLlmService } from './visita-resumo-llm.service';
 import { ClienteTimelineService } from './cliente-timeline.service';
 import { ClientesController } from './clientes.controller';
 import { ClientesService } from './clientes.service';
@@ -34,6 +35,7 @@ describe('ClientesController - ordem de rotas estaticas vs :id', () => {
       providers: [
         { provide: ClientesService, useValue: clientesService },
         { provide: ClienteResumoLlmService, useValue: {} },
+        { provide: VisitaResumoLlmService, useValue: {} },
         { provide: ClienteEstatisticasService, useValue: {} },
         { provide: ClienteFinanceiroService, useValue: {} },
         { provide: ClienteBoletoService, useValue: {} },

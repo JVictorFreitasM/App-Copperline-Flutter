@@ -16,8 +16,17 @@ import { CriarPedidoForm } from "./criar-pedido-form";
 // enviados junto. idOperacaoComercial/idClassificacao/idNaturezaOperacao
 // continuam de fora do envio (confirmado com o usuário: preenchidos pelo
 // setor de faturamento depois, não na criação do pedido).
-export default async function NovoPedidoPage() {
+export default async function NovoPedidoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ orcamento?: string }>;
+}) {
   const usuario = await exigirUsuarioAutenticado("/pedidos/novo");
+  // Épico 4 (config-aba-orcamento.jpg) - "Criar orçamento" na listagem
+  // (page.tsx) aponta pra esta mesma tela com ?orcamento=1, único jeito
+  // de diferenciar os dois botões sem duplicar o formulário inteiro.
+  const { orcamento } = await searchParams;
+  const modoOrcamento = orcamento === "1";
 
   // Isolado (mesmo critério de resiliência já usado em outras telas) - uma
   // falha aqui não derruba a página, só deixa os seletores vazios (o
@@ -60,13 +69,14 @@ export default async function NovoPedidoPage() {
       <Link href="/pedidos" className="text-sm font-medium text-primary hover:underline">
         ← Voltar para pedidos
       </Link>
-      <h1 className="text-2xl font-bold text-ink">Novo pedido</h1>
+      <h1 className="text-2xl font-bold text-ink">{modoOrcamento ? "Novo orçamento" : "Novo pedido"}</h1>
       <CriarPedidoForm
         formasPagamento={formasPagamento}
         condicoesPagamento={condicoesPagamento}
         meuVendedor={meuVendedor}
         vendedoresEquipe={vendedoresEquipe}
         nomeUsuarioLogado={usuario.name}
+        modoOrcamento={modoOrcamento}
       />
     </main>
   );

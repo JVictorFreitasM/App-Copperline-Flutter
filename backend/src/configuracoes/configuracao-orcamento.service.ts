@@ -6,6 +6,7 @@ export interface ConfiguracaoOrcamentoDto {
   permitirVendedorTransformarEmPedido: boolean;
   criarPedidoSugeridoComoOrcamento: boolean;
   permitirAlteracaoVendedorOrcamentoCriado: boolean;
+  permitirItensRepetidos: boolean;
   atualizadoEm: string;
 }
 
@@ -14,6 +15,7 @@ export interface AtualizarConfiguracaoOrcamentoInput {
   permitirVendedorTransformarEmPedido: boolean;
   criarPedidoSugeridoComoOrcamento: boolean;
   permitirAlteracaoVendedorOrcamentoCriado: boolean;
+  permitirItensRepetidos: boolean;
 }
 
 // Singleton (1 linha) - aba "Orcamento" da tela de Configuracoes (Epico 4,
@@ -53,6 +55,7 @@ function paraDto(config: {
   permitirVendedorTransformarEmPedido: boolean;
   criarPedidoSugeridoComoOrcamento: boolean;
   permitirAlteracaoVendedorOrcamentoCriado: boolean;
+  permitirItensRepetidos: boolean;
   atualizadoEm: Date;
 }): ConfiguracaoOrcamentoDto {
   return {
@@ -60,6 +63,7 @@ function paraDto(config: {
     permitirVendedorTransformarEmPedido: config.permitirVendedorTransformarEmPedido,
     criarPedidoSugeridoComoOrcamento: config.criarPedidoSugeridoComoOrcamento,
     permitirAlteracaoVendedorOrcamentoCriado: config.permitirAlteracaoVendedorOrcamentoCriado,
+    permitirItensRepetidos: config.permitirItensRepetidos,
     atualizadoEm: config.atualizadoEm.toISOString(),
   };
 }

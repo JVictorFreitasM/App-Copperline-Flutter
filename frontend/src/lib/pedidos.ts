@@ -37,7 +37,7 @@ export interface PedidoResumoDto {
   // Mesmo bucket dos atalhos/filtro da listagem, tambem exibido como
   // "Status da aprovação" na tela de detalhe (ref1.jpeg) - ver rótulos em
   // OPCOES_STATUS_APROVACAO abaixo.
-  statusAprovacaoBucket: "NAO_INTEGRADO" | "AGUARDANDO_APROVACAO" | "ENVIADO";
+  statusAprovacaoBucket: "NAO_INTEGRADO" | "AGUARDANDO_APROVACAO" | "ENVIADO" | "ORCAMENTO";
 }
 
 // Valores possíveis vêm do enum TipoSituacaoPedido do backend
@@ -75,13 +75,15 @@ export const OPCOES_SITUACAO_PEDIDO = Object.entries(CONFIG_SITUACAO).map(
 
 // "Status de aprovação" (layout de referência) - bucket derivado do fluxo
 // local de criação (ver backend/src/pedidos/dto/listar-pedidos-query.dto.ts
-// pra semântica exata de cada valor). NAO_INTEGRADO é rotulado "Orçamento"
-// no dropdown e "Não integrados" no atalho rápido (mesmo bucket, dois
-// rótulos - ver page.tsx).
+// pra semântica exata de cada valor). NAO_INTEGRADO era rotulado
+// "Orçamento" antes do Épico 4 (era só um apelido, sem entidade real por
+// trás) - agora ORCAMENTO é um bucket de verdade próprio, então
+// NAO_INTEGRADO volta a ser rotulado pelo que ele é.
 export const OPCOES_STATUS_APROVACAO = [
-  { valor: "NAO_INTEGRADO", rotulo: "Orçamento" },
+  { valor: "NAO_INTEGRADO", rotulo: "Não integrado" },
   { valor: "AGUARDANDO_APROVACAO", rotulo: "Aguardando aprovação" },
   { valor: "ENVIADO", rotulo: "Enviado" },
+  { valor: "ORCAMENTO", rotulo: "Orçamento" },
 ] as const;
 
 export function rotuloStatusAprovacaoPedido(
@@ -115,6 +117,7 @@ export interface PedidoItemDto {
   idItemGrade2: string | null;
   idItemGrade3: string | null;
   quantidadeVenda: string | null;
+  unidade: string | null;
   valorUnitario: string | null;
   valorTotal: string | null;
   situacao: string | null;
@@ -122,6 +125,7 @@ export interface PedidoItemDto {
   statusAprovacao: "PENDENTE" | "APROVADO" | "REJEITADO";
   decididoPor: { id: string; nome: string } | null;
   decididoEm: string | null;
+  observacoes: string | null;
 }
 
 export interface ContatoClientePedidoDto {
@@ -166,6 +170,20 @@ export interface CondicaoPagamentoResumoPedidoDto {
   nome: string | null;
 }
 
+// Nota fiscal vinculada ao pedido (N:N - um pedido pode ter mais de uma,
+// ex: faturamento parcial). `chave` null = sem NF-e sincronizada pra essa
+// nota (ex: só NFS-e, fora de escopo) - front usa isso pra decidir se
+// mostra o link de PDF sem precisar tentar a chamada primeiro.
+export interface NotaFiscalResumoPedidoDto {
+  id: string;
+  numero: number | null;
+  serie: string | null;
+  chave: string | null;
+  dataEmissao: string | null;
+  statusNfe: string | null;
+  valorTotalNotaFiscal: string | null;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
   cliente: ClienteDetalhePedidoDto | null;
   itens: PedidoItemDto[];
@@ -178,4 +196,6 @@ export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
   contato: ContatoClientePedidoDto | null;
   vendedorResponsavel: { id: string; nome: string | null } | null;
   horarioEnvio: string | null;
+  observacoes: string | null;
+  notasFiscais: NotaFiscalResumoPedidoDto[];
 }

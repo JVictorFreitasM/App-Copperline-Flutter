@@ -27,7 +27,7 @@ function precoProdutoServiceFake(overrides: {
 }
 
 describe('ProdutosService.listar', () => {
-  it('mapeia precoVenda (Decimal) pra string, sem perder precisao, quando nao ha tabela padrao', async () => {
+  it('mapeia precoVenda (Decimal, por km) sem conversao, quando nao ha tabela padrao', async () => {
     const produtoBruto = {
       id: '1',
       idExternoErp: 'ext-1',
@@ -45,10 +45,14 @@ describe('ProdutosService.listar', () => {
 
     const resultado = await service.listar({ page: 1, limit: 20 });
 
+    // precoVenda vem por KM (ver produto-response.dto.ts) - exibido cru,
+    // sem conversao (achado 2026-09-23: dividir aqui mostrava 1/1000 do
+    // preco real na tela de produto - as telas de tabela de preco ja
+    // exibiam o valor cru corretamente).
     expect(resultado.data[0].precoVenda).toBe('19.9900');
   });
 
-  it('usa o preco da tabela padrao no lugar do precoVenda cru, quando existe pro codigo do produto', async () => {
+  it('usa o preco da tabela padrao no lugar do precoVenda cru, sem conversao (preco de tabela ja vem por km)', async () => {
     const produtoBruto = {
       id: '1',
       idExternoErp: 'ext-1',
@@ -96,7 +100,7 @@ describe('ProdutosService.buscarPorId', () => {
     );
   });
 
-  it('usa o preco da tabela padrao no lugar do precoVenda cru, quando existe', async () => {
+  it('usa o preco da tabela padrao no lugar do precoVenda cru, sem conversao, quando existe', async () => {
     const produtoBruto = {
       id: '1',
       idExternoErp: 'ext-1',

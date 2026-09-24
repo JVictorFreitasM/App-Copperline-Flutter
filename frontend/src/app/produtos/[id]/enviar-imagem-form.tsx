@@ -22,7 +22,7 @@ export function EnviarImagemForm({ produtoId }: { produtoId: string }) {
           name="imagem"
           required
           accept="image/jpeg,image/png,image/webp"
-          className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+          className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-solid file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-solid"
         />
       </label>
       <PrimaryButton type="submit" disabled={pending}>

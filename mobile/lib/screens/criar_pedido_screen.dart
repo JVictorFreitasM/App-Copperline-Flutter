@@ -207,7 +207,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     return _itens.every((item) => item.produto != null && item.calculo != null && item.erroCalculo == null);
   }
 
-  Future<void> _onSubmeter() async {
+  Future<void> _onSubmeter({bool salvarComoOrcamento = false}) async {
     setState(() => _erro = null);
     if (_cliente == null) {
       setState(() => _erro = 'Selecione um cliente.');
@@ -250,7 +250,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
         // Segue sem posição - ver comentário acima.
       }
 
-      final pedidoId = await ref.read(criarPedidoServiceProvider).criar(
+      final resultado = await ref.read(criarPedidoServiceProvider).criar(
         clienteId: _cliente!.id,
         percentualDesconto: _desconto,
         formaPagamentoId: _formaPagamentoId!,
@@ -266,10 +266,16 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
             .toList(),
         latitude: latitude,
         longitude: longitude,
+        salvarComoOrcamento: salvarComoOrcamento,
       );
       if (!mounted) return;
+      if (resultado.status == 'ORCAMENTO') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Orçamento salvo.')));
+      }
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => PedidoDetalheScreen(id: pedidoId)),
+        MaterialPageRoute(builder: (_) => PedidoDetalheScreen(id: resultado.pedidoId)),
       );
     } on ApiException catch (erro) {
       if (!mounted) return;
@@ -458,9 +464,29 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
               Text(_erro!, style: const TextStyle(color: AppColors.red)),
             ],
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: (_enviando || !_podeSubmeter) ? null : _onSubmeter,
-              child: Text(_enviando ? 'Enviando...' : 'Confirmar pedido'),
+            Row(
+              children: [
+                // Épico 4 (config-aba-orcamento.jpg) - "Salvar como
+                // Orçamento" ao lado de "Confirmar pedido". Sem checar
+                // habilitarCriacaoOrcamento aqui (não exposto no
+                // snapshot) - se o admin desabilitou, o backend rejeita
+                // com mensagem clara, mostrada como qualquer outro erro.
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: (_enviando || !_podeSubmeter)
+                        ? null
+                        : () => _onSubmeter(salvarComoOrcamento: true),
+                    child: const Text('Salvar como orçamento'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: (_enviando || !_podeSubmeter) ? null : () => _onSubmeter(),
+                    child: Text(_enviando ? 'Enviando...' : 'Confirmar pedido'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

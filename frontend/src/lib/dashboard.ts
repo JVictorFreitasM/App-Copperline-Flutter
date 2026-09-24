@@ -175,6 +175,30 @@ export interface VendasVsFaturadoDashboardDto {
   meses: VendasVsFaturadoMesDto[];
 }
 
+// Mesmo shape de backend/src/dashboard/dto/kpis-dashboard.dto.ts (Epico
+// 1.1). Sem filtro de periodo (mesmo criterio de /dashboard/resumo).
+export interface OrcamentosAbertosDto {
+  quantidade: number;
+  valorTotal: string;
+}
+
+export interface ClientesSemPedidoRecenteDto {
+  quantidade: number;
+  valorPotencial: string;
+  diasSemPedido: number;
+}
+
+export interface TicketMedioVendasDto {
+  valor: string;
+  quantidadePedidos: number;
+}
+
+export interface KpisDashboardDto {
+  orcamentosAbertos: OrcamentosAbertosDto;
+  clientesSemPedidoRecente: ClientesSemPedidoRecenteDto;
+  ticketMedioVendas: TicketMedioVendasDto;
+}
+
 const NOMES_MES_ABREVIADOS = [
   "Jan",
   "Fev",

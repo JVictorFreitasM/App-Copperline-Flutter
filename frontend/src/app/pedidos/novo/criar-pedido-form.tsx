@@ -18,6 +18,11 @@ import type { ItemPedidoState, OpcaoBusca } from "./tipos";
 // tela, "popup selecionar item.jpg"/"img.jpeg" pros popups em cascata) -
 // tudo preenchido uma vez só, sem repetir cliente/tabela em cada item.
 const DEBOUNCE_MS = 300;
+// item.valorUnitarioBruto/quantidade vem em METRO internamente (mesmo
+// motivo de item-detalhe-popup.tsx) - preço de tabela do WK Radar é
+// sempre por KM, convertido de volta (×1000) só pra EXIBIÇÃO nesta tabela
+// (achado do usuário, 2026-09-23).
+const METROS_POR_KM = 1000;
 
 export function CriarPedidoForm({
   formasPagamento,
@@ -25,12 +30,17 @@ export function CriarPedidoForm({
   meuVendedor,
   vendedoresEquipe,
   nomeUsuarioLogado,
+  modoOrcamento = false,
 }: {
   formasPagamento: FormaPagamentoDto[];
   condicoesPagamento: CondicaoPagamentoDto[];
   meuVendedor: MeuVendedorDto;
   vendedoresEquipe: VendedorEquipeDto[];
   nomeUsuarioLogado: string;
+  // Épico 4 (config-aba-orcamento.jpg) - "Criar orçamento" na listagem
+  // reusa este mesmo formulário, só muda o que é enviado ao confirmar
+  // (salvarComoOrcamento) e o texto do botão/título.
+  modoOrcamento?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -124,6 +134,8 @@ export function CriarPedidoForm({
         codigoTabelaPreco,
         contatoId: contatoId ?? undefined,
         vendedorId,
+        salvarComoOrcamento: modoOrcamento || undefined,
+        observacoes: observacoesPedido.trim() || undefined,
         itens: itens.map((item) => ({
           produtoId: item.produto.id,
           metrosDesejados: item.metrosDesejados * 1000,
@@ -311,16 +323,24 @@ export function CriarPedidoForm({
                     </button>
                   </td>
                   <td className="px-4 py-3 text-muted">
-                    {item.quantidade} {item.unidade}
+                    {item.unidade === "METRO"
+                      ? `${item.metrosDesejados} km`
+                      : `${item.quantidade} ${item.unidade}`}
                   </td>
                   <td className="px-4 py-3 text-right text-ink">
-                    {formatarMoeda(String(item.valorUnitarioBruto))}
+                    {formatarMoeda(String(item.valorUnitarioBruto * METROS_POR_KM))}
                   </td>
                   <td className="px-4 py-3 text-right text-ink">
                     {formatarPercentual(item.percentualDesconto)}
                   </td>
                   <td className="px-4 py-3 text-right text-ink">
-                    {formatarMoeda(String(item.valorFinal / item.quantidade))}
+                    {formatarMoeda(
+                      String(
+                        item.unidade === "METRO" && item.metrosDesejados > 0
+                          ? item.valorFinal / item.metrosDesejados
+                          : item.valorFinal / item.quantidade,
+                      ),
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-ink">
                     {formatarMoeda(String(item.valorFinal))}
@@ -356,7 +376,7 @@ export function CriarPedidoForm({
         type="button"
         disabled={!cliente}
         onClick={() => setSelecionarItemAberto(true)}
-        className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+        className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
       >
         + Adicionar item
       </button>
@@ -368,9 +388,9 @@ export function CriarPedidoForm({
           type="button"
           disabled={pending || !podeSubmeter()}
           onClick={onSubmit}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
         >
-          {pending ? "Enviando..." : "Confirmar pedido"}
+          {pending ? "Enviando..." : modoOrcamento ? "Salvar orçamento" : "Confirmar pedido"}
         </button>
       </div>
 
@@ -386,7 +406,12 @@ export function CriarPedidoForm({
         onCancelar={() => setSelecionarItemAberto(false)}
         onSelecionarProduto={(produto) => {
           setSelecionarItemAberto(false);
-          setItemPopup({ produto, itemExistente: null });
+          // Produto ja adicionado ao pedido - abre pra EDITAR o item
+          // existente em vez de criar uma linha duplicada do mesmo
+          // produto (pedido explicito do usuario, 2026-09-23). Mesmo
+          // comportamento de clicar no nome do produto na tabela abaixo.
+          const itemExistente = itens.find((i) => i.produto.id === produto.id) ?? null;
+          setItemPopup({ produto, itemExistente });
         }}
       />
 

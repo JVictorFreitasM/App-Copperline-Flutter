@@ -55,6 +55,17 @@ export function paraProdutoResumoDto(
     nome: produto.nome,
     tipo: produto.tipo,
     inativo: produto.inativo,
+    // Preço vem do WK Radar (Produto.precoVenda ou item da tabela padrao,
+    // ver PrecoProdutoService) POR KM pra este tipo de produto (cabo,
+    // venda por METRO/retalho) - mostrado cru aqui, mesma escala que as
+    // telas de tabela de preco (tabela-preco-response.dto.ts) e
+    // comparativo por tabela (preco-produto.service.ts) ja exibem
+    // corretamente. NUNCA dividir por 1000 aqui - isso ja foi tentado
+    // (2026-09-21) e mostrou 1/1000 do preco real na tela de produto
+    // (achado do usuario, 2026-09-23). Conversao pra preco-por-METRO só
+    // faz sentido dentro de um calculo que multiplica por metros
+    // (ProdutoCalculoService.resolverPrecoVenda), nunca pra exibir o
+    // preço de tabela em si.
     precoVenda: precoTabela ?? produto.precoVenda?.toString() ?? null,
     gtin: produto.gtin,
     incompleto: produto.incompleto,

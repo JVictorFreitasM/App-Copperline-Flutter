@@ -53,18 +53,27 @@ export interface RegistrosIncompletosDto {
 
 // Espelha ENTIDADES_SEM_CURSOR_INCREMENTAL de
 // backend/src/sync/sync-config.service.ts - o backend rejeita
-// tipoCadencia:'INCREMENTAL' pra essas duas (limitação do ERP, não
+// tipoCadencia:'INCREMENTAL' pra essas tres (limitação do ERP, não
 // configurável), mas nenhum campo de ConfiguracaoSyncDto sinaliza isso -
 // duplicado aqui só pra desabilitar a opção na tela antes de tentar salvar
 // (o backend continua sendo quem de fato recusa, isso aqui é só UX).
-export const ENTIDADES_SEM_CURSOR_INCREMENTAL = new Set(["nota-fiscal", "saldo_estoque"]);
+export const ENTIDADES_SEM_CURSOR_INCREMENTAL = new Set([
+  "nota-fiscal",
+  "saldo_estoque",
+  "estoque_lote",
+]);
 
+// Titulos confirmados com o usuario (2026-09-22) - distinguem
+// explicitamente as duas fontes de estoque, que sao servicos DIFERENTES
+// do WK Radar e nunca devem ser confundidas (ver skill wk-radar-bi-client:
+// saldo liquido de pedido comprometido x soma fisica dos lotes).
 const ROTULOS_ENTIDADE: Record<string, string> = {
   cliente: "Clientes",
   produto: "Produtos",
   pedido: "Pedidos",
   "nota-fiscal": "Notas fiscais",
-  saldo_estoque: "Saldo de estoque",
+  saldo_estoque: "Saldo Estoque (Estoque.svc)",
+  estoque_lote: "Saldo Lote (Relatório Executivo.svc)",
   vendedor: "Vendedores",
   "tabela-preco": "Tabelas de preço",
 };

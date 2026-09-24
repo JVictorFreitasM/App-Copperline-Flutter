@@ -15,18 +15,20 @@ export interface ItemPedidoState {
   produto: OpcaoBusca;
   metrosDesejados: number;
   percentualDesconto: number;
-  observacoes: string;
   quantidade: number;
   unidade: string;
   valorUnitarioBruto: number;
   valorFinal: number;
-  estoqueDisponivel: number | null;
+  // Observação por item (PedidoItem.observacoes) - existia no backend
+  // (schema/service) mas nunca tinha sido coletada aqui nem exibida depois
+  // (bug corrigido).
+  observacoes: string;
 }
 
 export interface EstadoCriarPedido {
   status: "idle" | "sucesso" | "erro";
   pedidoId?: string;
-  situacaoPedido?: "ENVIADO" | "AGUARDANDO_APROVACAO";
+  situacaoPedido?: "ENVIADO" | "AGUARDANDO_APROVACAO" | "ORCAMENTO";
   mensagem?: string;
 }
 

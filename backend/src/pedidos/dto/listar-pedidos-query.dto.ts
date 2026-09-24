@@ -7,16 +7,21 @@ const SITUACOES_VALIDAS = Object.values(TipoSituacaoPedido);
 // Bucket derivado (nao e' um campo unico do banco) do fluxo local de
 // criacao (CriarPedidoService) - ver PedidosService.listar pro where
 // exato de cada valor. Rotulo na tela (layout de referencia,
-// "Status de aprovacao"): NAO_INTEGRADO = "Orcamento"/"Nao integrados"
-// (idExternoErp ainda null - pedido so existe aqui, nunca confirmado no
-// Radar); AGUARDANDO_APROVACAO = statusLocal AGUARDANDO_APROVACAO
-// (aguardando decisao de desconto antes de poder ser enviado); ENVIADO =
+// "Status de aprovacao"): NAO_INTEGRADO = "Nao integrados" (idExternoErp
+// ainda null e NAO e' orcamento - pedido so existe aqui, aguardando
+// aprovacao de desconto, nunca confirmado no Radar); AGUARDANDO_APROVACAO
+// = statusLocal AGUARDANDO_APROVACAO (mesmo conjunto de NAO_INTEGRADO
+// hoje, mantido como bucket separado por compatibilidade); ENVIADO =
 // tudo que ja tem confirmacao do Radar (idExternoErp preenchido) OU foi
-// marcado ENVIADO localmente.
+// marcado ENVIADO localmente; ORCAMENTO (Epico 4, config-aba-
+// orcamento.jpg) = statusLocal ORCAMENTO - rascunho local, nunca chegou
+// no ERP nem passou por avaliacao de desconto (rotulo "Orcamento" que
+// antes era so' um apelido de NAO_INTEGRADO agora e' esse bucket real).
 const STATUS_APROVACAO_VALIDOS = [
   'NAO_INTEGRADO',
   'AGUARDANDO_APROVACAO',
   'ENVIADO',
+  'ORCAMENTO',
 ] as const;
 
 export class ListarPedidosQueryDto extends PaginationQueryDto {

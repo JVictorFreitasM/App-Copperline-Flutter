@@ -10,7 +10,7 @@ export function Badge({ enfase = false, children }: { enfase?: boolean; children
   return (
     <span
       className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-        enfase ? "bg-ink text-white" : "bg-background text-muted"
+        enfase ? "bg-solid text-on-solid" : "bg-background text-muted"
       }`}
     >
       {children}

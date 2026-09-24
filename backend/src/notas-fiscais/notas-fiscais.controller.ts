@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, StreamableFile } from '@nestjs/common';
 import {
   NotasFiscaisService,
   type ListaNotasFiscaisDto,
@@ -24,5 +24,20 @@ export class NotasFiscaisController {
   @Get(':id')
   buscarPorId(@Param('id') id: string): Promise<NotaFiscalDto> {
     return this.notasFiscaisService.buscarPorId(id);
+  }
+
+  // "/:id/pdf" depois de "/:id" (GET simples) nunca colide - metodos e
+  // numero de segmentos diferentes, ao contrario do caso "/relatorio" vs
+  // "/:id" em pedidos.controller.ts. `inline` (nao `attachment`) - abre no
+  // visualizador de PDF do proprio navegador, cobrindo visualizacao E
+  // impressao (Ctrl+P do visualizador) sem forcar download; o usuario
+  // ainda pode salvar a partir do visualizador se quiser exportar.
+  @Get(':id/pdf')
+  async obterPdf(@Param('id') id: string): Promise<StreamableFile> {
+    const { buffer, nomeArquivo } = await this.notasFiscaisService.obterPdf(id);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${encodeURIComponent(nomeArquivo)}"`,
+    });
   }
 }

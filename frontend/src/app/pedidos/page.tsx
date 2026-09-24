@@ -81,13 +81,14 @@ export default async function PedidosPage({
   // criterio de resiliencia ja usado em outras telas): uma falha aqui nao
   // derruba a listagem principal, que ja teve sucesso acima.
   let equipe: VendedorEquipeDto[] = [];
-  let contadores = { naoIntegrados: 0, aguardandoAprovacao: 0 };
+  let contadores = { naoIntegrados: 0, aguardandoAprovacao: 0, orcamentos: 0 };
   try {
     [equipe, contadores] = await Promise.all([
       apiFetch<VendedorEquipeDto[]>("/vendedores/equipe", { cache: "no-store" }),
-      apiFetch<{ naoIntegrados: number; aguardandoAprovacao: number }>("/pedidos/contadores", {
-        cache: "no-store",
-      }),
+      apiFetch<{ naoIntegrados: number; aguardandoAprovacao: number; orcamentos: number }>(
+        "/pedidos/contadores",
+        { cache: "no-store" },
+      ),
     ]);
   } catch {
     // Silencioso - filtro de equipe some/contadores ficam em 0, resto da
@@ -110,7 +111,7 @@ export default async function PedidosPage({
         <h1 className="text-2xl font-bold text-ink">Pedidos</h1>
         <div className="flex flex-wrap gap-3">
           <PrimaryButton href="/pedidos/novo">Criar pedido</PrimaryButton>
-          <SecondaryButton href="/pedidos/novo">Criar orçamento</SecondaryButton>
+          <SecondaryButton href="/pedidos/novo?orcamento=1">Criar orçamento</SecondaryButton>
         </div>
       </div>
 
@@ -123,7 +124,7 @@ export default async function PedidosPage({
           href="/pedidos"
           scroll={false}
           className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-            !statusAprovacao ? "bg-ink text-white" : "bg-surface text-ink shadow-sm hover:opacity-80"
+            !statusAprovacao ? "bg-solid text-on-solid" : "bg-surface text-ink shadow-sm hover:opacity-80"
           }`}
         >
           Todos
@@ -133,7 +134,7 @@ export default async function PedidosPage({
           scroll={false}
           className={`rounded-full px-4 py-2 text-sm font-medium transition ${
             statusAprovacao === "NAO_INTEGRADO"
-              ? "bg-ink text-white"
+              ? "bg-solid text-on-solid"
               : "bg-surface text-ink shadow-sm hover:opacity-80"
           }`}
         >
@@ -144,11 +145,22 @@ export default async function PedidosPage({
           scroll={false}
           className={`rounded-full px-4 py-2 text-sm font-medium transition ${
             statusAprovacao === "AGUARDANDO_APROVACAO"
-              ? "bg-ink text-white"
+              ? "bg-solid text-on-solid"
               : "bg-surface text-ink shadow-sm hover:opacity-80"
           }`}
         >
           Aguardando aprovação ({contadores.aguardandoAprovacao})
+        </Link>
+        <Link
+          href="/pedidos?statusAprovacao=ORCAMENTO"
+          scroll={false}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+            statusAprovacao === "ORCAMENTO"
+              ? "bg-solid text-on-solid"
+              : "bg-surface text-ink shadow-sm hover:opacity-80"
+          }`}
+        >
+          Orçamentos ({contadores.orcamentos})
         </Link>
       </div>
 

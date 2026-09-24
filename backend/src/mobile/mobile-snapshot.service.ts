@@ -107,6 +107,14 @@ export class MobileSnapshotService {
     const produtoPorCodigo = new Map(
       produtos.filter((p) => p.codigo).map((p) => [p.codigo as string, p]),
     );
+    // itens (lotes reais) fica vazio aqui de proposito: ao contrario da
+    // consulta pontual (EstoqueService.consultarPorIdentificador), este
+    // snapshot cobre LIMITE_SALDOS_ESTOQUE produtos numa unica chamada -
+    // buscar lote no WK BI (Executivo.svc) produto por produto nao escala
+    // pra esse volume (ver skill wk-radar-bi-client). quantidadeFisicaTotal
+    // fica null pelo mesmo motivo (nao inventar soma sem os lotes reais),
+    // so quantidadeDisponivel (ja sincronizado, sem custo extra) e'
+    // preenchido.
     const estoque: EstoqueConsultaDto[] = saldosEstoque.flatMap((saldo) => {
       const produto = produtoPorCodigo.get(saldo.codigoProduto);
       if (!produto) return [];
@@ -114,15 +122,9 @@ export class MobileSnapshotService {
         {
           produtoId: produto.id,
           codigo: saldo.codigoProduto,
-          itens: [
-            {
-              localCodigo: null,
-              localNome: null,
-              lote: null,
-              fabricadoEm: null,
-              quantidade: saldo.quantidadeDisponivel.toString(),
-            },
-          ],
+          itens: [],
+          quantidadeFisicaTotal: null,
+          quantidadeDisponivel: saldo.quantidadeDisponivel.toString(),
           atualizadoEm: saldo.atualizadoEm.toISOString(),
         },
       ];

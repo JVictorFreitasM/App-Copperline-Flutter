@@ -27,6 +27,8 @@ import { ClienteLocalizacaoService } from './cliente-localizacao.service';
 import type { ClienteLocalizacaoDto } from './cliente-localizacao.service';
 import { ClienteResumoLlmService } from './cliente-resumo-llm.service';
 import type { ClienteResumoLlmDto } from './cliente-resumo-llm.service';
+import { VisitaResumoLlmService } from './visita-resumo-llm.service';
+import type { VisitaResumoLlmDto } from './visita-resumo-llm.service';
 import { ClienteTabelaPrecoService } from '../tabelas-preco/cliente-tabela-preco.service';
 import { ClientesService } from './clientes.service';
 import type { ConflitoClienteDto } from './clientes.service';
@@ -53,6 +55,7 @@ export class ClientesController {
   constructor(
     private readonly clientesService: ClientesService,
     private readonly clienteResumoLlmService: ClienteResumoLlmService,
+    private readonly visitaResumoLlmService: VisitaResumoLlmService,
     private readonly clienteEstatisticasService: ClienteEstatisticasService,
     private readonly clienteFinanceiroService: ClienteFinanceiroService,
     private readonly clienteBoletoService: ClienteBoletoService,
@@ -211,6 +214,22 @@ export class ClientesController {
   ): Promise<VisitaDto[]> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.visitasService.listarPorCliente(id, escopo);
+  }
+
+  // docs/casos-de-uso-ia.md secao 2.4 - resumo via LLM das notas de visita
+  // do cliente ao longo do tempo, "/:id/resumo-visitas" mais especifico
+  // que "/:id" mesmo raciocinio de "/:id/resumo"/"/:id/visitas" acima.
+  // Rate limit pelo mesmo motivo de "/:id/resumo" (chamada de LLM externa
+  // paga a cada cache-miss).
+  @Get(':id/resumo-visitas')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ prefixo: 'visita-resumo-llm', limite: 20, janelaSegundos: 60 })
+  async obterResumoVisitas(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VisitaResumoLlmDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.visitaResumoLlmService.obterResumo(id, escopo);
   }
 
   // "Pin" de localizacao do cliente (extensao pos-OS-BACKEND-28) - so o

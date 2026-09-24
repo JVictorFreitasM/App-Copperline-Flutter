@@ -95,8 +95,21 @@ function prismaFake(overrides: {
   agendamentoHoje?: Record<string, unknown> | null;
 } = {}) {
   const tx = {
-    visita: { update: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => visitaBruta(data)) },
-    eventoNotificacao: { create: jest.fn().mockResolvedValue(undefined) },
+    visita: {
+      update: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => visitaBruta(data)),
+      // registrarEventoNotificacao tambem resolve destinatario do inbox web
+      // (NotificacaoUsuario, Epico 5) na mesma transacao - VISITA_CANCELADA
+      // busca o supervisor via tx.visita.findUnique; sem supervisor vinculado
+      // nesses testes (resolve pra lista vazia, nao quebra).
+      findUnique: jest.fn().mockResolvedValue({ vendedor: { supervisor: null } }),
+    },
+    eventoNotificacao: {
+      create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'evento-1',
+        ...data,
+      })),
+    },
+    notificacaoUsuario: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
 
   return {

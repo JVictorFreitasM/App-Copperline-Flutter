@@ -23,6 +23,7 @@ class PedidoResumo {
     required this.dataHoraUltimaAlteracao,
     required this.valorTotal,
     required this.cliente,
+    required this.statusAprovacaoBucket,
   });
 
   factory PedidoResumo.fromJson(Map<String, dynamic> json) {
@@ -35,6 +36,11 @@ class PedidoResumo {
       cliente: json['cliente'] == null
           ? null
           : ClienteResumoPedido.fromJson(json['cliente'] as Map<String, dynamic>),
+      // Épico 4 (config-aba-orcamento.jpg) - "ORCAMENTO" é um dos valores
+      // possíveis desde então (ver backend, pedido-response.dto.ts).
+      // Ausente (snapshot de app antigo, offline) = null, tratado como
+      // pedido normal (nenhuma ação de orçamento aparece).
+      statusAprovacaoBucket: json['statusAprovacaoBucket'] as String?,
     );
   }
 
@@ -44,6 +50,9 @@ class PedidoResumo {
   final String? dataHoraUltimaAlteracao;
   final String? valorTotal;
   final ClienteResumoPedido? cliente;
+  final String? statusAprovacaoBucket;
+
+  bool get isOrcamento => statusAprovacaoBucket == 'ORCAMENTO';
 
   String get tituloCliente => cliente?.razaoSocial ?? 'Cliente não identificado';
 }
@@ -106,6 +115,7 @@ class PedidoDetalhe extends PedidoResumo {
     required super.dataHoraUltimaAlteracao,
     required super.valorTotal,
     required super.cliente,
+    required super.statusAprovacaoBucket,
     required this.itens,
     required this.pesoLiquidoTotalKg,
     required this.pesoBrutoTotalKg,
@@ -120,6 +130,7 @@ class PedidoDetalhe extends PedidoResumo {
       dataHoraUltimaAlteracao: resumo.dataHoraUltimaAlteracao,
       valorTotal: resumo.valorTotal,
       cliente: resumo.cliente,
+      statusAprovacaoBucket: resumo.statusAprovacaoBucket,
       itens: (json['itens'] as List)
           .cast<Map<String, dynamic>>()
           .map(PedidoItem.fromJson)

@@ -1,4 +1,11 @@
 import { DashboardService } from './dashboard.service';
+import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
+
+// Epico 1.2 (filtro "Equipe") - todos os testes existentes assumiam
+// acesso irrestrito, comportamento que corresponde a ESCOPO_TODOS
+// (equivalente a admin/sem filtro) - testes dedicados de EQUIPE/PROPRIO/
+// NENHUM ficam nos describe blocks novos, mais abaixo.
+const ESCOPO_TODOS: EscopoClientes = { tipo: 'TODOS' };
 
 function prismaFake(overrides: {
   clientesAtivos?: number;
@@ -119,7 +126,7 @@ describe('DashboardService.obterVendas', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterVendas({});
+    const resultado = await service.obterVendas({}, ESCOPO_TODOS);
 
     expect(resultado.totalPedidos).toBe(4);
     expect(resultado.valorTotal).toBe('1000');
@@ -130,7 +137,7 @@ describe('DashboardService.obterVendas', () => {
     const prisma = prismaFake({ pedidoAggregate: { _count: 0, _sum: { valorTotal: null } } });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterVendas({});
+    const resultado = await service.obterVendas({}, ESCOPO_TODOS);
 
     expect(resultado.ticketMedio).toBe('0');
   });
@@ -139,7 +146,7 @@ describe('DashboardService.obterVendas', () => {
     const prisma = prismaFake({});
     const service = new DashboardService(prisma as never);
 
-    await service.obterVendas({ dataInicial: '2026-01-01', dataFinal: '2026-01-31' });
+    await service.obterVendas({ dataInicial: '2026-01-01', dataFinal: '2026-01-31' }, ESCOPO_TODOS);
 
     expect(prisma.pedido.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -151,6 +158,42 @@ describe('DashboardService.obterVendas', () => {
         },
       }),
     );
+  });
+
+  // Epico 1.2 (filtro "Equipe") - o mesmo `where` de escopo ja usado em
+  // Pedido/Cliente (VendedorEscopoService) precisa chegar aqui tambem,
+  // mesclado com o filtro de periodo - representativo dos outros 6
+  // metodos que passaram pela mesma mudanca (ranking/notas-fiscais/funil/
+  // vendas-por-estado/vendas-vs-faturado/comparativo-mensal).
+  it('mescla o where de escopo EQUIPE com o filtro de periodo', async () => {
+    const prisma = prismaFake({});
+    const service = new DashboardService(prisma as never);
+
+    await service.obterVendas({}, { tipo: 'EQUIPE', vendedorIds: ['v1', 'v2'] });
+
+    expect(prisma.pedido.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          cliente: { vendedores: { some: { vendedorId: { in: ['v1', 'v2'] } } } },
+          dataHoraUltimaAlteracao: undefined,
+        },
+      }),
+    );
+  });
+
+  // Escopo NENHUM = "nenhum pedido nunca bate" - retorna vazio SEM
+  // consultar o banco (mesmo criterio ja usado em PedidosService), nunca
+  // um erro nem um numero inventado.
+  it('escopo NENHUM retorna vendas zeradas sem consultar o Prisma', async () => {
+    const prisma = prismaFake({});
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterVendas({}, { tipo: 'NENHUM' });
+
+    expect(resultado.totalPedidos).toBe(0);
+    expect(resultado.valorTotal).toBe('0');
+    expect(prisma.pedido.aggregate).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -165,7 +208,7 @@ describe('DashboardService.obterFunilPedidos', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterFunilPedidos({});
+    const resultado = await service.obterFunilPedidos({}, ESCOPO_TODOS);
 
     expect(resultado.etapas).toEqual([
       { etapa: 'Criado', quantidade: 9 },
@@ -180,10 +223,10 @@ describe('DashboardService.obterFunilPedidos', () => {
     const prisma = prismaFake({ pedidoGroupBy: [] });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterFunilPedidos({
-      dataInicial: '1900-01-01',
-      dataFinal: '1900-01-02',
-    });
+    const resultado = await service.obterFunilPedidos(
+      { dataInicial: '1900-01-01', dataFinal: '1900-01-02' },
+      ESCOPO_TODOS,
+    );
 
     expect(resultado.etapas.every((e) => e.quantidade === 0)).toBe(true);
   });
@@ -196,11 +239,10 @@ describe('DashboardService.obterRanking', () => {
     const prisma = prismaFake({ pedidoGroupBy: [], pedidoItemGroupBy: [] });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterRanking({
-      dataInicial: '1900-01-01',
-      dataFinal: '1900-01-02',
-      limite: 10,
-    });
+    const resultado = await service.obterRanking(
+      { dataInicial: '1900-01-01', dataFinal: '1900-01-02', limite: 10 },
+      ESCOPO_TODOS,
+    );
 
     expect(resultado.topClientes).toEqual([]);
     expect(resultado.topProdutos).toEqual([]);
@@ -216,7 +258,7 @@ describe('DashboardService.obterRanking', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterRanking({ limite: 10 });
+    const resultado = await service.obterRanking({ limite: 10 }, ESCOPO_TODOS);
 
     expect(resultado.topClientes).toEqual([{ id: 'c1', nome: 'Cliente Um', valorTotal: '500' }]);
     expect(resultado.topProdutos).toEqual([{ id: 'p1', nome: 'Produto Um', valorTotal: '300' }]);
@@ -240,7 +282,7 @@ describe('DashboardService.obterRanking', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterRanking({ limite: 10 });
+    const resultado = await service.obterRanking({ limite: 10 }, ESCOPO_TODOS);
 
     expect(resultado.topVendedores).toEqual([{ id: 'v1', nome: 'Vendedor Um', valorTotal: '800' }]);
   });
@@ -253,7 +295,7 @@ describe('DashboardService.obterRanking', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterRanking({ limite: 10 });
+    const resultado = await service.obterRanking({ limite: 10 }, ESCOPO_TODOS);
 
     expect(resultado.topVendedores).toEqual([]);
   });
@@ -272,7 +314,7 @@ describe('DashboardService.obterRanking', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterRanking({ limite: 10 });
+    const resultado = await service.obterRanking({ limite: 10 }, ESCOPO_TODOS);
 
     expect(resultado.topVendedores).toEqual([{ id: 'v1', nome: 'Vendedor Antigo', valorTotal: '500' }]);
   });
@@ -288,10 +330,10 @@ describe('DashboardService.obterNotasFiscais', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterNotasFiscais({
-      dataInicial: '1900-01-01',
-      dataFinal: '1900-01-02',
-    });
+    const resultado = await service.obterNotasFiscais(
+      { dataInicial: '1900-01-01', dataFinal: '1900-01-02' },
+      ESCOPO_TODOS,
+    );
 
     expect(resultado.valorFaturado).toBe('0');
     expect(resultado.contagemPorStatus).toEqual([]);
@@ -304,7 +346,7 @@ describe('DashboardService.obterNotasFiscais', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterNotasFiscais({});
+    const resultado = await service.obterNotasFiscais({}, ESCOPO_TODOS);
 
     expect(resultado.valorFaturado).toBe('2500');
     expect(resultado.contagemPorStatus).toEqual([{ status: 'AUTORIZADA', quantidade: 3 }]);
@@ -433,7 +475,7 @@ describe('DashboardService.obterComparativoMensal', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterComparativoMensal({ ano: 2026 });
+    const resultado = await service.obterComparativoMensal({ ano: 2026 }, ESCOPO_TODOS);
 
     expect(resultado.anoAtual).toBe(2026);
     expect(resultado.anoAnterior).toBe(2025);
@@ -454,7 +496,7 @@ describe('DashboardService.obterComparativoMensal', () => {
     const prisma = prismaFake({ pedidosRecentes: [] });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterComparativoMensal({});
+    const resultado = await service.obterComparativoMensal({}, ESCOPO_TODOS);
 
     expect(resultado.anoAtual).toBe(new Date().getFullYear());
   });
@@ -472,7 +514,7 @@ describe('DashboardService.obterVendasPorEstado', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterVendasPorEstado({});
+    const resultado = await service.obterVendasPorEstado({}, ESCOPO_TODOS);
 
     expect(resultado.estados).toEqual([
       { uf: 'MA', valorTotal: '1000', quantidadePedidos: 3 },
@@ -500,7 +542,7 @@ describe('DashboardService.obterVendasVsFaturado', () => {
     });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterVendasVsFaturado({});
+    const resultado = await service.obterVendasVsFaturado({}, ESCOPO_TODOS);
 
     expect(resultado.meses).toEqual([
       { mes: '2026-01', valorVendido: '100', valorFaturado: '60' },
@@ -512,8 +554,104 @@ describe('DashboardService.obterVendasVsFaturado', () => {
     const prisma = prismaFake({ pedidosRecentes: [], notasFiscais: [] });
     const service = new DashboardService(prisma as never);
 
-    const resultado = await service.obterVendasVsFaturado({});
+    const resultado = await service.obterVendasVsFaturado({}, ESCOPO_TODOS);
 
     expect(resultado.meses).toEqual([]);
+  });
+});
+
+// OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.1 - 3 cards
+// de KPI do topo do painel.
+describe('DashboardService.obterKpis', () => {
+  function prismaFakeKpis(overrides: {
+    orcamentosCount?: number;
+    orcamentosSoma?: number | null;
+    aprovadosCount?: number;
+    aprovadosMedia?: number | null;
+    ultimoPedidoPorCliente?: { clienteId: string | null; _max: { dataHoraUltimaAlteracao: Date | null } }[];
+    clientesAtivosSemPedidoRecente?: number;
+  }) {
+    return {
+      cliente: {
+        count: jest.fn().mockResolvedValue(overrides.clientesAtivosSemPedidoRecente ?? 0),
+      },
+      pedido: {
+        aggregate: jest.fn().mockImplementation((args: { where?: { statusLocal?: string } }) => {
+          if (args?.where?.statusLocal === 'ORCAMENTO') {
+            return Promise.resolve({
+              _count: overrides.orcamentosCount ?? 0,
+              _sum: { valorTotal: overrides.orcamentosSoma ?? null },
+            });
+          }
+          return Promise.resolve({
+            _count: overrides.aprovadosCount ?? 0,
+            _avg: { valorTotal: overrides.aprovadosMedia ?? null },
+          });
+        }),
+        groupBy: jest.fn().mockResolvedValue(overrides.ultimoPedidoPorCliente ?? []),
+      },
+    };
+  }
+
+  it('conta orcamentos abertos (statusLocal ORCAMENTO) e soma o valor total', async () => {
+    const prisma = prismaFakeKpis({ orcamentosCount: 4, orcamentosSoma: 12000 });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterKpis();
+
+    expect(resultado.orcamentosAbertos).toEqual({ quantidade: 4, valorTotal: '12000' });
+  });
+
+  it('calcula ticket medio como media dos pedidos aprovados (FATURADO/ATENDIDO)', async () => {
+    const prisma = prismaFakeKpis({ aprovadosCount: 10, aprovadosMedia: 250.5 });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterKpis();
+
+    expect(resultado.ticketMedioVendas).toEqual({ valor: '250.5', quantidadePedidos: 10 });
+  });
+
+  it('conta clientes ativos sem pedido aprovado ha mais de 30 dias e projeta valor potencial pelo ticket medio geral', async () => {
+    const cortado = new Date();
+    cortado.setDate(cortado.getDate() - 45);
+    const recente = new Date();
+    recente.setDate(recente.getDate() - 5);
+
+    const prisma = prismaFakeKpis({
+      aprovadosMedia: 300,
+      ultimoPedidoPorCliente: [
+        { clienteId: 'cliente-inativo', _max: { dataHoraUltimaAlteracao: cortado } },
+        { clienteId: 'cliente-recente', _max: { dataHoraUltimaAlteracao: recente } },
+      ],
+      clientesAtivosSemPedidoRecente: 1,
+    });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterKpis();
+
+    expect(prisma.cliente.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['cliente-inativo'] }, inativo: false }),
+      }),
+    );
+    expect(resultado.clientesSemPedidoRecente).toEqual({
+      quantidade: 1,
+      valorPotencial: '300',
+      diasSemPedido: 30,
+    });
+  });
+
+  it('nao chama cliente.count quando nenhum cliente esta sem pedido recente', async () => {
+    const prisma = prismaFakeKpis({ ultimoPedidoPorCliente: [] });
+    const service = new DashboardService(prisma as never);
+
+    const resultado = await service.obterKpis();
+
+    expect(prisma.cliente.count).not.toHaveBeenCalled();
+    expect(resultado.clientesSemPedidoRecente).toEqual({
+      quantidade: 0,
+      valorPotencial: '0',
+      diasSemPedido: 30,
+    });
   });
 });

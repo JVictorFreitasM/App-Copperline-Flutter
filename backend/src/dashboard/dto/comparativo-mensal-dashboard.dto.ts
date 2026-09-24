@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Epico 2 da OS-dashboard-configuracoes-notificacoes-auditoria.md -
@@ -12,6 +12,13 @@ export class ComparativoMensalQueryDto {
   @Min(2000)
   @Max(2100)
   ano?: number;
+
+  // Filtro "Equipe" (Epico 1.2) - mesmo campo/validacao de
+  // PeriodoQueryDto.vendedorId, duplicado aqui porque este DTO nao usa
+  // dataInicial/dataFinal (nao estende PeriodoQueryDto).
+  @IsOptional()
+  @IsUUID()
+  vendedorId?: string;
 }
 
 export interface ComparativoMensalMesDto {

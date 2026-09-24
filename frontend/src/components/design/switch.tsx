@@ -26,7 +26,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-ink" : "bg-background border border-badge"
+        checked ? "bg-solid" : "bg-background border border-badge"
       }`}
     >
       <span

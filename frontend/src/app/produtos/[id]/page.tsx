@@ -80,7 +80,7 @@ export default async function ProdutoDetalhePage({
                 <BadgeAtivoInativo inativo={produto.inativo} />
               </div>
               {produto.codigo && (
-                <SecondaryButton href={`/estoque?identificador=${encodeURIComponent(produto.codigo)}`}>
+                <SecondaryButton href={`/estoque/${encodeURIComponent(produto.codigo)}`}>
                   Ver estoque
                 </SecondaryButton>
               )}

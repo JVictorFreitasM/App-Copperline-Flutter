@@ -80,11 +80,13 @@ describe('ProdutoCalculoService.calcular', () => {
 
     const resultado = await service.calcular('p1', 90);
 
+    // precoVenda vem por KM (ver comentario em resolverPrecoVenda) - 10
+    // convertido pra 0.01/metro antes de multiplicar pelos 90 metros.
     expect(resultado).toEqual({
       quantidade: 90,
       unidade: 'METRO',
-      valorUnitario: 10,
-      valorFinal: 900,
+      valorUnitario: 0.01,
+      valorFinal: 0.9,
       margemLucro: null,
       estoqueDisponivel: null,
     });
@@ -122,8 +124,8 @@ describe('ProdutoCalculoService.calcular', () => {
     expect(resultado).toEqual({
       quantidade: 3,
       unidade: 'PECA',
-      valorUnitario: 10,
-      valorFinal: 900,
+      valorUnitario: 0.01,
+      valorFinal: 0.9,
       margemLucro: null,
       estoqueDisponivel: null,
     });
@@ -146,8 +148,8 @@ describe('ProdutoCalculoService.calcular', () => {
     expect(resultado).toEqual({
       quantidade: 12.5,
       unidade: 'METRO',
-      valorUnitario: 10,
-      valorFinal: 125,
+      valorUnitario: 0.01,
+      valorFinal: 0.13,
       margemLucro: null,
       estoqueDisponivel: null,
     });
@@ -190,7 +192,8 @@ describe('ProdutoCalculoService.calcular', () => {
 
     const resultado = await service.calcular('p1', 10);
 
-    expect(resultado.valorFinal).toBe(500);
+    // preco '50' (por km) -> 0.05/metro * 10 metros = 0.5.
+    expect(resultado.valorFinal).toBe(0.5);
   });
 
   // OS-novas-implementacoes.md Bloco 1 - tabela especifica, desconto livre
@@ -212,8 +215,9 @@ describe('ProdutoCalculoService.calcular', () => {
       const resultado = await service.calcular('p1', 10, { codigoTabela: '205' });
 
       expect(precoProdutoService.obterPrecoPorCodigoDeTabela).toHaveBeenCalledWith('205', 'C1');
-      expect(resultado.valorUnitario).toBe(80);
-      expect(resultado.valorFinal).toBe(800);
+      // preco '80' (por km) -> 0.08/metro * 10 metros = 0.8.
+      expect(resultado.valorUnitario).toBe(0.08);
+      expect(resultado.valorFinal).toBe(0.8);
     });
 
     it('lanca UnprocessableEntityException (nao cai pro fallback) quando o produto nao tem preco NESSA tabela', async () => {
@@ -248,7 +252,8 @@ describe('ProdutoCalculoService.calcular', () => {
 
       const resultado = await service.calcular('p1', 10, { percentualDesconto: 10 });
 
-      expect(resultado.valorFinal).toBe(90);
+      // precoVenda 10 (por km) -> 0.01/metro * 10 metros = 0.1, -10% = 0.09.
+      expect(resultado.valorFinal).toBe(0.09);
     });
 
     it('margemLucro e sempre null (formula pendente de confirmacao)', async () => {

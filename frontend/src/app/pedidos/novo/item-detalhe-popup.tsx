@@ -37,7 +37,6 @@ export function ItemDetalhePopup({
     unidade: string;
     valorUnitario: number;
     valorFinal: number;
-    estoqueDisponivel: number | null;
   } | null>(null);
 
   // Reabre pré-preenchido quando é edição de um item já adicionado, ou
@@ -54,7 +53,6 @@ export function ItemDetalhePopup({
         unidade: itemExistente.unidade,
         valorUnitario: itemExistente.valorUnitarioBruto,
         valorFinal: itemExistente.valorFinal,
-        estoqueDisponivel: itemExistente.estoqueDisponivel,
       });
     } else {
       setKm("");
@@ -85,7 +83,6 @@ export function ItemDetalhePopup({
         unidade: resultado.resultado.unidade,
         valorUnitario: resultado.resultado.valorUnitario,
         valorFinal: resultado.resultado.valorFinal,
-        estoqueDisponivel: resultado.resultado.estoqueDisponivel,
       });
     } else {
       setErro(resultado.mensagem);
@@ -134,38 +131,47 @@ export function ItemDetalhePopup({
             />
           </label>
 
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            Observação do item
+            <textarea
+              value={observacoes}
+              onChange={(evento) => setObservacoes(evento.target.value)}
+              rows={2}
+              placeholder="Opcional"
+              className="rounded-2xl bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+            />
+          </label>
+
           {calculando && <p className="text-xs text-muted">Calculando...</p>}
           {erro && <p className="text-xs font-medium text-ink">{erro}</p>}
 
           {calculo && (
             <div className="grid grid-cols-2 gap-4">
-              <Campo label="Preço" value={formatarMoeda(String(calculo.valorUnitario))} />
+              {/* calculo.valorUnitario/quantidade vem em METRO internamente
+                  (ver ProdutoCalculoService.resolverPrecoVenda) - preço de
+                  tabela real do WK Radar é sempre por KM, então exibimos
+                  convertido de volta (×1000), nunca o valor cru por metro
+                  (achado do usuário, 2026-09-23: mesmo bug do preço do
+                  produto, aqui no popup de criação de pedido). Só a
+                  EXIBIÇÃO muda - o que é persistido/enviado ao ERP continua
+                  em metro, sem tocar nisso aqui. */}
+              <Campo
+                label="Preço"
+                value={formatarMoeda(String(calculo.valorUnitario * METROS_POR_KM))}
+              />
               <Campo
                 label="Valor unitário líquido"
-                value={formatarMoeda(String(calculo.valorFinal / calculo.quantidade))}
+                value={formatarMoeda(
+                  String(
+                    calculo.unidade === "METRO" && Number(km) > 0
+                      ? calculo.valorFinal / Number(km)
+                      : calculo.valorFinal / calculo.quantidade,
+                  ),
+                )}
               />
               <Campo label="Total" value={formatarMoeda(String(calculo.valorFinal))} />
-              <Campo
-                label="Total c/ impostos"
-                value="—"
-                title="Cálculo de impostos ainda não implementado"
-              />
-              <Campo
-                label="Em estoque"
-                value={calculo.estoqueDisponivel !== null ? `${calculo.estoqueDisponivel} ${calculo.unidade}` : "—"}
-              />
             </div>
           )}
-
-          <label className="flex flex-col gap-1 text-sm text-muted">
-            Observações do item
-            <textarea
-              value={observacoes}
-              onChange={(evento) => setObservacoes(evento.target.value)}
-              rows={3}
-              className="rounded-2xl bg-background px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
-            />
-          </label>
         </div>
 
         <div className="flex flex-col gap-3 rounded-card bg-background p-4">
@@ -196,12 +202,11 @@ export function ItemDetalhePopup({
               produto,
               metrosDesejados: Number(km),
               percentualDesconto: Number(percentualDesconto) || 0,
-              observacoes,
               quantidade: calculo.quantidade,
               unidade: calculo.unidade,
               valorUnitarioBruto: calculo.valorUnitario,
               valorFinal: calculo.valorFinal,
-              estoqueDisponivel: calculo.estoqueDisponivel,
+              observacoes: observacoes.trim(),
             });
           }}
         />

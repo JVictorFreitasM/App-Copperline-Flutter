@@ -185,11 +185,19 @@ interface CriarPedidoInput {
   codigoTabelaPreco?: string;
   contatoId?: string;
   vendedorId?: string;
+  // Épico 4 (config-aba-orcamento.jpg) - salva como rascunho em vez de
+  // enviar ao ERP.
+  salvarComoOrcamento?: boolean;
+  // Observações do PEDIDO inteiro (2026-09-21) - preenchida uma vez no
+  // formulário principal, não mais por item (ver histórico: o campo
+  // "Observações" da tela já existia, mas nunca era enviado no payload -
+  // corrigido junto com esta mudança).
+  observacoes?: string;
   itens: CriarPedidoItemInput[];
 }
 
 interface CriarPedidoResultadoDto {
-  status: "ENVIADO" | "AGUARDANDO_APROVACAO";
+  status: "ENVIADO" | "AGUARDANDO_APROVACAO" | "ORCAMENTO";
   pedidoId: string;
   valorTotal: number;
   idExternoErp: string | null;

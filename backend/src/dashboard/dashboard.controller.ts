@@ -1,4 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import type { IdpUser } from '@copperline/idp-client';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UsuariosService } from '../usuarios/usuarios.service';
+import {
+  restringirEscopoPorVendedorId,
+  VendedorEscopoService,
+} from '../vendedores/vendedor-escopo.service';
 import { ComparativoVendedoresService } from './comparativo-vendedores.service';
 import { DashboardService } from './dashboard.service';
 import { ComparativoMensalQueryDto } from './dto/comparativo-mensal-dashboard.dto';
@@ -10,6 +17,7 @@ import type { VendasVsFaturadoDashboardDto } from './dto/vendas-vs-faturado-dash
 import { EstoqueCriticoQueryDto } from './dto/estoque-critico-dashboard.dto';
 import type { EstoqueCriticoDashboardDto } from './dto/estoque-critico-dashboard.dto';
 import type { FunilPedidosDashboardDto } from './dto/funil-pedidos-dashboard.dto';
+import type { KpisDashboardDto } from './dto/kpis-dashboard.dto';
 import type { MapaCalorVendasDto } from './dto/mapa-calor-vendas.dto';
 import { filtroPeriodo } from './filtro-periodo';
 import type { NotasFiscaisDashboardDto } from './dto/notas-fiscais-dashboard.dto';
@@ -31,6 +39,8 @@ export class DashboardController {
     private readonly dashboardService: DashboardService,
     private readonly sazonalidadeService: SazonalidadeService,
     private readonly comparativoVendedoresService: ComparativoVendedoresService,
+    private readonly usuariosService: UsuariosService,
+    private readonly vendedorEscopoService: VendedorEscopoService,
   ) {}
 
   @Get('resumo')
@@ -38,19 +48,39 @@ export class DashboardController {
     return this.dashboardService.obterResumo();
   }
 
+  // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.1 - 3
+  // cards de KPI do topo do painel (Orcamentos Abertos, +30 dias sem
+  // pedido, Ticket Medio de Vendas).
+  @Get('kpis')
+  obterKpis(): Promise<KpisDashboardDto> {
+    return this.dashboardService.obterKpis();
+  }
+
   @Get('vendas')
-  obterVendas(@Query() query: PeriodoQueryDto): Promise<VendasDashboardDto> {
-    return this.dashboardService.obterVendas(query);
+  async obterVendas(
+    @Query() query: PeriodoQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VendasDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterVendas(query, escopo);
   }
 
   @Get('ranking')
-  obterRanking(@Query() query: RankingQueryDto): Promise<RankingDashboardDto> {
-    return this.dashboardService.obterRanking(query);
+  async obterRanking(
+    @Query() query: RankingQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<RankingDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterRanking(query, escopo);
   }
 
   @Get('notas-fiscais')
-  obterNotasFiscais(@Query() query: PeriodoQueryDto): Promise<NotasFiscaisDashboardDto> {
-    return this.dashboardService.obterNotasFiscais(query);
+  async obterNotasFiscais(
+    @Query() query: PeriodoQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<NotasFiscaisDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterNotasFiscais(query, escopo);
   }
 
   @Get('estoque-critico')
@@ -65,8 +95,12 @@ export class DashboardController {
   // texto original da OS - StatusPedidoLocal ainda nao tem dado real,
   // OS-BACKEND-25 bloqueada).
   @Get('funil-pedidos')
-  obterFunilPedidos(@Query() query: PeriodoQueryDto): Promise<FunilPedidosDashboardDto> {
-    return this.dashboardService.obterFunilPedidos(query);
+  async obterFunilPedidos(
+    @Query() query: PeriodoQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<FunilPedidosDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterFunilPedidos(query, escopo);
   }
 
   // OS-WEB-39 - so' clientes com pin de localizacao definido (ver
@@ -99,22 +133,45 @@ export class DashboardController {
   // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 2 -
   // comparativo mes a mes, ano atual vs ano anterior.
   @Get('comparativo-mensal')
-  obterComparativoMensal(
+  async obterComparativoMensal(
     @Query() query: ComparativoMensalQueryDto,
+    @CurrentUser() idpUser: IdpUser,
   ): Promise<ComparativoMensalDashboardDto> {
-    return this.dashboardService.obterComparativoMensal(query);
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterComparativoMensal(query, escopo);
   }
 
   // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2.
   @Get('vendas-por-estado')
-  obterVendasPorEstado(@Query() query: PeriodoQueryDto): Promise<VendasPorEstadoDashboardDto> {
-    return this.dashboardService.obterVendasPorEstado(query);
+  async obterVendasPorEstado(
+    @Query() query: PeriodoQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VendasPorEstadoDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterVendasPorEstado(query, escopo);
   }
 
   // OS-dashboard-configuracoes-notificacoes-auditoria.md, Epico 1.2 -
   // "Vendas x Faturado".
   @Get('vendas-vs-faturado')
-  obterVendasVsFaturado(@Query() query: PeriodoQueryDto): Promise<VendasVsFaturadoDashboardDto> {
-    return this.dashboardService.obterVendasVsFaturado(query);
+  async obterVendasVsFaturado(
+    @Query() query: PeriodoQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<VendasVsFaturadoDashboardDto> {
+    const escopo = await this.resolverEscopo(idpUser, query.vendedorId);
+    return this.dashboardService.obterVendasVsFaturado(query, escopo);
+  }
+
+  // Epico 1.2 - resolve o escopo automatico (TODOS/EQUIPE/PROPRIO/NENHUM,
+  // ja usado em pedidos/clientes) e, se um vendedorId especifico foi
+  // escolhido no filtro "Equipe" do painel, restringe pra ele (validado
+  // contra o escopo - ver restringirEscopoPorVendedorId).
+  private async resolverEscopo(idpUser: IdpUser, vendedorId?: string) {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.vendedorEscopoService.resolverEscopoVendedores(
+      idpUser,
+      usuario.id,
+    );
+    return restringirEscopoPorVendedorId(escopo, vendedorId);
   }
 }

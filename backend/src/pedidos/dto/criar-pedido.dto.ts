@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -81,6 +82,21 @@ export class CriarPedidoDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  // Epico 4 (config-aba-orcamento.jpg) - salva como rascunho em vez de
+  // enviar ao ERP (ver CriarPedidoService.criar). Omitido = comportamento
+  // de sempre (cria pedido de verdade).
+  @IsOptional()
+  @IsBoolean()
+  salvarComoOrcamento?: boolean;
+
+  // Observacoes do PEDIDO inteiro (2026-09-21, pedido do usuario) - campo
+  // unico preenchido uma vez na criacao, nao por item (ver
+  // CriarPedidoItemDto.observacoes acima, conceito separado ja existente).
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  observacoes?: string;
 
   @IsArray()
   @ArrayMinSize(1)

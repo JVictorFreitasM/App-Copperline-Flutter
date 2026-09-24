@@ -23,7 +23,7 @@ export function Timeline({ eventos }: { eventos: TimelineEvento[] }) {
           <div className="flex flex-col items-center">
             <ItemIcone evento={evento} />
             {indice < eventos.length - 1 && (
-              <div className="w-px flex-1 bg-black/10" style={{ minHeight: 16 }} />
+              <div className="w-px flex-1 bg-ink/10" style={{ minHeight: 16 }} />
             )}
           </div>
           <div className="flex-1 pb-5">

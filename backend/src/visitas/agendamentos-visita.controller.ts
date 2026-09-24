@@ -4,7 +4,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { AgendamentosVisitaService } from './agendamentos-visita.service';
 import { CriarAgendamentoVisitaDto } from './dto/criar-agendamento-visita.dto';
-import type { AgendamentoVisitaDto } from './dto/agendamento-visita-response.dto';
+import type {
+  AgendamentoVisitaDto,
+  AgendamentoVisitaEquipeDto,
+} from './dto/agendamento-visita-response.dto';
+import { ListarAgendamentosEquipeQueryDto } from './dto/listar-agendamentos-equipe-query.dto';
 import { ListarAgendamentosVisitaQueryDto } from './dto/listar-agendamentos-visita-query.dto';
 
 // Protegido por requireAuth via MiddlewareConsumer (ver visitas.module.ts,
@@ -35,5 +39,19 @@ export class AgendamentosVisitaController {
   ): Promise<AgendamentoVisitaDto[]> {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     return this.agendamentosVisitaService.listarPorVendedor(usuario.id, query.clienteId);
+  }
+
+  // "equipe" ANTES de nenhum ':id' existir neste controller - sem risco de
+  // colisao (nao ha rota parametrizada aqui), mas literal primeiro por
+  // consistencia com o padrao do resto do projeto. Gap identificado em
+  // OS-pendentes-claude-code.md: so existia "minha agenda" (GET raiz
+  // acima), supervisor/admin nao tinha onde ver agendamento da equipe.
+  @Get('equipe')
+  async listarEquipe(
+    @Query() query: ListarAgendamentosEquipeQueryDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<AgendamentoVisitaEquipeDto[]> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.agendamentosVisitaService.listarEquipe(idpUser, usuario.id, query);
   }
 }

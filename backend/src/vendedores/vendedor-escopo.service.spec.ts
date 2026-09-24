@@ -1,4 +1,8 @@
-import { VendedorEscopoService } from './vendedor-escopo.service';
+import {
+  construirWhereNotaFiscalPorEscopo,
+  restringirEscopoPorVendedorId,
+  VendedorEscopoService,
+} from './vendedor-escopo.service';
 
 function prismaFake(
   vendedores: Record<string, unknown>[],
@@ -189,5 +193,84 @@ describe('VendedorEscopoService.resolverEscopoVendedores', () => {
     if (escopo.tipo === 'EQUIPE') {
       expect(new Set(escopo.vendedorIds)).toEqual(new Set(['sup1', 'v1']));
     }
+  });
+});
+
+describe('construirWhereNotaFiscalPorEscopo', () => {
+  // TODOS nunca envolve em `pedidos.some` (exigiria a nota TER pelo menos
+  // um pedido vinculado - filtro diferente de "sem filtro nenhum").
+  it('retorna {} pra TODOS, sem envolver em pedidos.some', () => {
+    expect(construirWhereNotaFiscalPorEscopo({ tipo: 'TODOS' })).toEqual({});
+  });
+
+  it('retorna null pra NENHUM (nenhuma nota nunca bate)', () => {
+    expect(construirWhereNotaFiscalPorEscopo({ tipo: 'NENHUM' })).toBeNull();
+  });
+
+  it('filtra por pedidos.some.pedido.cliente.vendedores pra PROPRIO', () => {
+    expect(
+      construirWhereNotaFiscalPorEscopo({ tipo: 'PROPRIO', vendedorId: 'v1' }),
+    ).toEqual({
+      pedidos: {
+        some: { pedido: { cliente: { vendedores: { some: { vendedorId: 'v1' } } } } },
+      },
+    });
+  });
+
+  it('filtra pela lista de vendedorIds pra EQUIPE', () => {
+    expect(
+      construirWhereNotaFiscalPorEscopo({ tipo: 'EQUIPE', vendedorIds: ['v1', 'v2'] }),
+    ).toEqual({
+      pedidos: {
+        some: {
+          pedido: { cliente: { vendedores: { some: { vendedorId: { in: ['v1', 'v2'] } } } } },
+        },
+      },
+    });
+  });
+});
+
+describe('restringirEscopoPorVendedorId', () => {
+  it('retorna o escopo original quando nenhum vendedorId foi escolhido no filtro', () => {
+    const escopo = { tipo: 'EQUIPE' as const, vendedorIds: ['v1', 'v2'] };
+    expect(restringirEscopoPorVendedorId(escopo, undefined)).toBe(escopo);
+  });
+
+  it('TODOS + vendedorId escolhido: restringe pra PROPRIO daquele vendedor, sem lista pra validar', () => {
+    expect(restringirEscopoPorVendedorId({ tipo: 'TODOS' }, 'v9')).toEqual({
+      tipo: 'PROPRIO',
+      vendedorId: 'v9',
+    });
+  });
+
+  it('EQUIPE + vendedorId DENTRO da equipe: restringe pra PROPRIO daquele vendedor', () => {
+    const escopo = { tipo: 'EQUIPE' as const, vendedorIds: ['v1', 'v2'] };
+    expect(restringirEscopoPorVendedorId(escopo, 'v2')).toEqual({
+      tipo: 'PROPRIO',
+      vendedorId: 'v2',
+    });
+  });
+
+  it('EQUIPE + vendedorId FORA da equipe: lanca NotFoundException (nunca deixa escapar dado de fora do escopo)', () => {
+    const escopo = { tipo: 'EQUIPE' as const, vendedorIds: ['v1', 'v2'] };
+    expect(() => restringirEscopoPorVendedorId(escopo, 'v-de-fora')).toThrow(
+      /não encontrado/,
+    );
+  });
+
+  it('PROPRIO + o mesmo vendedorId: retorna o escopo (idempotente)', () => {
+    const escopo = { tipo: 'PROPRIO' as const, vendedorId: 'v1' };
+    expect(restringirEscopoPorVendedorId(escopo, 'v1')).toEqual(escopo);
+  });
+
+  it('PROPRIO + vendedorId DIFERENTE: lanca NotFoundException', () => {
+    const escopo = { tipo: 'PROPRIO' as const, vendedorId: 'v1' };
+    expect(() => restringirEscopoPorVendedorId(escopo, 'v2')).toThrow(/não encontrado/);
+  });
+
+  it('NENHUM + qualquer vendedorId: lanca NotFoundException', () => {
+    expect(() => restringirEscopoPorVendedorId({ tipo: 'NENHUM' }, 'v1')).toThrow(
+      /não encontrado/,
+    );
   });
 });

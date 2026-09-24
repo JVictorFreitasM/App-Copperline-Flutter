@@ -1,17 +1,18 @@
 import Form from "next/form";
 import Link from "next/link";
-import { IconeBusca, IconeEngrenagem, IconeSino } from "./icons";
+import { IconeBusca, IconeEngrenagem } from "./icons";
+import { NotificacaoSino } from "./notificacao-sino";
+import { ThemeToggle } from "./theme-toggle";
 
 // Barra superior (ver skill design-system, "Aplicação no Web - casca do
 // app") - busca global (GET /busca, OS-BACKEND-18 - ficou só visual/
 // `disabled` por um bom tempo até a tela de resultado, /busca, existir) +
-// notificações (visual, sem sistema de notificação in-app no web ainda) +
-// configurações (Épico 4, OS-dashboard-configuracoes-notificacoes-
-// auditoria.md - só pra quem é admin, mesmo critério de "Administração"
-// na Sidebar) + usuário/sair. Server Component (só Link/texto) -
-// next/form (mesmo padrão de FiltroForm) reflete a busca na URL sem
-// precisar de nenhum JS no cliente, então a Topbar continua sem virar
-// Client Component só por causa disso.
+// notificações (Épico 5 - NotificacaoSino, Client Component isolado, ver
+// seu comentário) + configurações (Épico 4, OS-dashboard-configuracoes-
+// notificacoes-auditoria.md - só pra quem é admin, mesmo critério de
+// "Administração" na Sidebar) + usuário/sair. Server Component pro resto
+// (só Link/texto) - next/form (mesmo padrão de FiltroForm) reflete a busca
+// na URL sem precisar de nenhum JS no cliente.
 export function Topbar({
   nomeUsuario,
   papel,
@@ -24,7 +25,7 @@ export function Topbar({
   mostrarConfiguracoes?: boolean;
 }) {
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-black/5 bg-surface px-8 py-4">
+    <header className="flex items-center justify-between gap-4 border-b border-ink/5 bg-surface px-8 py-4">
       <Form action="/busca" className="w-full max-w-sm">
         <label className="flex items-center gap-2 rounded-full bg-background px-4 py-2.5 text-sm text-muted">
           <IconeBusca />
@@ -38,6 +39,7 @@ export function Topbar({
       </Form>
 
       <div className="flex items-center gap-4">
+        <ThemeToggle />
         {mostrarConfiguracoes && (
           <Link
             href="/configuracoes"
@@ -47,13 +49,7 @@ export function Topbar({
             <IconeEngrenagem />
           </Link>
         )}
-        <button
-          type="button"
-          title="Notificações"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-background text-muted transition hover:text-ink"
-        >
-          <IconeSino />
-        </button>
+        <NotificacaoSino />
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary">
             {nomeUsuario.charAt(0).toUpperCase()}

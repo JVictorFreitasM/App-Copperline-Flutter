@@ -244,3 +244,22 @@ export function IconeAlerta() {
     </svg>
   );
 }
+
+// Toggle de tema (ThemeToggle) - sol = tema atual claro (clicar vai pro
+// escuro), lua = tema atual escuro (clicar vai pro claro).
+export function IconeSol() {
+  return (
+    <svg {...PROPS_BASE} aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.5 5.5l-1.55 1.55M7.05 16.95l-1.55 1.55M18.5 18.5l-1.55-1.55M7.05 7.05 5.5 5.5" />
+    </svg>
+  );
+}
+
+export function IconeLua() {
+  return (
+    <svg {...PROPS_BASE} aria-hidden="true">
+      <path d="M20 14.5a8.5 8.5 0 0 1-11-11 8.5 8.5 0 1 0 11 11Z" />
+    </svg>
+  );
+}
