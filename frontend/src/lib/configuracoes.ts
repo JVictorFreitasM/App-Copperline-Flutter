@@ -19,6 +19,9 @@ export interface ConfiguracaoOrcamentoDto {
   permitirVendedorTransformarEmPedido: boolean;
   criarPedidoSugeridoComoOrcamento: boolean;
   permitirAlteracaoVendedorOrcamentoCriado: boolean;
+  // 2026-09-24 - por padrao BLOQUEADO (mesmo comportamento de sempre, ver
+  // CriarPedidoService.validarItensSemDuplicata no backend).
+  permitirItensRepetidos: boolean;
   atualizadoEm: string;
 }
 
@@ -36,5 +39,32 @@ export interface ConfiguracaoRastreioDto {
   permitirRegistroComGpsDesabilitado: boolean;
   distanciaMaximaClienteRegistroPedidoMetros: number | null;
   distanciaMaximaClienteRegistroVisitaMetros: number;
+  atualizadoEm: string;
+}
+
+// Mesmo shape de backend/src/llm-client/configuracao-llm.service.ts
+// (ConfiguracaoLlmDto) - aba "LLM" (2026-09-24, unificada aqui - antes
+// vivia sozinha em /admin/llm). apiKey nunca aparece aqui - gerenciamento
+// das chaves em si e' via ChaveLlmDto abaixo.
+export interface ConfiguracaoLlmDto {
+  provedor: string;
+  modelo: string;
+  // 2026-09-25 - liga/desliga o fallback em cadeia entre chaves (switch na
+  // tela). Default LIGADO - desligado, so a primeira chave ativa (menor
+  // ordem) e' tentada, sem cair pra proxima se ela falhar.
+  fallbackAtivo: boolean;
+  atualizadoEm: string;
+}
+
+// Mesmo shape de backend/src/llm-client/chave-llm.service.ts (ChaveLlmDto) -
+// multiplas chaves com fallback em cadeia (ordem crescente = prioridade,
+// reordenavel por drag-and-drop na tela). chavePreview e' so os 4 ultimos
+// caracteres mascarados - a chave crua nunca sai do backend.
+export interface ChaveLlmDto {
+  id: string;
+  rotulo: string;
+  chavePreview: string;
+  ordem: number;
+  ativa: boolean;
   atualizadoEm: string;
 }

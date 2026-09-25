@@ -21,7 +21,8 @@ export function AbaOrcamento({ inicial }: { inicial: ConfiguracaoOrcamentoDto })
     valores.permitirVendedorTransformarEmPedido !== inicial.permitirVendedorTransformarEmPedido ||
     valores.criarPedidoSugeridoComoOrcamento !== inicial.criarPedidoSugeridoComoOrcamento ||
     valores.permitirAlteracaoVendedorOrcamentoCriado !==
-      inicial.permitirAlteracaoVendedorOrcamentoCriado;
+      inicial.permitirAlteracaoVendedorOrcamentoCriado ||
+    valores.permitirItensRepetidos !== inicial.permitirItensRepetidos;
 
   function salvar() {
     setErro(null);
@@ -33,6 +34,7 @@ export function AbaOrcamento({ inicial }: { inicial: ConfiguracaoOrcamentoDto })
           permitirVendedorTransformarEmPedido: valores.permitirVendedorTransformarEmPedido,
           criarPedidoSugeridoComoOrcamento: valores.criarPedidoSugeridoComoOrcamento,
           permitirAlteracaoVendedorOrcamentoCriado: valores.permitirAlteracaoVendedorOrcamentoCriado,
+          permitirItensRepetidos: valores.permitirItensRepetidos,
         });
         setValores(atualizado);
         setSucesso(true);
@@ -88,6 +90,17 @@ export function AbaOrcamento({ inicial }: { inicial: ConfiguracaoOrcamentoDto })
           onChange={(valor) =>
             setValores((atual) => ({ ...atual, permitirAlteracaoVendedorOrcamentoCriado: valor }))
           }
+        />
+      </LinhaConfiguracao>
+
+      <LinhaConfiguracao
+        titulo="Permitir itens repetidos no pedido"
+        descricao="Se habilitado, deixa incluir o mesmo produto mais de uma vez no mesmo pedido (por padrão, bloqueado)."
+      >
+        <Switch
+          checked={valores.permitirItensRepetidos}
+          disabled={pending}
+          onChange={(valor) => setValores((atual) => ({ ...atual, permitirItensRepetidos: valor }))}
         />
       </LinhaConfiguracao>
 

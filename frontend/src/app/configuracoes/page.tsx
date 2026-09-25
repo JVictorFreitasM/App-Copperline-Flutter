@@ -3,6 +3,8 @@ import { exigirUsuarioAutenticado } from "@/lib/auth";
 import { apiFetch, ApiError } from "@/lib/api";
 import type {
   AlcadaAprovacaoDto,
+  ChaveLlmDto,
+  ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
 } from "@/lib/configuracoes";
@@ -21,10 +23,12 @@ export default async function ConfiguracoesPage() {
   }
 
   try {
-    const [alcada, orcamento, rastreio] = await Promise.all([
+    const [alcada, orcamento, rastreio, llm, chavesLlm] = await Promise.all([
       apiFetch<AlcadaAprovacaoDto>("/admin/configuracoes/alcada-aprovacao", { cache: "no-store" }),
       apiFetch<ConfiguracaoOrcamentoDto>("/admin/configuracoes/orcamento", { cache: "no-store" }),
       apiFetch<ConfiguracaoRastreioDto>("/admin/configuracoes/rastreio", { cache: "no-store" }),
+      apiFetch<ConfiguracaoLlmDto>("/admin/configuracoes/llm", { cache: "no-store" }),
+      apiFetch<ChaveLlmDto[]>("/admin/configuracoes/llm/chaves", { cache: "no-store" }),
     ]);
 
     return (
@@ -34,6 +38,8 @@ export default async function ConfiguracoesPage() {
           alcadaInicial={alcada}
           orcamentoInicial={orcamento}
           rastreioInicial={rastreio}
+          llmInicial={llm}
+          chavesLlmIniciais={chavesLlm}
         />
       </main>
     );

@@ -81,6 +81,29 @@ export function CampoInteiro({
   );
 }
 
+export function CampoTexto({
+  valor,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  valor: string;
+  disabled?: boolean;
+  placeholder?: string;
+  onChange: (valor: string) => void;
+}) {
+  return (
+    <input
+      type="text"
+      value={valor}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(evento) => onChange(evento.target.value)}
+      className="w-56 rounded-full bg-background px-3 py-1.5 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+    />
+  );
+}
+
 export function CampoHorario({
   valor,
   disabled,
@@ -132,7 +155,7 @@ export function RodapeSalvar({
           type="button"
           disabled={pending}
           onClick={onSalvar}
-          className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-surface transition disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-solid px-5 py-2 text-sm font-medium text-on-solid transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? "Salvando..." : "Salvar alterações"}
         </button>

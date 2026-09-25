@@ -4,21 +4,22 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface ConfiguracaoLlmDto {
   provedor: string;
   modelo: string;
-  // Nunca a chave em si - so se ha uma configurada (ver comentario no
-  // schema.prisma, model ConfiguracaoLlm).
-  apiKeyConfigurada: boolean;
+  // 2026-09-25 - liga/desliga o fallback em cadeia entre chaves (ver
+  // ChaveLlmService/LlmClientService). Default LIGADO.
+  fallbackAtivo: boolean;
   atualizadoEm: string;
 }
 
 export interface AtualizarConfiguracaoLlmInput {
   provedor?: string;
-  apiKey?: string;
   modelo?: string;
+  fallbackAtivo?: boolean;
 }
 
-// Singleton (1 linha) - mesmo padrao ja usado por ConfiguracaoSyncEstoqueService
-// (OS-BACKEND-14, removido)/SyncConfigService (OS-BACKEND-15): obterOuCriar
-// com default, atualizar faz upsert dos campos informados.
+// Singleton (1 linha) - so provedor/modelo/fallbackAtivo, compartilhado
+// entre todas as chaves (ver ChaveLlmService, 2026-09-24: a(s) chave(s) em
+// si saíram desta tabela - suporte a multiplas chaves com fallback em
+// cadeia).
 @Injectable()
 export class ConfiguracaoLlmService {
   constructor(private readonly prisma: PrismaService) {}
@@ -34,21 +35,11 @@ export class ConfiguracaoLlmService {
       where: { id: existente.id },
       data: {
         provedor: input.provedor,
-        apiKey: input.apiKey,
         modelo: input.modelo,
+        fallbackAtivo: input.fallbackAtivo,
       },
     });
     return paraDto(atualizado);
-  }
-
-  // Uso interno do LlmClientService - unico lugar que le a apiKey crua.
-  async obterCredenciais(): Promise<{
-    provedor: string;
-    apiKey: string | null;
-    modelo: string;
-  }> {
-    const config = await this.obterOuCriarLinha();
-    return { provedor: config.provedor, apiKey: config.apiKey, modelo: config.modelo };
   }
 
   private async obterOuCriarLinha() {
@@ -63,13 +54,13 @@ export class ConfiguracaoLlmService {
 function paraDto(config: {
   provedor: string;
   modelo: string;
-  apiKey: string | null;
+  fallbackAtivo: boolean;
   atualizadoEm: Date;
 }): ConfiguracaoLlmDto {
   return {
     provedor: config.provedor,
     modelo: config.modelo,
-    apiKeyConfigurada: Boolean(config.apiKey),
+    fallbackAtivo: config.fallbackAtivo,
     atualizadoEm: config.atualizadoEm.toISOString(),
   };
 }

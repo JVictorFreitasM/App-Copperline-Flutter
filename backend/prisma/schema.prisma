@@ -550,6 +550,14 @@ model Pedido {
   formaPagamentoId    String? @map("forma_pagamento_id")
   condicaoPagamentoId String? @map("condicao_pagamento_id")
 
+  // Observacoes do pedido (2026-09-21, pedido do usuario) - campo do
+  // PEDIDO inteiro, nao por item (ver PedidoItem.observacoes, conceito
+  // separado e ja existente). Preenchido na criacao (POST /pedidos),
+  // exibido em GET /pedidos/:id. Nullable tambem pra pedido sincronizado
+  // do Radar (o Radar nao expoe observacao livre no schema confirmado ate
+  // agora, ver skill wk-radar-client).
+  observacoes String? @db.Text
+
   cliente              Cliente?                @relation(fields: [clienteId], references: [id])
   vendedor             Vendedor?               @relation(fields: [vendedorId], references: [id])
   vendedorRadar        Vendedor?               @relation("PedidoVendedorRadar", fields: [vendedorRadarId], references: [id])
@@ -568,6 +576,14 @@ model Pedido {
 enum StatusPedidoLocal {
   AGUARDANDO_APROVACAO
   ENVIADO
+  // Epico 4 (config-aba-orcamento.jpg) - rascunho local, nunca chegou no
+  // ERP e nunca passou pela avaliacao de desconto (isso so acontece
+  // quando o orcamento e' "transformado" num pedido de verdade, ver
+  // CriarPedidoService.transformarEmPedido). Cancelar um orcamento
+  // (nunca chegou no ERP) apaga a linha por completo, nao vira um
+  // status novo - mesmo espirito de "sem deixar registro orfao" ja
+  // usado pro envio que falha.
+  ORCAMENTO
 
   @@map("status_pedido_local")
 }
@@ -649,6 +665,19 @@ model PedidoItem {
   percentualDesconto Decimal? @map("percentual_desconto") @db.Decimal(5, 2)
   valorUnitarioBruto Decimal? @map("valor_unitario_bruto") @db.Decimal(18, 6)
   observacoes        String?
+
+  // Congelado na criacao (2026-09-21, mesmo criterio de valorUnitarioBruto
+  // acima - nunca recalculado depois) - 'METRO' (retalho, quantidadeVenda
+  // em KM) ou 'PECA' (rolo/peca fechada, quantidadeVenda em contagem).
+  // Necessario pra transformarEmPedido (Epico 4, orcamento -> pedido)
+  // reconstruir a quantidade em METROS internamente (calculo de peso,
+  // subtotal bruto pro ERP) sem reconsultar TipoAcondicionamento.tamanhoPadrao
+  // do produto - que pode ter mudado entre a criacao do orcamento e a
+  // transformacao, e a unidade de venda do item nao pode "flutuar" depois
+  // de decidida. Nullable so' pra item sincronizado do Radar (nunca passa
+  // por aqui) - ver ProdutoCalculoService/calcularQuantidadePedido pra
+  // origem do valor.
+  unidade String? @map("unidade")
 
   // Revisao por item (ver comentario do enum acima) - default PENDENTE pra
   // item sincronizado do ERP e pra item recem-criado localmente, nunca
@@ -755,6 +784,33 @@ model SaldoEstoque {
   @@map("saldos_estoque")
 }
 
+// Lotes por local de estocagem (WK BI/Executivo.svc, relatorio "Saldo de
+// Produtos por Local de Estocagem" - ver skill wk-radar-bi-client e
+// EstoqueLoteSyncStrategy) - metrica DIFERENTE de SaldoEstoque acima
+// (fisico bruto somado dos lotes, sem considerar pedido comprometido/
+// reservado - as duas NUNCA devem ser somadas nem confundidas, confirmado
+// via teste real que nao batem por design).
+model EstoqueLote {
+  id            String @id @default(uuid())
+  codigoProduto String @map("codigo_produto")
+  // "" (nunca null) quando o produto nao tem controle de lote (ex: tinta/
+  // embalagem, ~1,5% das linhas do catalogo real) - deliberado: NULL nao
+  // colide num unique composto no Postgres (cada linha NULL e' unica),
+  // o que quebraria o upsert do full refresh (cada sync criaria uma linha
+  // nova em vez de atualizar a existente).
+  lote        String @default("")
+  localCodigo String @map("local_codigo")
+  localNome   String @map("local_nome")
+  quantidade  Decimal @db.Decimal(18, 6)
+  fabricadoEm DateTime? @map("fabricado_em")
+  // Momento da sincronizacao que gravou/atualizou esta linha - por linha,
+  // nao por execucao (upsert individual, ver EstoqueLoteSyncStrategy).
+  sincronizadoEm DateTime @default(now()) @updatedAt @map("sincronizado_em")
+
+  @@unique([codigoProduto, lote, localCodigo])
+  @@map("estoque_lotes")
+}
+
 enum TipoCadenciaSync {
   INCREMENTAL
   INCREMENTAL_NOTURNO
@@ -818,6 +874,7 @@ model Usuario {
   documentosEnviados     Documento[]
   agendamentosVisitaCriados AgendamentoVisita[]
   itensPedidoDecididos   PedidoItem[]
+  notificacoes           NotificacaoUsuario[]
 
   @@map("usuarios")
 }
@@ -909,28 +966,89 @@ model EventoNotificacao {
   processadoEm DateTime?               @map("processado_em")
   erro         Json?
 
+  destinatarios NotificacaoUsuario[]
+
   @@index([status])
   @@map("eventos_notificacao")
 }
 
+// Epico 5 - "inbox" web/in-app por usuario, distinto do disparo de push em
+// si (EventoNotificacao/NotificacaoDispatchService, que so registra
+// ENVIADO/ERRO do lado do FCM, sem saber QUEM leu ou nao). Uma linha por
+// (usuario, evento) - criada dentro da MESMA transacao que grava o
+// EventoNotificacao (ver registrarEventoNotificacao, evento-notificacao.service.ts),
+// resolvendo o destinatario com a MESMA regra de tipo->publico-alvo ja
+// usada por NotificacaoDispatchService.resolverTokensAlvo (duplicada
+// deliberadamente em resolverUsuariosAlvo, no mesmo arquivo - ver
+// comentario la sobre manter as duas em sincronia se um tipo novo entrar).
+// Aparece na tela web IMEDIATAMENTE (nao espera o cron de push, que e'
+// best-effort e pode falhar/atrasar sem que isso afete o inbox).
+model NotificacaoUsuario {
+  id        String    @id @default(uuid())
+  usuarioId String    @map("usuario_id")
+  eventoId  String    @map("evento_id")
+  lida      Boolean   @default(false)
+  lidaEm    DateTime? @map("lida_em")
+  criadoEm  DateTime  @default(now()) @map("criado_em")
+
+  usuario Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  evento  EventoNotificacao @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, eventoId])
+  @@index([usuarioId, lida, criadoEm])
+  @@map("notificacoes_usuario")
+}
+
 // Tabela singleton (1 linha, service garante) - config do provedor de LLM
-// (OS-BACKEND-20), editavel em runtime via PATCH /admin/llm/configuracao.
+// (OS-BACKEND-20), aba "LLM" da tela de Configuracoes (2026-09-24,
+// unificada com as outras 3 abas - antes vivia em /admin/llm sozinha).
 // DESVIO DELIBERADO do padrao "credencial de servico externo = env var"
 // usado no resto do projeto (WK_RADAR_*/WK_BI_*/FIREBASE_SERVICE_ACCOUNT_JSON)
 // - pedido explicito do usuario ("deixe uma opcao de configuracao"), nao
-// trocar por env var sem re-confirmar. apiKey NUNCA e' retornada em GET
-// (so um booleano `apiKeyConfigurada`, ver ConfiguracaoLlmService).
+// trocar por env var sem re-confirmar. A(s) chave(s) em si NAO ficam mais
+// aqui (ver ChaveLlm abaixo, 2026-09-24: suporte a multiplas chaves com
+// fallback em cadeia) - esta tabela so guarda provedor/modelo, compartilhado
+// entre todas as chaves. Endpoint protegido por requireRole('admin') (ver
+// configuracoes.module.ts), mesmo criterio das outras 3 abas.
 model ConfiguracaoLlm {
   id           String   @id @default(uuid())
   // "openrouter" por enquanto (gateway OpenAI-compatible cobrindo
   // Claude/GPT/etc via o campo `modelo`) - string livre, nao enum, pra
   // nao exigir migration se um provedor novo entrar depois.
   provedor     String   @default("openrouter")
-  apiKey       String?  @map("api_key")
   modelo       String   @default("anthropic/claude-opus-5")
+  // Pedido explicito do usuario (2026-09-25) - liga/desliga o fallback em
+  // cadeia entre chaves (ver ChaveLlm). Default LIGADO (mesmo
+  // comportamento de sempre desde 2026-09-24). Desligado,
+  // LlmClientService.gerarJson tenta SO a primeira chave ativa (menor
+  // `ordem`) e propaga o erro direto se ela falhar, sem cair pra proxima.
+  fallbackAtivo Boolean @default(true) @map("fallback_ativo")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_llm")
+}
+
+// Multiplas chaves de API de LLM com fallback em cadeia (2026-09-24, pedido
+// explicito do usuario: "lista de fallback, caso uma chave nao responda,
+// cai pra proxima") - LlmClientService.gerarJson tenta as `ativa: true` em
+// ordem crescente de `ordem` (drag-and-drop na tela reordena), parando na
+// primeira que responder com sucesso. `ordem` nao e' unico por design (a
+// tela reescreve o bloco inteiro a cada reordenacao, sem gap/compactacao
+// necessaria). apiKey cifrada em runtime (AES-256-GCM, ver
+// SegredoCryptoService) antes de gravar, mesmo criterio que a antiga
+// ConfiguracaoLlm.apiKey (removida) - nunca texto plano no Postgres, nunca
+// retornada em GET (so um preview mascarado, ver ChaveLlmService).
+model ChaveLlm {
+  id           String   @id @default(uuid())
+  rotulo       String
+  apiKey       String   @map("api_key")
+  ordem        Int      @default(0)
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@index([ativa, ordem])
+  @@map("chaves_llm")
 }
 
 // Sincronizado do WK Radar (GET /empresarial/v1/vendedor) - so leitura, ver
@@ -1150,6 +1268,11 @@ model ConfiguracaoOrcamento {
   permitirVendedorTransformarEmPedido       Boolean  @default(true) @map("permitir_vendedor_transformar_em_pedido")
   criarPedidoSugeridoComoOrcamento          Boolean  @default(true) @map("criar_pedido_sugerido_como_orcamento")
   permitirAlteracaoVendedorOrcamentoCriado  Boolean  @default(true) @map("permitir_alteracao_vendedor_orcamento_criado")
+  // Pedido explicito do usuario (2026-09-24) - por padrao BLOQUEADO (mesmo
+  // comportamento de sempre, sem mudanca nenhuma pra quem nao mexer na
+  // config). Ligado, CriarPedidoService.validarItensSemDuplicata deixa de
+  // rejeitar o mesmo produtoId duas vezes no mesmo pedido.
+  permitirItensRepetidos                    Boolean  @default(false) @map("permitir_itens_repetidos")
   atualizadoEm                              DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_orcamento")

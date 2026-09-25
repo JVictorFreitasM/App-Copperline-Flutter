@@ -18,6 +18,8 @@ import {
   IconeRecibo,
   IconeAtualizar,
   IconeUpload,
+  IconeAlerta,
+  IconeSino,
 } from "./icons";
 import { Sidebar, type SecaoNavSidebar } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -52,6 +54,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
         { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/notas-fiscais", rotulo: "Notas fiscais", icone: <IconeRecibo /> },
         { href: "/tabelas-preco", rotulo: "Tabelas de preço", icone: <IconeMoeda /> },
+        { href: "/metas", rotulo: "Metas e ranking", icone: <IconeGrafico /> },
+        { href: "/oportunidades", rotulo: "Oportunidades", icone: <IconeAlerta /> },
+        { href: "/coberturas", rotulo: "Cobertura temporária", icone: <IconePessoas /> },
+        { href: "/agendamentos", rotulo: "Minha agenda", icone: <IconeCalendario /> },
+        { href: "/notificacoes", rotulo: "Notificações", icone: <IconeSino /> },
       ],
     },
     ...(podeAprovar
@@ -62,6 +69,11 @@ export async function AppShell({ children }: { children: ReactNode }) {
               { href: "/aprovacoes", rotulo: "Aprovações", icone: <IconeCheck /> },
               { href: "/rastreio-equipe", rotulo: "Rastreio de equipe", icone: <IconeMapa /> },
               { href: "/admin/visitas", rotulo: "Visitas da equipe", icone: <IconeCalendario /> },
+              {
+                href: "/admin/agendamentos",
+                rotulo: "Agendamentos da equipe",
+                icone: <IconeCalendario />,
+              },
               {
                 href: "/admin/relatorio-pedidos",
                 rotulo: "Relatório de pedidos",
@@ -99,6 +111,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
                 rotulo: "Importar via Swagger",
                 icone: <IconeUpload />,
               },
+              { href: "/admin/metas", rotulo: "Metas e gamificação", icone: <IconeGrafico /> },
+              { href: "/admin/coberturas", rotulo: "Coberturas temporárias", icone: <IconePessoas /> },
             ],
           },
         ]

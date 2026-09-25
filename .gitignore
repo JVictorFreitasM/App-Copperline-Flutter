@@ -21,3 +21,20 @@ CLAUDE.md
 # Documentos de OS (rascunhos/pendencias de trabalho) - uso interno,
 # nao versionado a partir de agora (pedido do usuario).
 /OS-*.md
+
+# Pasta de teste com PDFs REAIS de nota fiscal (dados sensiveis de
+# cliente/fiscal) - copia local temporaria pra testar a associacao
+# nota->PDF antes da pasta de rede compartilhada real existir
+# (NOTAS_FISCAIS_PDF_DIR). Nunca versionar.
+/07127994000150/
+
+# Graphify (mapeamento do codebase em grafo) - so os 3 arquivos de saida
+# pensados pra leitura/consulta sao versionados (autorizado pelo usuario,
+# 2026-09-25): graph.json (consulta programatica), graph.html (visual),
+# GRAPH_REPORT.md (documentacao). O resto (cache/, manifest.json,
+# .graphify_analysis.json, .graphify_root) e' estado de build local,
+# regenerado por `graphify update .` - nao tem valor versionado.
+/graphify-out/*
+!/graphify-out/graph.json
+!/graphify-out/graph.html
+!/graphify-out/GRAPH_REPORT.md

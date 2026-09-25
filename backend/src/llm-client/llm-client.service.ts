@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import type { ZodType } from 'zod';
+import { ChaveLlmService } from './chave-llm.service';
 import { ConfiguracaoLlmService } from './configuracao-llm.service';
 
 // OpenRouter (o "omniroute" da OS) - gateway compativel com o formato de
@@ -22,6 +23,17 @@ interface OpenRouterChatResponse {
 // schema Zod recebido do chamador antes de retornar - nunca repassa JSON
 // malformado/fora do formato esperado adiante (protecao contra alucinacao
 // estrutural, complementar a instrucao no prompt em si).
+//
+// 2026-09-24 - fallback em cadeia entre multiplas chaves (ChaveLlmService,
+// aba "LLM" da tela de Configuracoes): tenta cada chave ATIVA em ordem
+// crescente de `ordem`, parando na primeira que responder com sucesso.
+// Falha de UMA chave (rate limit, chave revogada, timeout) nao derruba a
+// chamada inteira enquanto houver outra na cadeia - so propaga erro quando
+// TODAS falharem (ou nao houver nenhuma chave ativa configurada).
+//
+// 2026-09-25 - ConfiguracaoLlm.fallbackAtivo (switch na tela) liga/desliga
+// esse comportamento: desligado, tenta SO a primeira chave ativa (menor
+// `ordem`) e propaga o erro dela direto, sem cair pra proxima.
 @Injectable()
 export class LlmClientService {
   private readonly logger = new Logger(LlmClientService.name);
@@ -29,16 +41,49 @@ export class LlmClientService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configuracaoLlmService: ConfiguracaoLlmService,
+    private readonly chaveLlmService: ChaveLlmService,
   ) {}
 
   async gerarJson<T>(system: string, user: string, schema: ZodType<T>): Promise<T> {
-    const { apiKey, modelo } = await this.configuracaoLlmService.obterCredenciais();
-    if (!apiKey) {
+    const [{ modelo, fallbackAtivo }, todasCredenciais] = await Promise.all([
+      this.configuracaoLlmService.obter(),
+      this.chaveLlmService.listarCredenciaisAtivas(),
+    ]);
+    if (todasCredenciais.length === 0) {
       throw new Error(
-        'Nenhuma chave de API de LLM configurada - use PATCH /admin/llm/configuracao antes de chamar este recurso.',
+        'Nenhuma chave de API de LLM ativa configurada - configure ao menos uma na aba "LLM" de Configurações antes de chamar este recurso.',
       );
     }
 
+    // fallbackAtivo desligado - so a primeira (menor `ordem`) e' tentada,
+    // erro dela propaga direto (nunca cai pra proxima da lista).
+    const credenciais = fallbackAtivo ? todasCredenciais : todasCredenciais.slice(0, 1);
+
+    const erros: string[] = [];
+    for (const credencial of credenciais) {
+      try {
+        return await this.chamarComChave(credencial.apiKey, modelo, system, user, schema);
+      } catch (error) {
+        const mensagem = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Chave de LLM '${credencial.id}' falhou, tentando a próxima da cadeia (se houver): ${mensagem}`,
+        );
+        erros.push(mensagem);
+      }
+    }
+
+    throw new Error(
+      `Todas as ${credenciais.length} chave(s) de LLM ativa(s) falharam: ${erros.join(' | ')}`,
+    );
+  }
+
+  private async chamarComChave<T>(
+    apiKey: string,
+    modelo: string,
+    system: string,
+    user: string,
+    schema: ZodType<T>,
+  ): Promise<T> {
     const resposta = await firstValueFrom(
       this.httpService.post<OpenRouterChatResponse>(
         URL_CHAT_COMPLETIONS,

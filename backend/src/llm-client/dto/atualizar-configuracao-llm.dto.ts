@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class AtualizarConfiguracaoLlmDto {
   @IsOptional()
@@ -9,10 +9,9 @@ export class AtualizarConfiguracaoLlmDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  apiKey?: string;
+  modelo?: string;
 
   @IsOptional()
-  @IsString()
-  @MinLength(1)
-  modelo?: string;
+  @IsBoolean()
+  fallbackAtivo?: boolean;
 }
