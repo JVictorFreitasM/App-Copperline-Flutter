@@ -113,9 +113,24 @@ export class PedidoSyncStrategy implements SyncStrategy<
 
   async fetch(janela: SyncWindow): Promise<SyncFetchResultado<WkRadarPedido>> {
     const idsVistos = new Set<string>();
-    const registros: WkRadarPedido[] = [];
     const avisos: string[] = [];
+    let processados = 0;
+    let comErro = 0;
 
+    // Pedido pode acumular uma janela de backlog muito maior que as outras
+    // entidades (meses, nao horas) - o SyncService generico so faz upsert
+    // e avanca o cursor DEPOIS que fetch() inteiro retorna, entao uma
+    // interrupcao no meio do run (restart do container, deploy) jogava
+    // fora todo o progresso e o cursor ficava preso pra sempre no inicio
+    // do backlog (incidente real: sync_entities.pedido.ultima_sincronizacao
+    // travado em 2024-12-01 por meses, pedidos locais nunca tendo
+    // dataHoraUltimaAlteracao preenchida de volta). Por isso, so pra essa
+    // strategy, fazemos upsert + checkpoint do cursor a cada sub-janela
+    // processada, em vez de esperar o fetch() inteiro terminar - cada
+    // sub-janela vira uma unidade atomica (registros gravados e cursor so
+    // avanca depois), sem depender do loop generico do SyncService.
+    // registros_processados/registros_com_erro em sync_logs ficam 0 pra
+    // pedido por causa disso - a contagem real vai nos avisos abaixo.
     for (const subJanela of gerarSubJanelas(janela, this.tamanhoJanelaMs)) {
       // Pedido so tem cursor unico (DataHoraBaseAlteracao) - mesma
       // limitacao ja documentada em produto.sync.ts: a API nao aceita um
@@ -134,14 +149,32 @@ export class PedidoSyncStrategy implements SyncStrategy<
       }
 
       for (const pedido of pagina) {
-        if (!idsVistos.has(pedido.id)) {
-          idsVistos.add(pedido.id);
-          registros.push(pedido);
+        if (idsVistos.has(pedido.id)) {
+          continue;
+        }
+        idsVistos.add(pedido.id);
+        try {
+          await this.upsert(this.map(pedido));
+          processados++;
+        } catch (error) {
+          comErro++;
+          this.logger.error(
+            `Falha ao sincronizar pedido ${pedido.id}`,
+            error instanceof Error ? error.stack : undefined,
+          );
         }
       }
+
+      await this.prisma.syncEntity.update({
+        where: { nome: this.nomeEntidade },
+        data: { ultimaSincronizacao: subJanela.ate },
+      });
     }
 
-    return { registros, avisos };
+    avisos.push(
+      `Checkpoint incremental por sub-janela: ${processados} pedido(s) processado(s), ${comErro} com erro.`,
+    );
+    return { registros: [], avisos };
   }
 
   map(bruto: WkRadarPedido): PedidoMapeado {

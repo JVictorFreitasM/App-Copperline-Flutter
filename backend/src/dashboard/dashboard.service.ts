@@ -87,7 +87,11 @@ export class DashboardService {
       }),
       this.prisma.pedido.findMany({
         take: QUANTIDADE_RECENTES,
-        orderBy: { dataHoraUltimaAlteracao: 'desc' },
+        // Desempate por sincronizadoEm - mesmo bug/motivo de
+        // pedidos.service.ts (dataHoraUltimaAlteracao fica null ate' o
+        // pedido criado localmente sincronizar de volta do Radar; sem
+        // desempate, ele cai numa posicao arbitraria em vez do topo).
+        orderBy: [{ dataHoraUltimaAlteracao: 'desc' }, { sincronizadoEm: 'desc' }],
         include: { cliente: true },
       }),
       this.prisma.notaFiscal.findMany({

@@ -102,7 +102,12 @@ export class CoberturaResumoService {
     const [pedidos, ticketMedio] = await Promise.all([
       this.prisma.pedido.findMany({
         where: { clienteId },
-        orderBy: { dataHoraUltimaAlteracao: 'desc' },
+        // Desempate por sincronizadoEm - mesmo bug/motivo de
+        // pedidos.service.ts (dataHoraUltimaAlteracao fica null ate' o
+        // pedido criado localmente sincronizar de volta do Radar; sem
+        // desempate, o pedido mais recente pode ficar de fora do "top N"
+        // em vez de aparecer no resumo de handoff).
+        orderBy: [{ dataHoraUltimaAlteracao: 'desc' }, { sincronizadoEm: 'desc' }],
         take: QUANTIDADE_PEDIDOS_RECENTES,
         select: { numero: true, situacao: true, valorTotal: true, dataHoraUltimaAlteracao: true },
       }),
