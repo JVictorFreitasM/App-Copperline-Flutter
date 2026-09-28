@@ -546,7 +546,20 @@ export class CriarPedidoService {
         // (ver ProdutoCalculoService.resolverPrecoVenda, preco por KM
         // convertido) pode ter ate 6 casas internamente, mas o payload do
         // ERP precisa da versao arredondada pra moeda.
-        valorUnitario: arredondarMoeda(item.valorUnitarioBruto),
+        //
+        // BUG CORRIGIDO (2026-09-28, reportado pelo usuario): valorUnitario
+        // estava indo em preco POR METRO (valorUnitarioBruto, unidade
+        // interna) ao lado de `quantidade` acima em KM - `quantidade *
+        // valorUnitario` no Radar ficava 1000x menor que o valor real pra
+        // todo item METRO. valorUnitario precisa estar na MESMA unidade de
+        // `quantidade` (KM pra METRO) - por isso multiplica de volta por
+        // METROS_POR_KM antes de arredondar. Item PECA nao e afetado
+        // (unidade ja bate: preco e quantidade em pecas nos dois campos).
+        valorUnitario: arredondarMoeda(
+          item.unidade === 'METRO'
+            ? item.valorUnitarioBruto * METROS_POR_KM
+            : item.valorUnitarioBruto,
+        ),
       };
     });
 
@@ -970,23 +983,32 @@ async function criarItensPedido(
   sincronizadoEm: Date,
 ): Promise<void> {
   await tx.pedidoItem.createMany({
-    data: itens.map((item, indice) => ({
-      pedidoId,
-      numero: indice + 1,
-      produtoId: item.produtoId,
-      // Em KM pra item METRO (retalho) - ver comentario de
-      // quantidadeVendaExterna. valorUnitario abaixo continua dividindo
-      // por item.quantidade (metros), NAO pela quantidade convertida -
-      // e' o preco liquido POR METRO, mesma unidade de valorUnitarioBruto.
-      quantidadeVenda: quantidadeVendaExterna(item),
-      valorUnitario: item.quantidade > 0 ? item.valorTotal / item.quantidade : 0,
-      valorUnitarioBruto: item.valorUnitarioBruto,
-      valorTotal: item.valorTotal,
-      percentualDesconto: item.percentualDesconto,
-      observacoes: item.observacoes ?? null,
-      unidade: item.unidade,
-      sincronizadoEm,
-    })),
+    data: itens.map((item, indice) => {
+      const quantidadeExterna = quantidadeVendaExterna(item);
+      return {
+        pedidoId,
+        numero: indice + 1,
+        produtoId: item.produtoId,
+        // Em KM pra item METRO (retalho) - ver comentario de
+        // quantidadeVendaExterna. valorUnitario PRECISA estar na MESMA
+        // unidade de quantidadeVenda (bug reportado pelo usuario,
+        // 2026-09-28: tela/PDF mostravam QTDE em KM ao lado de um preco
+        // por METRO - "1km" ficava parecendo 1000x mais barato do que
+        // era). Por isso divide por quantidadeExterna (KM pra item METRO),
+        // NAO por item.quantidade (sempre em metros, unidade interna de
+        // calculo) - valorUnitarioBruto continua em METRO de proposito,
+        // e' o preco usado internamente pro calculo (calcularQuantidadePedido/
+        // ProdutoCalculoService), nao o exibido.
+        quantidadeVenda: quantidadeExterna,
+        valorUnitario: quantidadeExterna > 0 ? item.valorTotal / quantidadeExterna : 0,
+        valorUnitarioBruto: item.valorUnitarioBruto,
+        valorTotal: item.valorTotal,
+        percentualDesconto: item.percentualDesconto,
+        observacoes: item.observacoes ?? null,
+        unidade: item.unidade,
+        sincronizadoEm,
+      };
+    }),
   });
 }
 

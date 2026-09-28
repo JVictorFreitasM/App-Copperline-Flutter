@@ -104,6 +104,31 @@ export function CampoTexto({
   );
 }
 
+export function CampoTextoLongo({
+  valor,
+  disabled,
+  placeholder,
+  linhas = 8,
+  onChange,
+}: {
+  valor: string;
+  disabled?: boolean;
+  placeholder?: string;
+  linhas?: number;
+  onChange: (valor: string) => void;
+}) {
+  return (
+    <textarea
+      value={valor}
+      disabled={disabled}
+      placeholder={placeholder}
+      rows={linhas}
+      onChange={(evento) => onChange(evento.target.value)}
+      className="w-full resize-y rounded-2xl bg-background px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+    />
+  );
+}
+
 export function CampoHorario({
   valor,
   disabled,

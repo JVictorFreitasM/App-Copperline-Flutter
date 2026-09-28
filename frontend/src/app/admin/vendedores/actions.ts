@@ -73,3 +73,19 @@ export async function atualizarPermiteCheckinSemAgendamento(
   );
   revalidatePath(ROTA);
 }
+
+// Cadastro manual (2026-09-28) - Radar nao expoe telefone/whatsapp de
+// vendedor, precisado pro bloco "Vendedor(a)" do PDF de impressao do
+// pedido. Mesmo padrao isolado de atualizarPermiteCheckinSemAgendamento.
+export async function atualizarWhatsappVendedor(
+  vendedorId: string,
+  whatsapp: string,
+): Promise<void> {
+  await adminApiFetch(`/admin/vendedores/${encodeURIComponent(vendedorId)}/whatsapp`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ whatsapp: whatsapp || null }),
+    cache: "no-store",
+  });
+  revalidatePath(ROTA);
+}

@@ -4,6 +4,7 @@ import { exigirUsuarioAutenticado } from "@/lib/auth";
 import { formatarDataHora } from "@/lib/formatacao";
 import { configSituacaoPedido } from "@/lib/pedidos";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
+import { AbasPedido } from "../abas-pedido";
 
 interface PedidoHistoricoStatusDto {
   id: string;
@@ -42,14 +43,7 @@ export default async function PedidoHistoricoPage({
         « Lista de pedidos
       </Link>
 
-      <div className="flex items-end gap-6 border-b border-line">
-        <Link href={`/pedidos/${id}`} className="pb-3 text-sm font-medium text-muted hover:text-ink">
-          PEDIDO Nº: {id.slice(0, 8)}
-        </Link>
-        <span className="border-b-2 border-primary pb-3 text-sm font-semibold text-ink">
-          HISTÓRICO
-        </span>
-      </div>
+      <AbasPedido pedidoId={id} numeroExibido={id.slice(0, 8)} abaAtiva="historico" />
 
       {erro ? (
         <ErroConexao mensagem={erro} />

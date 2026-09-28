@@ -29,6 +29,7 @@ describe('ClienteSyncStrategy.map', () => {
       cpfCnpj: '12345678900',
       razaoSocial: 'Cliente Teste Ltda',
       nomeFantasia: null,
+      inscricaoEstadual: null,
       inativo: false,
       enderecos: [{ cep: '01000-000', bairro: 'Centro' }],
       contatos: [],
@@ -51,6 +52,20 @@ describe('ClienteSyncStrategy.map', () => {
     const mapeado = strategy.map(bruto);
 
     expect(mapeado.tabelaPrecoIdExterno).toBe('tabela-ext-110');
+  });
+
+  // Achado 2026-09-28 - confirmado contra a API real do WK Radar (bloco
+  // "IE" do PDF de impressao do pedido, ver PedidoPdfService).
+  it('mapeia inscricoesLegais.inscricaoEstadual', () => {
+    const bruto: WkRadarCliente = {
+      id: '123',
+      inativo: false,
+      inscricoesLegais: { inscricaoEstadual: '195652886' },
+    };
+
+    const mapeado = strategy.map(bruto);
+
+    expect(mapeado.inscricaoEstadual).toBe('195652886');
   });
 
   it('mapeia informacoesFinanceiras.limiteCredito/dataLimiteCredito (OS-BACKEND-36)', () => {
@@ -139,6 +154,7 @@ const MAPEADO_BASE = {
   cpfCnpj: null,
   razaoSocial: null,
   nomeFantasia: null,
+  inscricaoEstadual: null,
   inativo: false,
   enderecos: [],
   contatos: [],

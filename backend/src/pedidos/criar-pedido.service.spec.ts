@@ -683,7 +683,10 @@ describe('CriarPedidoService.criar', () => {
       expect.objectContaining({
         // 3 metros -> 0.003 km no payload do ERP (ver teste dedicado
         // abaixo pra um caso mais realista, 1000 metros -> 1 km).
-        itens: [expect.objectContaining({ quantidade: 0.003, valorUnitario: 3.08 })],
+        // valorUnitario precisa estar na MESMA unidade de quantidade (KM,
+        // nao metro) - bug corrigido 2026-09-28, reportado pelo usuario:
+        // 3.079998/metro * 1000 = 3079.998/km, arredondado pra 3080.
+        itens: [expect.objectContaining({ quantidade: 0.003, valorUnitario: 3080 })],
       }),
     );
   });

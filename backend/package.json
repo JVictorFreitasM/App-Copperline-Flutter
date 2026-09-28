@@ -44,6 +44,7 @@
     "multer": "^2.2.0",
     "pg": "^8.23.0",
     "prisma": "^7.9.1",
+    "puppeteer-core": "^25.12.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.4.3"
@@ -89,7 +90,8 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1"
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^puppeteer-core$": "<rootDir>/__mocks__/puppeteer-core.ts"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

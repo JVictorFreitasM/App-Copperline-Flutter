@@ -30,8 +30,14 @@ FROM node:24-slim AS runtime
 WORKDIR /workspace/backend
 ENV NODE_ENV=production
 # node:24-slim (Debian) nao vem com openssl - prisma migrate deploy (rodado
-# no entrypoint) avisa "failed to detect libssl" sem isso.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# no entrypoint) avisa "failed to detect libssl" sem isso. chromium (pacote
+# Debian, nao o Chromium baixado pelo puppeteer) - PedidoPdfService usa
+# puppeteer-core (sem download proprio de browser) + este binario via
+# PUPPETEER_EXECUTABLE_PATH, evitando puxar todas as libs do Chromium "na
+# unha" (apt ja resolve isso) e o download de ~300MB do puppeteer completo
+# durante o npm install.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl chromium && rm -rf /var/lib/apt/lists/*
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 COPY --from=prod-deps /workspace/idp-client ../idp-client
 COPY --from=prod-deps /workspace/backend/node_modules ./node_modules
 COPY --from=build /workspace/backend/dist ./dist
@@ -39,6 +45,7 @@ COPY --from=build /workspace/backend/generated ./generated
 COPY backend/package.json ./package.json
 COPY backend/prisma ./prisma
 COPY backend/prisma.config.ts ./prisma.config.ts
+COPY backend/assets ./assets
 COPY backend/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 

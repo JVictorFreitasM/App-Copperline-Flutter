@@ -87,6 +87,39 @@ describe('PedidosService.listar', () => {
     );
   });
 
+  // Achado 2026-09-28 (pedido do usuario: "nome do vendedor nao aparece,
+  // mesmo enviado ao Radar") - pedido criado localmente so tem vendedorId
+  // (vendedor), vendedorRadarId fica null ate' sincronizar de volta (pode
+  // nunca acontecer). paraPedidoResumoDto precisa cair pro vendedor local
+  // quando nao ha' vendedorRadar.
+  it('usa o vendedor local (Pedido.vendedorId) como fallback quando nao ha vendedorRadar', async () => {
+    const pedidoBruto = {
+      id: '1',
+      idExternoErp: null,
+      numero: null,
+      situacao: null,
+      dataHoraUltimaAlteracao: null,
+      valorTotal: { toString: () => '150.00' },
+      incompleto: false,
+      sincronizadoEm: new Date('2026-01-01'),
+      cliente: { id: 'cli-1', razaoSocial: 'Cliente A' },
+      vendedorRadar: null,
+      vendedor: { id: 'vend-1', nome: 'Vendedor Local', email: 'v@x.com', whatsapp: null },
+      solicitacoesDesconto: [],
+    };
+    const prisma = prismaFake({ findMany: [pedidoBruto], count: 1 });
+    const service = new PedidosService(prisma as never);
+
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    expect(resultado.data[0].vendedor).toEqual({
+      id: 'vend-1',
+      nome: 'Vendedor Local',
+      email: 'v@x.com',
+      whatsapp: null,
+    });
+  });
+
   it('filtra por clienteId e situacao quando informados', async () => {
     const prisma = prismaFake({ findMany: [], count: 0 });
     const service = new PedidosService(prisma as never);

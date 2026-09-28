@@ -29,7 +29,10 @@ export interface PedidoResumoDto {
   incompleto: boolean;
   sincronizadoEm: string;
   cliente: ClienteResumoPedidoDto | null;
-  // Vendedor DO PEDIDO sincronizado (Radar), não quem criou localmente.
+  // Vendedor a EXIBIR - vendedor do Radar (pedido sincronizado) OU,
+  // faltando esse, o vendedor dono do pedido criado localmente (achado
+  // 2026-09-28: sem esse fallback no backend, todo pedido recém-criado
+  // aparecia sem nome de vendedor na listagem até o sync trazer de volta).
   vendedor: VendedorResumoPedidoDto | null;
   // Ícone de exclamação no layout de referência - solicitação de desconto
   // aguardando aprovação (confirmado com o usuário).
@@ -64,6 +67,21 @@ export function configSituacaoPedido(situacao: string | null): {
     return { rotulo: "—", enfase: false };
   }
   return CONFIG_SITUACAO[situacao] ?? { rotulo: situacao, enfase: false };
+}
+
+// Coluna "Status" da listagem (achado 2026-09-28): `situacao` é o status
+// do Radar (EM_ANALISE/FATURADO/etc), só preenchido depois que o pedido
+// sincroniza de volta - até lá fica null e a coluna mostrava só "—", mesmo
+// o pedido já tendo um status local conhecido (Enviado/Aguardando
+// aprovação/Orçamento). Cai pro bucket local nesse caso.
+export function configStatusExibicaoPedido(pedido: PedidoResumoDto): {
+  rotulo: string;
+  enfase: boolean;
+} {
+  if (pedido.situacao) {
+    return configSituacaoPedido(pedido.situacao);
+  }
+  return { rotulo: rotuloStatusAprovacaoPedido(pedido.statusAprovacaoBucket), enfase: false };
 }
 
 // Opções pro <select> de filtro por situação (OS-WEB-15) - mesmos valores

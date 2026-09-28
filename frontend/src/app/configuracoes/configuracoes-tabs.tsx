@@ -4,23 +4,27 @@ import { useState } from "react";
 import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
+  ComunicadoPedidoPdfDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
+  DadosEmpresaPdfDto,
 } from "@/lib/configuracoes";
 import { Card } from "@/components/design/card";
 import { AbaAlcadaAprovacao } from "./aba-alcada-aprovacao";
+import { AbaDocumentoPedido } from "./aba-documento-pedido";
 import { AbaLlm } from "./aba-llm";
 import { AbaOrcamento } from "./aba-orcamento";
 import { AbaRastreio } from "./aba-rastreio";
 
-type Aba = "orcamento" | "rastreio" | "alcada" | "llm";
+type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido";
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "orcamento", rotulo: "Orçamento" },
   { id: "rastreio", rotulo: "Rastreio" },
   { id: "alcada", rotulo: "Alçada de aprovação" },
   { id: "llm", rotulo: "LLM" },
+  { id: "documento-pedido", rotulo: "Documento do Pedido" },
 ];
 
 export function ConfiguracoesTabs({
@@ -29,12 +33,16 @@ export function ConfiguracoesTabs({
   rastreioInicial,
   llmInicial,
   chavesLlmIniciais,
+  empresaPdfInicial,
+  comunicadoPdfInicial,
 }: {
   alcadaInicial: AlcadaAprovacaoDto;
   orcamentoInicial: ConfiguracaoOrcamentoDto;
   rastreioInicial: ConfiguracaoRastreioDto;
   llmInicial: ConfiguracaoLlmDto;
   chavesLlmIniciais: ChaveLlmDto[];
+  empresaPdfInicial: DadosEmpresaPdfDto;
+  comunicadoPdfInicial: ComunicadoPedidoPdfDto;
 }) {
   const [abaAtiva, setAbaAtiva] = useState<Aba>("alcada");
 
@@ -63,6 +71,12 @@ export function ConfiguracoesTabs({
         {abaAtiva === "rastreio" && <AbaRastreio inicial={rastreioInicial} />}
         {abaAtiva === "llm" && (
           <AbaLlm configuracaoInicial={llmInicial} chavesIniciais={chavesLlmIniciais} />
+        )}
+        {abaAtiva === "documento-pedido" && (
+          <AbaDocumentoPedido
+            empresaInicial={empresaPdfInicial}
+            comunicadoInicial={comunicadoPdfInicial}
+          />
         )}
       </Card>
     </div>

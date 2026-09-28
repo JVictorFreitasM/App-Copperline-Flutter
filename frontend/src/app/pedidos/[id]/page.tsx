@@ -14,8 +14,10 @@ import { configStatusNfe } from "@/lib/notas-fiscais";
 import { formatarData, formatarDataHora, formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
+import { AbasPedido } from "./abas-pedido";
 import { AprovarReprovarTudo } from "./aprovar-reprovar-tudo";
 import { ItemAprovacaoBotoes } from "./item-aprovacao-botoes";
+import { LinkPdfNotaFiscal } from "./link-pdf-nota-fiscal";
 
 // Tela de detalhe do pedido (layout de referencia ref1.jpeg, fornecida
 // pelo usuario) - retrofit visual completo (substitui a versao anterior,
@@ -91,17 +93,11 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
 
   return (
     <>
-      <div className="flex items-end gap-6 border-b border-line">
-        <span className="border-b-2 border-primary pb-3 text-sm font-semibold text-ink">
-          PEDIDO Nº: {pedido.numero ?? pedido.id.slice(0, 8)}
-        </span>
-        <Link
-          href={`/pedidos/${pedido.id}/historico`}
-          className="pb-3 text-sm font-medium text-muted hover:text-ink"
-        >
-          HISTÓRICO
-        </Link>
-      </div>
+      <AbasPedido
+        pedidoId={pedido.id}
+        numeroExibido={pedido.numero ?? pedido.id.slice(0, 8)}
+        abaAtiva="pedido"
+      />
 
       {!faturado && <AprovarReprovarTudo pedidoId={pedido.id} />}
 
@@ -138,7 +134,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
             </div>
             <div className="flex gap-6">
               <Campo
-                label="Nr. do Pedido / Nr. no ERP"
+                label="Nr. no ERP / Nr. do Pedido"
                 value={`${pedido.idExternoErp ?? "N/A"} / ${pedido.numero ?? pedido.id.slice(0, 8)}`}
               />
             </div>
@@ -248,14 +244,7 @@ function NotasFiscaisSecao({ notasFiscais }: { notasFiscais: NotaFiscalResumoPed
                 <div className="flex items-center gap-3">
                   <Badge enfase={status.enfase}>{status.rotulo}</Badge>
                   {nota.chave ? (
-                    <a
-                      href={`/api/notas-fiscais/${nota.id}/pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-primary hover:underline"
-                    >
-                      Ver PDF
-                    </a>
+                    <LinkPdfNotaFiscal notaId={nota.id} numero={nota.numero} />
                   ) : (
                     <span className="text-xs text-muted" title="Sem chave de NF-e sincronizada">
                       PDF indisponível

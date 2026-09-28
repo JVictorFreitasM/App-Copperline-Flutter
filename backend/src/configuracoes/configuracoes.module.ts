@@ -7,11 +7,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoes-desconto.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminConfiguracaoAlcadaAprovacaoController } from './admin-configuracao-alcada-aprovacao.controller';
+import { AdminConfiguracaoDocumentoPedidoController } from './admin-configuracao-documento-pedido.controller';
 import { AdminConfiguracaoLlmController } from './admin-configuracao-llm.controller';
 import { AdminConfiguracaoOrcamentoController } from './admin-configuracao-orcamento.controller';
 import { AdminConfiguracaoRastreioController } from './admin-configuracao-rastreio.controller';
+import { ComunicadoPedidoPdfService } from './comunicado-pedido-pdf.service';
 import { ConfiguracaoOrcamentoService } from './configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from './configuracao-rastreio.service';
+import { DadosEmpresaPdfService } from './dados-empresa-pdf.service';
 import { VendedorHorarioTrabalhoController } from './vendedor-horario-trabalho.controller';
 import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.service';
 
@@ -30,6 +33,7 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
     AdminConfiguracaoOrcamentoController,
     AdminConfiguracaoRastreioController,
     AdminConfiguracaoLlmController,
+    AdminConfiguracaoDocumentoPedidoController,
     // VendedorHorarioTrabalhoController fica FORA do requireRole('admin')
     // abaixo, de proposito - e' o proprio vendedor editando o horario
     // dele, nao uma tela de admin (ver seu comentario sobre por que vive
@@ -40,12 +44,21 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
     ConfiguracaoOrcamentoService,
     ConfiguracaoRastreioService,
     VendedorHorarioTrabalhoService,
+    DadosEmpresaPdfService,
+    ComunicadoPedidoPdfService,
   ],
   // Exportados pra outros modulos consumirem os valores de verdade
   // (VisitasModule/PedidosModule/RastreioModule/MobileModule le
   // ConfiguracaoRastreioService; PedidosModule/CriarPedidoService le
-  // ConfiguracaoOrcamentoService, incluindo permitirItensRepetidos).
-  exports: [ConfiguracaoOrcamentoService, ConfiguracaoRastreioService],
+  // ConfiguracaoOrcamentoService, incluindo permitirItensRepetidos;
+  // PedidosModule/PedidoPdfService le DadosEmpresaPdfService/
+  // ComunicadoPedidoPdfService pro cabecalho/2a pagina do PDF).
+  exports: [
+    ConfiguracaoOrcamentoService,
+    ConfiguracaoRastreioService,
+    DadosEmpresaPdfService,
+    ComunicadoPedidoPdfService,
+  ],
 })
 export class ConfiguracoesModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}
@@ -58,6 +71,7 @@ export class ConfiguracoesModule implements NestModule {
         AdminConfiguracaoOrcamentoController,
         AdminConfiguracaoRastreioController,
         AdminConfiguracaoLlmController,
+        AdminConfiguracaoDocumentoPedidoController,
       );
 
     consumer

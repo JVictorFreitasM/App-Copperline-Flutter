@@ -21,6 +21,12 @@ export interface ClienteResumoPedidoDto {
 export interface VendedorResumoPedidoDto {
   id: string;
   nome: string | null;
+  // email ja vem do WK Radar; whatsapp e' cadastro manual do admin (ver
+  // AdminVendedoresController) - os dois so pro bloco "Vendedor(a)" do PDF
+  // de impressao do pedido (PedidoPdfService), nao usados em outro lugar
+  // da tela de detalhe ainda.
+  email: string | null;
+  whatsapp: string | null;
 }
 
 // Resumo de listagem - sem os itens (arvore de pedido pode ser grande, ver
@@ -141,6 +147,9 @@ export interface ContatoClientePedidoDto {
 export interface ClienteDetalhePedidoDto extends ClienteResumoPedidoDto {
   nomeFantasia: string | null;
   cpfCnpj: string | null;
+  // inscricoesLegais.inscricaoEstadual no WK Radar (ver cliente.sync.ts) -
+  // so pro bloco de identificacao do PDF de impressao do pedido.
+  inscricaoEstadual: string | null;
   codigoIntegrador: string | null;
   enderecos: unknown;
   contatos: ContatoClientePedidoDto[];
@@ -223,7 +232,16 @@ export function paraClienteResumoPedidoDto(
 }
 
 export function paraPedidoResumoDto(
-  pedido: Pedido & { cliente: Cliente | null; vendedorRadar?: Vendedor | null },
+  pedido: Pedido & {
+    cliente: Cliente | null;
+    vendedorRadar?: Vendedor | null;
+    // Vendedor DONO do pedido (Pedido.vendedorId) - so' preenchido de
+    // verdade pra pedido criado localmente (POST /pedidos). Fallback pra
+    // vendedorRadar abaixo, achado 2026-09-28: sem isso, todo pedido
+    // recem-criado (ainda sem retorno do sync) mostrava "—" no nome do
+    // vendedor na listagem, mesmo o vendedor sendo conhecido.
+    vendedor?: Vendedor | null;
+  },
   temSolicitacaoDescontoPendente = false,
 ): PedidoResumoDto {
   return {
@@ -239,8 +257,20 @@ export function paraPedidoResumoDto(
     sincronizadoEm: pedido.sincronizadoEm,
     cliente: paraClienteResumoPedidoDto(pedido.cliente),
     vendedor: pedido.vendedorRadar
-      ? { id: pedido.vendedorRadar.id, nome: pedido.vendedorRadar.nome }
-      : null,
+      ? {
+          id: pedido.vendedorRadar.id,
+          nome: pedido.vendedorRadar.nome,
+          email: pedido.vendedorRadar.email,
+          whatsapp: pedido.vendedorRadar.whatsapp,
+        }
+      : pedido.vendedor
+        ? {
+            id: pedido.vendedor.id,
+            nome: pedido.vendedor.nome,
+            email: pedido.vendedor.email,
+            whatsapp: pedido.vendedor.whatsapp,
+          }
+        : null,
     temSolicitacaoDescontoPendente,
     statusAprovacaoBucket: calcularStatusAprovacaoPedido(pedido),
   };
@@ -255,6 +285,7 @@ export function paraClienteDetalhePedidoDto(
     razaoSocial: cliente.razaoSocial,
     nomeFantasia: cliente.nomeFantasia,
     cpfCnpj: cliente.cpfCnpj,
+    inscricaoEstadual: cliente.inscricaoEstadual,
     codigoIntegrador: cliente.codigoIntegrador,
     enderecos: cliente.enderecos,
     contatos: cliente.contatos.map((contato) => ({
@@ -343,7 +374,12 @@ export function paraPedidoDetalheDto(
         }
       : null,
     vendedorResponsavel: pedido.vendedor
-      ? { id: pedido.vendedor.id, nome: pedido.vendedor.nome }
+      ? {
+          id: pedido.vendedor.id,
+          nome: pedido.vendedor.nome,
+          email: pedido.vendedor.email,
+          whatsapp: pedido.vendedor.whatsapp,
+        }
       : null,
     observacoes: pedido.observacoes,
     itens: pedido.itens.map(paraPedidoItemDto),

@@ -44,11 +44,26 @@ export class PedidosService {
         include: {
           cliente: true,
           vendedorRadar: true,
+          // Pedido criado localmente (POST /pedidos) so' tem vendedorId
+          // (vendedor), nunca vendedorRadarId (so' preenchido depois que o
+          // sync trouxer de volta do Radar - pode nunca acontecer, ver
+          // achado de 2026-09-28). Sem isso, a listagem mostrava "—" no
+          // nome do vendedor de todo pedido recem-criado - paraPedidoResumoDto
+          // agora tenta os dois.
+          vendedor: true,
           solicitacoesDesconto: { where: { status: 'PENDENTE' }, take: 1 },
         },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        orderBy: { dataHoraUltimaAlteracao: 'desc' },
+        // Desempate por sincronizadoEm (2026-09-25, bug real: pedido
+        // criado localmente por POST /pedidos fica com dataHoraUltimaAlteracao
+        // null ate' o proximo sync trazer de volta do Radar - SEM
+        // desempate, o Postgres nao garante ordem nenhuma entre as
+        // dezenas de milhares de linhas empatadas em null, entao um
+        // pedido acabado de criar cai numa posicao arbitraria da
+        // paginacao em vez de aparecer no topo. sincronizadoEm NUNCA e'
+        // null (preenchido na criacao E em todo upsert de sync).
+        orderBy: [{ dataHoraUltimaAlteracao: 'desc' }, { sincronizadoEm: 'desc' }],
       }),
       this.prisma.pedido.count({ where }),
     ]);

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { AtualizarHierarquiaVendedorDto } from './dto/atualizar-hierarquia-vendedor.dto';
 import { AtualizarPermiteCheckinSemAgendamentoDto } from './dto/atualizar-permite-checkin-sem-agendamento.dto';
+import { AtualizarWhatsappVendedorDto } from './dto/atualizar-whatsapp-vendedor.dto';
 import { VendedoresHierarquiaService } from './vendedores-hierarquia.service';
 import type { VendedorHierarquiaDto, VendedorListaDto } from './vendedores-hierarquia.service';
 
@@ -42,5 +43,16 @@ export class AdminVendedoresController {
       id,
       dto.permiteCheckinSemAgendamento,
     );
+  }
+
+  // Cadastro manual (2026-09-28) - Radar nao expoe telefone/whatsapp de
+  // vendedor, precisado pro bloco "Vendedor(a)" do PDF de impressao do
+  // pedido (ver PedidoPdfService).
+  @Patch(':id/whatsapp')
+  atualizarWhatsapp(
+    @Param('id') id: string,
+    @Body() dto: AtualizarWhatsappVendedorDto,
+  ): Promise<VendedorHierarquiaDto> {
+    return this.vendedoresHierarquiaService.atualizarWhatsapp(id, dto.whatsapp ?? null);
   }
 }

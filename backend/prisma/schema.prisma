@@ -63,6 +63,10 @@ model Cliente {
   cpfCnpj          String?  @map("cpf_cnpj")
   razaoSocial      String?  @map("razao_social")
   nomeFantasia     String?  @map("nome_fantasia")
+  // inscricoesLegais.inscricaoEstadual no WK Radar (confirmado contra a API
+  // real, 2026-09-28) - pedido pro PDF de impressao do pedido (IE do
+  // cliente no bloco de identificacao).
+  inscricaoEstadual String? @map("inscricao_estadual")
   inativo          Boolean  @default(false)
   // Enderecos nao tem id/codigoIntegrador proprio no WK Radar (ao contrario
   // de contatos) - sem identidade propria pra preservar, JSONB e suficiente.
@@ -1076,6 +1080,10 @@ model Vendedor {
   codigo                    String?
   nome                      String?
   email                     String?
+  // NAO vem do WK Radar (endpoint /vendedor nao tem telefone/whatsapp) -
+  // cadastrado manualmente pelo admin (PATCH /admin/vendedores/:id,
+  // 2026-09-28), pro PDF de impressao do pedido (bloco "Vendedor(a)").
+  whatsapp                  String?
   inativo                   Boolean  @default(false)
   usuarioId                 String?  @map("usuario_id")
   semCorrespondenciaUsuario Boolean  @default(true) @map("sem_correspondencia_usuario")
@@ -1276,6 +1284,39 @@ model ConfiguracaoOrcamento {
   atualizadoEm                              DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_orcamento")
+}
+
+// Tabela singleton (1 linha, service garante) - aba "Documento do Pedido"
+// da tela de Configuracoes (pedido do usuario, 2026-09-28). Cabecalho fixo
+// (razao social/CNPJ/endereco/telefone) do PDF de impressao do pedido -
+// nao vem do WK Radar (e' a propria empresa que usa o sistema, nao um
+// cliente), editavel so pelo admin.
+model DadosEmpresaPdf {
+  id           String   @id @default(uuid())
+  razaoSocial  String   @default("") @map("razao_social")
+  cnpj         String   @default("")
+  endereco     String   @default("")
+  cep          String   @default("")
+  telefone     String   @default("")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("dados_empresa_pdf")
+}
+
+// Tabela singleton (1 linha, service garante) - "Comunicado" (2a pagina do
+// PDF de impressao do pedido, "Premissas e Outras Observacoes" no modelo
+// de referencia). Pedido explicito do usuario (2026-09-28): relacao 1:N
+// simples - so' o texto ATUAL importa, aplicado a todo PDF gerado dali em
+// diante ate' ser modificado de novo (sem versionamento por pedido, sem
+// historico - geracao de PDF e' sempre sob demanda, nunca pre-gerada/
+// armazenada, entao mudar o texto aqui afeta o proximo PDF gerado de
+// QUALQUER pedido, passado ou futuro).
+model ComunicadoPedidoPdf {
+  id           String   @id @default(uuid())
+  texto        String   @default("")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("comunicado_pedido_pdf")
 }
 
 // Tabela singleton (1 linha, service garante) - aba "Rastreio" da tela de

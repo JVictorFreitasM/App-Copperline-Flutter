@@ -68,3 +68,25 @@ export interface ChaveLlmDto {
   ativa: boolean;
   atualizadoEm: string;
 }
+
+// Mesmo shape de backend/src/configuracoes/dados-empresa-pdf.service.ts
+// (DadosEmpresaPdfDto) - aba "Documento do Pedido". Cabecalho fixo do PDF
+// de impressao do pedido (pedido do usuario, 2026-09-28).
+export interface DadosEmpresaPdfDto {
+  razaoSocial: string;
+  cnpj: string;
+  endereco: string;
+  cep: string;
+  telefone: string;
+  atualizadoEm: string;
+}
+
+// Mesmo shape de
+// backend/src/configuracoes/comunicado-pedido-pdf.service.ts
+// (ComunicadoPedidoPdfDto) - "Comunicado" (2a pagina do PDF, "Premissas e
+// Outras Observações" no modelo de referencia). Relacao 1:N (pedido do
+// usuario): o texto atual se aplica a todo PDF gerado dali em diante.
+export interface ComunicadoPedidoPdfDto {
+  texto: string;
+  atualizadoEm: string;
+}

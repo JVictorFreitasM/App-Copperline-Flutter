@@ -7,6 +7,7 @@ import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitaco
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { CriarPedidoService } from './criar-pedido.service';
+import { PedidoPdfService } from './pedido-pdf.service';
 import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
 import { RelatorioPedidosService } from './relatorio-pedidos.service';
@@ -38,6 +39,7 @@ describe('PedidosController - ordem de rotas estaticas vs :id', () => {
         { provide: RelatorioPedidosService, useValue: relatorioPedidosService },
         { provide: SolicitacoesDescontoService, useValue: {} },
         { provide: PrismaService, useValue: {} },
+        { provide: PedidoPdfService, useValue: {} },
       ],
     }).compile();
 

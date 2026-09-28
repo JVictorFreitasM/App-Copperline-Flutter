@@ -18,6 +18,9 @@ export interface VendedorListaDto {
   id: string;
   nome: string | null;
   email: string | null;
+  // NAO vem do WK Radar - cadastrado manualmente pelo admin (2026-09-28),
+  // pro PDF de impressao do pedido (bloco "Vendedor(a)").
+  whatsapp: string | null;
   inativo: boolean;
   papel: PapelVendedor;
   supervisorId: string | null;
@@ -91,6 +94,7 @@ export class VendedoresHierarquiaService {
         id: true,
         nome: true,
         email: true,
+        whatsapp: true,
         inativo: true,
         papel: true,
         supervisorId: true,
@@ -103,12 +107,38 @@ export class VendedoresHierarquiaService {
       id: vendedor.id,
       nome: vendedor.nome,
       email: vendedor.email,
+      whatsapp: vendedor.whatsapp,
       inativo: vendedor.inativo,
       papel: vendedor.papel,
       supervisorId: vendedor.supervisorId,
       supervisorNome: vendedor.supervisor?.nome ?? null,
       permiteCheckinSemAgendamento: vendedor.permiteCheckinSemAgendamento,
     }));
+  }
+
+  // Cadastro manual (2026-09-28) - Radar nao expoe telefone/whatsapp de
+  // vendedor. Mesmo padrao isolado de atualizarPermiteCheckinSemAgendamento
+  // (campo sem relacao com papel/supervisor).
+  async atualizarWhatsapp(
+    vendedorId: string,
+    whatsapp: string | null,
+  ): Promise<VendedorHierarquiaDto> {
+    const vendedor = await this.prisma.vendedor.findUnique({ where: { id: vendedorId } });
+    if (!vendedor) {
+      throw new NotFoundException(`Vendedor '${vendedorId}' não encontrado`);
+    }
+
+    const atualizado = await this.prisma.vendedor.update({
+      where: { id: vendedorId },
+      data: { whatsapp },
+    });
+
+    return {
+      id: atualizado.id,
+      nome: atualizado.nome,
+      papel: atualizado.papel,
+      supervisorId: atualizado.supervisorId,
+    };
   }
 
   // OS-novas-implementacoes.md Bloco 5 - toggle isolado (nao dentro de

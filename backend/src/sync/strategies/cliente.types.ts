@@ -51,6 +51,13 @@ export interface WkRadarClienteInformacoesExtras2 {
   idTabelaPrecoProduto?: string | null;
 }
 
+// Subconjunto de ReadClienteInscricoesLegaisDto - so inscricaoEstadual e'
+// usado (bloco de identificacao do PDF de impressao do pedido, 2026-09-28).
+// Confirmado contra a API real do ambiente de testes.
+export interface WkRadarClienteInscricoesLegais {
+  inscricaoEstadual?: string | null;
+}
+
 export interface WkRadarCliente {
   id: string;
   codigoIntegrador?: string | null;
@@ -63,6 +70,7 @@ export interface WkRadarCliente {
   detalhes?: WkRadarClienteDetalhes | null;
   informacoesFinanceiras?: WkRadarClienteInformacoesFinanceiras | null;
   informacoesExtras2?: WkRadarClienteInformacoesExtras2 | null;
+  inscricoesLegais?: WkRadarClienteInscricoesLegais | null;
 }
 
 export interface ContatoMapeado {
@@ -81,6 +89,7 @@ export interface ClienteMapeado {
   cpfCnpj: string | null;
   razaoSocial: string | null;
   nomeFantasia: string | null;
+  inscricaoEstadual: string | null;
   inativo: boolean;
   enderecos: WkRadarEndereco[];
   contatos: ContatoMapeado[];

@@ -8,6 +8,7 @@ import { Badge } from "@/components/badge";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
 import { HierarquiaForm } from "./hierarquia-form";
 import { PermiteCheckinToggle } from "./permite-checkin-toggle";
+import { WhatsappForm } from "./whatsapp-form";
 
 // Gestão de hierarquia de vendedores (OS-WEB-21) - consome GET/PATCH
 // admin/vendedores/* (o GET foi adicionado nesta OS, ver
@@ -73,11 +74,12 @@ export default async function AdminVendedoresPage() {
                   <HierarquiaForm vendedor={vendedor} opcoesSupervisor={opcoesSupervisor} />
                 </details>
 
-                <div className="mt-3">
+                <div className="mt-3 flex flex-col gap-3">
                   <PermiteCheckinToggle
                     vendedorId={vendedor.id}
                     permiteInicial={vendedor.permiteCheckinSemAgendamento}
                   />
+                  <WhatsappForm vendedorId={vendedor.id} whatsappInicial={vendedor.whatsapp} />
                 </div>
               </Card>
             );

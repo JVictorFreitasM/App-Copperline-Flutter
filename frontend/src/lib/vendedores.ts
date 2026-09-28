@@ -7,6 +7,9 @@ export interface VendedorListaDto {
   id: string;
   nome: string | null;
   email: string | null;
+  // NAO vem do WK Radar - cadastrado manualmente pelo admin (2026-09-28),
+  // pro PDF de impressao do pedido (bloco "Vendedor(a)").
+  whatsapp: string | null;
   inativo: boolean;
   papel: PapelVendedor;
   supervisorId: string | null;

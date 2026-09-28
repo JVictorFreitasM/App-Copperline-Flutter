@@ -4,9 +4,11 @@ import { apiFetch, ApiError } from "@/lib/api";
 import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
+  ComunicadoPedidoPdfDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
+  DadosEmpresaPdfDto,
 } from "@/lib/configuracoes";
 import { ErroConexao } from "@/components/listagem-feedback";
 import { ConfiguracoesTabs } from "./configuracoes-tabs";
@@ -23,12 +25,16 @@ export default async function ConfiguracoesPage() {
   }
 
   try {
-    const [alcada, orcamento, rastreio, llm, chavesLlm] = await Promise.all([
+    const [alcada, orcamento, rastreio, llm, chavesLlm, empresaPdf, comunicadoPdf] = await Promise.all([
       apiFetch<AlcadaAprovacaoDto>("/admin/configuracoes/alcada-aprovacao", { cache: "no-store" }),
       apiFetch<ConfiguracaoOrcamentoDto>("/admin/configuracoes/orcamento", { cache: "no-store" }),
       apiFetch<ConfiguracaoRastreioDto>("/admin/configuracoes/rastreio", { cache: "no-store" }),
       apiFetch<ConfiguracaoLlmDto>("/admin/configuracoes/llm", { cache: "no-store" }),
       apiFetch<ChaveLlmDto[]>("/admin/configuracoes/llm/chaves", { cache: "no-store" }),
+      apiFetch<DadosEmpresaPdfDto>("/admin/configuracoes/documento-pedido/empresa", { cache: "no-store" }),
+      apiFetch<ComunicadoPedidoPdfDto>("/admin/configuracoes/documento-pedido/comunicado", {
+        cache: "no-store",
+      }),
     ]);
 
     return (
@@ -40,6 +46,8 @@ export default async function ConfiguracoesPage() {
           rastreioInicial={rastreio}
           llmInicial={llm}
           chavesLlmIniciais={chavesLlm}
+          empresaPdfInicial={empresaPdf}
+          comunicadoPdfInicial={comunicadoPdf}
         />
       </main>
     );

@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -24,6 +25,7 @@ import type { CriarPedidoResultadoDto } from './criar-pedido.service';
 import { AlterarVendedorOrcamentoDto } from './dto/alterar-vendedor-orcamento.dto';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
 import { SimularDescontoDto } from './dto/simular-desconto.dto';
+import { PedidoPdfService } from './pedido-pdf.service';
 import { PedidosService } from './pedidos.service';
 import type {
   PedidoDetalheDto,
@@ -46,6 +48,7 @@ export class PedidosController {
     private readonly relatorioPedidosService: RelatorioPedidosService,
     private readonly solicitacoesDescontoService: SolicitacoesDescontoService,
     private readonly prisma: PrismaService,
+    private readonly pedidoPdfService: PedidoPdfService,
   ) {}
 
   @Get()
@@ -100,6 +103,24 @@ export class PedidosController {
   ): Promise<PedidoHistoricoStatusDto[]> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.pedidosService.obterHistorico(id, escopo);
+  }
+
+  // "/:id/pdf" - PDF de impressao do pedido inteiro (pedido do usuario,
+  // 2026-09-28), botao "Exportar PDF" na aba HISTÓRICO. Mesmo escopo de
+  // buscarPorId (PedidoPdfService delega pra pedidosService.buscarPorId) -
+  // 404 tanto pra "nao existe" quanto pra "fora do escopo de quem pediu",
+  // evita IDOR. `inline`, mesmo criterio de NotasFiscaisController.obterPdf.
+  @Get(':id/pdf')
+  async obterPdf(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<StreamableFile> {
+    const escopo = await this.resolverEscopo(idpUser);
+    const { buffer, nomeArquivo } = await this.pedidoPdfService.gerarPdf(id, escopo);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${encodeURIComponent(nomeArquivo)}"`,
+    });
   }
 
   // Revisao por item (tela de detalhe do pedido, layout de referencia

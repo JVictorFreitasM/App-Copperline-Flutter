@@ -12,6 +12,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { CriarPedidoService } from './criar-pedido.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
+import { PedidoPdfService } from './pedido-pdf.service';
 import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
 import { RelatorioPedidosService } from './relatorio-pedidos.service';
@@ -33,7 +34,13 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
     ConfiguracoesModule,
   ],
   controllers: [PedidosController],
-  providers: [PedidosService, CriarPedidoService, PedidoErpClientService, RelatorioPedidosService],
+  providers: [
+    PedidosService,
+    CriarPedidoService,
+    PedidoErpClientService,
+    RelatorioPedidosService,
+    PedidoPdfService,
+  ],
   // CriarPedidoService exportado pra MobileModule (OS-BACKEND-29)
   // reaproveitar na fila de acoes offline.
   exports: [CriarPedidoService],

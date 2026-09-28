@@ -2,7 +2,7 @@ import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import {
-  configSituacaoPedido,
+  configStatusExibicaoPedido,
   OPCOES_SITUACAO_PEDIDO,
   OPCOES_STATUS_APROVACAO,
   UFS_BRASIL,
@@ -251,7 +251,7 @@ export default async function PedidosPage({
                 </thead>
                 <tbody>
                   {resultado.data.map((pedido) => {
-                    const situacaoConfig = configSituacaoPedido(pedido.situacao);
+                    const situacaoConfig = configStatusExibicaoPedido(pedido);
                     return (
                       <tr key={pedido.id} className="border-b border-line last:border-0 hover:bg-background">
                         <td className="px-4 py-3">
@@ -274,7 +274,15 @@ export default async function PedidosPage({
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted">
-                          <p>{formatarData(pedido.dataEmissao ?? pedido.dataHoraUltimaAlteracao)}</p>
+                          {/* dataEmissao/dataHoraUltimaAlteracao so vem do Radar - fica
+                              null pro pedido recem-criado ate sincronizar de volta.
+                              sincronizadoEm nunca e null (achado 2026-09-28: sem esse
+                              fallback a coluna ficava vazia num pedido acabado de criar). */}
+                          <p>
+                            {formatarData(
+                              pedido.dataEmissao ?? pedido.dataHoraUltimaAlteracao ?? pedido.sincronizadoEm,
+                            )}
+                          </p>
                           <p className="text-xs">{pedido.vendedor?.nome ?? "—"}</p>
                         </td>
                         <td className="px-4 py-3">

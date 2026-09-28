@@ -4,9 +4,11 @@ import { apiFetch } from "@/lib/api";
 import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
+  ComunicadoPedidoPdfDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
+  DadosEmpresaPdfDto,
 } from "@/lib/configuracoes";
 
 // Protegido por requireRole('admin') no backend (ver configuracoes.module.ts)
@@ -96,6 +98,28 @@ export async function reordenarChavesLlm(ids: string[]): Promise<ChaveLlmDto[]> 
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ids }),
+    cache: "no-store",
+  });
+}
+
+// Aba "Documento do Pedido" (2026-09-28) - cabecalho fixo + comunicado do
+// PDF de impressao do pedido (ver PedidoPdfService no backend).
+export async function atualizarDadosEmpresaPdf(
+  input: Omit<DadosEmpresaPdfDto, "atualizadoEm">,
+): Promise<DadosEmpresaPdfDto> {
+  return apiFetch<DadosEmpresaPdfDto>("/admin/configuracoes/documento-pedido/empresa", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+}
+
+export async function atualizarComunicadoPedidoPdf(texto: string): Promise<ComunicadoPedidoPdfDto> {
+  return apiFetch<ComunicadoPedidoPdfDto>("/admin/configuracoes/documento-pedido/comunicado", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texto }),
     cache: "no-store",
   });
 }
