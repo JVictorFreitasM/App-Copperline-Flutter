@@ -1,6 +1,6 @@
 import { Card } from "@/components/design/card";
 import { ListItem } from "@/components/design/list-item";
-import { formatarQuantidade } from "@/lib/formatacao";
+import { formatarQuantidade, formatarQuantidadeLote } from "@/lib/formatacao";
 import type { EstoqueConsultaDto } from "@/lib/estoque";
 
 // Bloco visual compartilhado entre a busca pontual (BuscaEstoque, cliente)
@@ -44,7 +44,7 @@ export function EstoqueResultadoView({ resultado }: { resultado: EstoqueConsulta
               ? `Lote ${item.lote ?? "—"} · Fabricado em ${item.fabricadoEm ?? "—"}`
               : undefined
           }
-          valor={formatarQuantidade(item.quantidade)}
+          valor={formatarQuantidadeLote(item.quantidade)}
         />
       ))}
       {resultado.atualizadoEm && (

@@ -21,12 +21,27 @@ export async function definirMetaVendedor(
   _estadoAnterior: EstadoDefinirMeta,
   formData: FormData,
 ): Promise<EstadoDefinirMeta> {
-  const mesAno = String(formData.get("mesAno") ?? "");
+  const periodicidade = String(formData.get("periodicidade") ?? "");
+  const periodo = String(formData.get("periodo") ?? "");
+  const tipoMeta = String(formData.get("tipoMeta") ?? "");
   const valorMetaRaw = String(formData.get("valorMeta") ?? "").trim();
   const valorMeta = Number(valorMetaRaw);
 
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mesAno)) {
-    return { erro: "Informe um mês válido.", sucesso: null };
+  if (periodicidade !== "MENSAL" && periodicidade !== "SEMANAL") {
+    return { erro: "Selecione mensal ou semanal.", sucesso: null };
+  }
+  const formatoValido =
+    periodicidade === "MENSAL"
+      ? /^\d{4}-(0[1-9]|1[0-2])$/.test(periodo)
+      : /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(periodo);
+  if (!formatoValido) {
+    return {
+      erro: periodicidade === "MENSAL" ? "Informe um mês válido." : "Informe uma semana válida.",
+      sucesso: null,
+    };
+  }
+  if (tipoMeta !== "DINHEIRO" && tipoMeta !== "PESO" && tipoMeta !== "MARGEM") {
+    return { erro: "Selecione o tipo de meta.", sucesso: null };
   }
   if (!valorMetaRaw || Number.isNaN(valorMeta) || valorMeta <= 0) {
     return { erro: "Meta precisa ser um número maior que zero.", sucesso: null };
@@ -36,7 +51,7 @@ export async function definirMetaVendedor(
     await adminApiFetch(`/admin/vendedores/${encodeURIComponent(vendedorId)}/meta`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mesAno, valorMeta }),
+      body: JSON.stringify({ periodicidade, periodo, tipoMeta, valorMeta }),
       cache: "no-store",
     });
   } catch (error) {

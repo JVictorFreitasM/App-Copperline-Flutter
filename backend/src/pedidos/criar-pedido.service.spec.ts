@@ -73,6 +73,11 @@ function prismaFake(overrides: {
     estoqueLote: { update: estoqueLoteUpdate, upsert: estoqueLoteUpsert },
   };
 
+  // Fora de qualquer transacao de proposito - ver
+  // CriarPedidoService.atualizarCabecalhoAposEnvio (best-effort, roda
+  // depois que a transacao de criacao ja commitou).
+  const pedidoUpdate = jest.fn().mockResolvedValue(undefined);
+
   return {
     vendedor: {
       findFirst: jest
@@ -129,6 +134,7 @@ function prismaFake(overrides: {
         .mockResolvedValue('contato' in overrides ? overrides.contato : CONTATO_PADRAO),
     },
     $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(tx)),
+    pedido: { update: pedidoUpdate },
     _tx: tx,
   };
 }
@@ -172,7 +178,11 @@ function pedidoErpClientServiceFake(
         .mockResolvedValue(
           overrides.resolve ?? { idExterno: 'erp-1', codigoIntegrador: 'pedido-1' },
         );
-  return { criar };
+  // Best-effort (ver PedidoErpClientService.buscarCabecalhoAtualizado) -
+  // resolve null por padrao (equivalente a "Radar ainda nao processou" ou
+  // falha de rede), que e' um caminho ja tratado sem lancar.
+  const buscarCabecalhoAtualizado = jest.fn().mockResolvedValue(null);
+  return { criar, buscarCabecalhoAtualizado };
 }
 
 function configuracaoTabelaPrecoServiceFake(codigo: string | null = '110') {
@@ -655,6 +665,58 @@ describe('CriarPedidoService.criar', () => {
         }),
       ],
     });
+  });
+
+  // Pedido do usuario (2026-09-28): "numero"/situacao/datas do pedido so
+  // existem no Radar depois que ele termina de processar a criacao (POST
+  // devolve so {id, codigoIntegrador}) - busca isso de volta logo apos
+  // enviar, em vez de esperar o sync noturno/manual.
+  it('busca e grava numero/situacao/datas do Radar logo apos enviar o pedido', async () => {
+    const prisma = prismaFake();
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    pedidoErpClientService.buscarCabecalhoAtualizado.mockResolvedValue({
+      numero: '0724-000999',
+      situacao: 'EM_ANALISE',
+      dataEmissao: new Date('2026-09-28'),
+      dataHoraUltimaAlteracao: new Date('2026-09-28T10:00:00Z'),
+    });
+    const service = criarService(
+      prisma,
+      undefined,
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientService,
+    );
+
+    await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(pedidoErpClientService.buscarCabecalhoAtualizado).toHaveBeenCalledWith('erp-1');
+    expect(prisma.pedido.update).toHaveBeenCalledWith({
+      where: { id: 'pedido-1' },
+      data: {
+        numero: '0724-000999',
+        situacao: 'EM_ANALISE',
+        dataEmissao: new Date('2026-09-28'),
+        dataHoraUltimaAlteracao: new Date('2026-09-28T10:00:00Z'),
+      },
+    });
+  });
+
+  // Best-effort: Radar pode ainda nao ter processado (buscarCabecalhoAtualizado
+  // resolve null, ver mock padrao) - nao pode quebrar a criacao do pedido.
+  it('nao falha a criacao quando a busca de cabecalho pos-envio nao retorna nada', async () => {
+    const prisma = prismaFake();
+    const pedidoErpClientService = pedidoErpClientServiceFake();
+    const service = criarService(
+      prisma,
+      undefined,
+      solicitacoesDescontoServiceFake(),
+      pedidoErpClientService,
+    );
+
+    const resultado = await service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS);
+
+    expect(resultado.status).toBe('ENVIADO');
+    expect(prisma.pedido.update).not.toHaveBeenCalled();
   });
 
   // 2026-09-21 - WK Radar rejeitou ValorUnitario com mais de 2 casas

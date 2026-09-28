@@ -19,8 +19,12 @@ final metaProgressoProvider = FutureProvider<MetaProgresso?>((ref) async {
   if (vendedorId == null) return null;
 
   final apiClient = ref.watch(apiClientProvider);
+  // periodicidade=MENSAL (nao SEMANAL) - gauge da home sempre mostra a
+  // meta do MES (2026-09-28: backend passou a suportar tambem meta
+  // semanal, que pode coexistir com a mensal, mas o mobile continua so'
+  // mensal por enquanto, mesmo comportamento de antes).
   final json = await apiClient.getJson(
-    '/vendedores/${Uri.encodeComponent(vendedorId)}/meta-progresso?mesAno=${_mesAnoAtual()}',
+    '/vendedores/${Uri.encodeComponent(vendedorId)}/meta-progresso?periodicidade=MENSAL&periodo=${_mesAnoAtual()}',
   );
   return MetaProgresso.fromJson(json);
 });

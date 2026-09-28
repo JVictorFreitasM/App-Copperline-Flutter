@@ -58,7 +58,8 @@ const IBGE_UF_POR_PREFIXO: Record<string, string> = {
   '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF',
 };
 
-const MAPA_SITUACAO: Record<SituacaoPedidoWkRadar, TipoSituacaoPedido> = {
+// Exportado - ver comentario de parseDataBrWkRadar abaixo sobre reaproveitamento.
+export const MAPA_SITUACAO: Record<SituacaoPedidoWkRadar, TipoSituacaoPedido> = {
   EmAnalise: 'EM_ANALISE',
   Bloqueado: 'BLOQUEADO',
   Pendente: 'PENDENTE',
@@ -395,7 +396,10 @@ function formatarDataWkRadar(data: Date): string {
 // dataEmissao/dataEntrega do pedido vem em DD/MM/YYYY (confirmado
 // empiricamente) - diferente do formato ISO de dataHoraUltimaAlteracao/
 // dataHoraGravacao. Fail-safe: formato inesperado vira null, nunca lanca.
-function parseDataBrWkRadar(valor: string | null | undefined): Date | null {
+// Exportada - reaproveitada por PedidoErpClientService.buscarCabecalhoAtualizado
+// (pedido do usuario 2026-09-28: buscar numero/situacao/datas logo apos
+// criar o pedido, sem esperar o sync noturno) pra nao duplicar o parsing.
+export function parseDataBrWkRadar(valor: string | null | undefined): Date | null {
   if (!valor) return null;
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor);
   if (!match) return null;

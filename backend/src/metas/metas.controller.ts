@@ -5,6 +5,7 @@ import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { MesAnoQueryDto } from './dto/mes-ano-query.dto';
+import { MetaProgressoQueryDto } from './dto/meta-progresso-query.dto';
 import type { MetaProgressoDto } from './meta-vendedor.service';
 import { MetaVendedorService } from './meta-vendedor.service';
 import type { RankingEquipeItemDto } from './ranking-equipe.service';
@@ -42,7 +43,7 @@ export class MetasController {
   @Get('vendedores/:id/meta-progresso')
   async metaProgresso(
     @Param('id') id: string,
-    @Query() query: MesAnoQueryDto,
+    @Query() query: MetaProgressoQueryDto,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<MetaProgressoDto> {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
@@ -55,7 +56,7 @@ export class MetasController {
         'Sem permissão para consultar a meta deste vendedor',
       );
     }
-    return this.metaVendedorService.obterProgresso(id, query.mesAno);
+    return this.metaVendedorService.obterProgresso(id, query.periodicidade, query.periodo);
   }
 
   @Get('equipe/ranking')

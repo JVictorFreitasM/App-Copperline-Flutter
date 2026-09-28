@@ -254,6 +254,7 @@ export class CriarPedidoService {
         contatoId,
         input.observacoes ?? null,
       );
+      await this.atualizarCabecalhoAposEnvio(pedido.id, resultadoErp.idExterno);
       return {
         status: 'ENVIADO',
         pedidoId: pedido.id,
@@ -655,6 +656,34 @@ export class CriarPedidoService {
     });
   }
 
+  // Pedido do usuario (2026-09-28) - logo apos o pedido ser aceito pelo
+  // Radar (idExternoErp ja gravado), busca de volta numero/situacao/datas
+  // (so existem depois que o Radar termina de processar a criacao, ver
+  // PedidoErpClientService.buscarCabecalhoAtualizado) em vez de deixar
+  // esses campos null ate' o proximo sync noturno/manual. Best-effort de
+  // proposito: nunca lanca (buscarCabecalhoAtualizado ja engole erro de
+  // rede/Radar), e um update comum (fora de qualquer transacao) - se nao
+  // vier a tempo, o sync de fundo completa depois, sem bloquear a resposta
+  // de criacao do pedido por causa disso.
+  private async atualizarCabecalhoAposEnvio(
+    pedidoId: string,
+    idExterno: string,
+  ): Promise<void> {
+    const cabecalho = await this.pedidoErpClientService.buscarCabecalhoAtualizado(idExterno);
+    if (!cabecalho) {
+      return;
+    }
+    await this.prisma.pedido.update({
+      where: { id: pedidoId },
+      data: {
+        numero: cabecalho.numero,
+        situacao: cabecalho.situacao,
+        dataEmissao: cabecalho.dataEmissao,
+        dataHoraUltimaAlteracao: cabecalho.dataHoraUltimaAlteracao,
+      },
+    });
+  }
+
   private async persistirPedidoAguardandoAprovacao(
     vendedorId: string,
     clienteId: string,
@@ -863,6 +892,7 @@ export class CriarPedidoService {
         });
         return novo;
       });
+      await this.atualizarCabecalhoAposEnvio(atualizado.id, resultadoErp.idExterno);
       return {
         status: 'ENVIADO',
         pedidoId: atualizado.id,

@@ -1176,25 +1176,53 @@ enum PapelVendedor {
   @@map("papel_vendedor")
 }
 
-// Meta mensal por vendedor (OS-BACKEND-44) - configurada manualmente pelo
+// Meta por vendedor (OS-BACKEND-44) - configurada manualmente pelo
 // admin/supervisor (nao vem do Radar, mesmo motivo estrutural de
 // Vendedor.papel/supervisorId acima: e' decisao de gestao interna, sem
-// endpoint equivalente no ERP). mesAno como string "YYYY-MM" (nao DateTime)
-// - representa um MES inteiro, nao um instante; evita ambiguidade de fuso
-// horario na comparacao "qual mes e' esse timestamp" que um DateTime
-// exigiria a cada leitura.
+// endpoint equivalente no ERP). `periodo` como string (nao DateTime) -
+// representa um MES ("YYYY-MM") ou uma SEMANA ISO ("YYYY-Www", segunda a
+// domingo) inteiros, nao um instante; evita ambiguidade de fuso horario na
+// comparacao "qual periodo e' esse timestamp" que um DateTime exigiria a
+// cada leitura. O FORMATO de `periodo` depende de `periodicidade`.
+//
+// Pedido do usuario (2026-09-28):
+// 1. Mensal e semanal podem coexistir (um vendedor pode ter as duas metas
+//    ativas ao mesmo tempo, mostradas separadas) - por isso periodicidade
+//    entra na chave unica, nao e' so um filtro.
+// 2. Só um TIPO de meta ativo por periodo (Dinheiro OU Peso OU Margem,
+//    nunca mais de um simultaneo pro mesmo vendedor+periodicidade+periodo)
+//    - tipoMeta fica FORA da chave unica de proposito: trocar o tipo e'
+//    um update no mesmo registro, nao um novo.
+// 3. Margem ainda nao tem calculo de progresso implementado (so o nome
+//    existe como opcao selecionavel) - ver MetaVendedorService.obterProgresso.
 model MetaVendedor {
-  id           String   @id @default(uuid())
-  vendedorId   String   @map("vendedor_id")
-  mesAno       String   @map("mes_ano")
-  valorMeta    Decimal  @map("valor_meta") @db.Decimal(18, 6)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  id            String                 @id @default(uuid())
+  vendedorId    String                 @map("vendedor_id")
+  periodicidade TipoPeriodicidadeMeta  @default(MENSAL)
+  periodo       String
+  tipoMeta      TipoMeta               @default(DINHEIRO) @map("tipo_meta")
+  valorMeta     Decimal                @map("valor_meta") @db.Decimal(18, 6)
+  criadoEm      DateTime               @default(now()) @map("criado_em")
+  atualizadoEm  DateTime               @updatedAt @map("atualizado_em")
 
   vendedor Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
 
-  @@unique([vendedorId, mesAno])
+  @@unique([vendedorId, periodicidade, periodo])
   @@map("metas_vendedor")
+}
+
+enum TipoPeriodicidadeMeta {
+  MENSAL
+  SEMANAL
+}
+
+// PESO usa Pedido.pesoLiquidoTotalKg (meta em Kg) - MARGEM ainda sem
+// calculo de progresso (so o nome existe como opcao, ver comentario acima
+// em MetaVendedor).
+enum TipoMeta {
+  DINHEIRO
+  PESO
+  MARGEM
 }
 
 // Substituicao temporaria de carteira (OS-BACKEND-48) - enquanto ativa

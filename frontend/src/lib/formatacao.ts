@@ -59,6 +59,25 @@ export function formatarQuantidade(valor: string | null): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 }).format(numero);
 }
 
+// Listagem de lotes (estoque-resultado-view) - pedido do usuário
+// (2026-09-28): sempre 3 casas decimais, mesmo com zero à direita (0,9 ->
+// "0,900", 15,3 -> "15,300"), diferente de formatarQuantidade acima (que
+// corta zeros à direita). Só essa tela - as outras usam formatarQuantidade
+// normal.
+export function formatarQuantidadeLote(valor: string | null): string {
+  if (valor === null) {
+    return "—";
+  }
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) {
+    return "—";
+  }
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  }).format(numero);
+}
+
 // Contato de cliente (ContatoCliente.telefoneDdd/telefoneNumero) - "—"
 // quando falta qualquer uma das duas partes (nunca mostra so DDD ou so
 // numero solto).

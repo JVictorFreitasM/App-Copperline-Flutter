@@ -45,19 +45,9 @@ export class VendedorVendasService {
       return new Map();
     }
 
-    const vinculos = await this.prisma.clienteVendedor.findMany({
-      where: {
-        clienteId: { in: clientesAgrupado.map((c) => c.clienteId as string) },
-      },
-      orderBy: { criadoEm: 'asc' },
-      select: { clienteId: true, vendedorId: true },
-    });
-    const vendedorIdPorCliente = new Map<string, string>();
-    for (const vinculo of vinculos) {
-      if (!vendedorIdPorCliente.has(vinculo.clienteId)) {
-        vendedorIdPorCliente.set(vinculo.clienteId, vinculo.vendedorId);
-      }
-    }
+    const vendedorIdPorCliente = await this.resolverVendedorPorCliente(
+      clientesAgrupado.map((c) => c.clienteId as string),
+    );
 
     const resultado = new Map<string, { valor: number; quantidade: number }>();
     for (const linha of clientesAgrupado) {
@@ -72,5 +62,59 @@ export class VendedorVendasService {
       });
     }
     return resultado;
+  }
+
+  // Meta tipo PESO (pedido do usuario, 2026-09-28) - mesma atribuicao
+  // cliente->vendedor de valorEQuantidadePorVendedor acima, somando
+  // Pedido.pesoLiquidoTotalKg em vez de valorTotal. null pra pedido
+  // sincronizado do Radar (nunca calculado nesse caminho, ver
+  // CriarPedidoService) - excluido da soma, nao tratado como zero.
+  async pesoVendidoPorVendedor(periodo: {
+    gte?: Date;
+    lte?: Date;
+  }): Promise<Map<string, number>> {
+    const clientesAgrupado = await this.prisma.pedido.groupBy({
+      by: ['clienteId'],
+      where: { clienteId: { not: null }, dataHoraUltimaAlteracao: periodo },
+      _sum: { pesoLiquidoTotalKg: true },
+    });
+    if (clientesAgrupado.length === 0) {
+      return new Map();
+    }
+
+    const vendedorIdPorCliente = await this.resolverVendedorPorCliente(
+      clientesAgrupado.map((c) => c.clienteId as string),
+    );
+
+    const resultado = new Map<string, number>();
+    for (const linha of clientesAgrupado) {
+      const vendedorId = vendedorIdPorCliente.get(linha.clienteId as string);
+      if (!vendedorId) {
+        continue;
+      }
+      const atual = resultado.get(vendedorId) ?? 0;
+      resultado.set(vendedorId, atual + Number(linha._sum.pesoLiquidoTotalKg ?? 0));
+    }
+    return resultado;
+  }
+
+  // ClienteVendedor e' N:N no schema mas na pratica um cliente so negocia
+  // com um vendedor (confirmado com o usuario) - o primeiro vinculo (mais
+  // antigo) de cada cliente e' o vendedor responsavel.
+  private async resolverVendedorPorCliente(
+    clienteIds: string[],
+  ): Promise<Map<string, string>> {
+    const vinculos = await this.prisma.clienteVendedor.findMany({
+      where: { clienteId: { in: clienteIds } },
+      orderBy: { criadoEm: 'asc' },
+      select: { clienteId: true, vendedorId: true },
+    });
+    const vendedorIdPorCliente = new Map<string, string>();
+    for (const vinculo of vinculos) {
+      if (!vendedorIdPorCliente.has(vinculo.clienteId)) {
+        vendedorIdPorCliente.set(vinculo.clienteId, vinculo.vendedorId);
+      }
+    }
+    return vendedorIdPorCliente;
   }
 }

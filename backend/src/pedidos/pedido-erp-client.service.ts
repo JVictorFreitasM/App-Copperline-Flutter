@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { TipoSituacaoPedido } from '../../generated/prisma/client';
 import { ErpClientService } from '../erp-client/erp-client.service';
+import { MAPA_SITUACAO, parseDataBrWkRadar } from '../sync/strategies/pedido.sync';
 
 export interface PedidoErpItemInput {
   produtoIdExterno: string;
@@ -34,6 +36,20 @@ interface WkRadarPedidoCriarResposta {
   codigoIntegrador: string | null;
 }
 
+export interface PedidoErpCabecalho {
+  numero: string | null;
+  situacao: TipoSituacaoPedido | null;
+  dataEmissao: Date | null;
+  dataHoraUltimaAlteracao: Date | null;
+}
+
+interface WkRadarPedidoCabecalho {
+  numero?: string | null;
+  situacao?: string | null;
+  dataEmissao?: string | null;
+  dataHoraUltimaAlteracao?: string | null;
+}
+
 // OS-BACKEND-25 - envio real de pedido ao WK Radar (POST
 // /comercial/v1/pedido). Contrato de request confirmado pelo usuario
 // (swagger real do ambiente, 2026-09-16) - a API grava uma LISTA de
@@ -59,6 +75,7 @@ interface WkRadarPedidoCriarResposta {
 // resolve o valor final e' o proprio Radar a partir do total.
 @Injectable()
 export class PedidoErpClientService {
+  private readonly logger = new Logger(PedidoErpClientService.name);
   private readonly idFilial: string;
   private readonly idUnidadeVenda: string;
 
@@ -118,6 +135,47 @@ export class PedidoErpClientService {
       idExterno: criado.id,
       codigoIntegrador: criado.codigoIntegrador ?? '',
     };
+  }
+
+  // Pedido do usuario (2026-09-28): "numero", "situacao" e as datas do
+  // pedido so existem no Radar depois que ELE termina de processar a
+  // criacao (POST /pedido so devolve {id, codigoIntegrador}) - sem isso,
+  // esses campos ficavam null ate' o proximo sync noturino/manual, que
+  // pode demorar (ou nunca) acontecer (ver PedidoSyncStrategy). Busca
+  // avulsa por id (`Ids=`), SO os 4 campos de cabecalho - nunca reaproveita
+  // PedidoSyncStrategy.upsert() aqui de proposito: ele tambem recria os
+  // itens a partir do Radar, o que sobrescreveria o preco/desconto ja
+  // calculado localmente (ver CriarPedidoService) com o retalho cru do
+  // Radar. Best-effort: retorna null em qualquer falha (rede, Radar ainda
+  // nao processou, campo ausente) - quem chama nao pode deixar a criacao
+  // do pedido falhar por causa disso, o sync de fundo cobre o que faltar.
+  async buscarCabecalhoAtualizado(idExterno: string): Promise<PedidoErpCabecalho | null> {
+    try {
+      const pagina = await this.erpClient.get<WkRadarPedidoCabecalho[]>(
+        '/comercial/v1/pedido',
+        {
+          Ids: idExterno,
+          Fields: ['numero', 'situacao', 'dataEmissao', 'dataHoraUltimaAlteracao'],
+        },
+      );
+      const bruto = pagina[0];
+      if (!bruto) {
+        return null;
+      }
+      return {
+        numero: bruto.numero ?? null,
+        situacao: bruto.situacao ? (MAPA_SITUACAO[bruto.situacao as keyof typeof MAPA_SITUACAO] ?? null) : null,
+        dataEmissao: parseDataBrWkRadar(bruto.dataEmissao),
+        dataHoraUltimaAlteracao: bruto.dataHoraUltimaAlteracao
+          ? new Date(bruto.dataHoraUltimaAlteracao)
+          : null,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao buscar cabecalho atualizado do pedido '${idExterno}' logo apos criar - sync de fundo cobre depois: ${error instanceof Error ? error.message : error}`,
+      );
+      return null;
+    }
   }
 }
 
