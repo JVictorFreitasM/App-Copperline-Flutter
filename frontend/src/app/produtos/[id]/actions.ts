@@ -132,33 +132,6 @@ export async function atualizarTipoAcondicionamento(
   return { erro: null, sucesso: "Tipo de acondicionamento atualizado." };
 }
 
-export async function enviarImagemProduto(
-  produtoId: string,
-  _estadoAnterior: EstadoEdicaoManual,
-  formData: FormData,
-): Promise<EstadoEdicaoManual> {
-  const imagem = formData.get("imagem");
-  if (!(imagem instanceof File) || imagem.size === 0) {
-    return { erro: "Selecione uma imagem.", sucesso: null };
-  }
-
-  try {
-    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}/imagem`, {
-      method: "POST",
-      body: formData,
-      cache: "no-store",
-    });
-  } catch (error) {
-    return {
-      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao enviar a imagem.",
-      sucesso: null,
-    };
-  }
-
-  revalidatePath(`/produtos/${produtoId}`);
-  return { erro: null, sucesso: "Imagem atualizada." };
-}
-
 // apiFetch (lib/api.ts) embute o corpo cru da resposta de erro na mensagem
 // (formato "API respondeu 422 para <url>: {"message":"...","error":...}")
 // - extrai só o `message` do JSON do Nest quando possível, pra não mostrar

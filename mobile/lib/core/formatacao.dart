@@ -33,6 +33,18 @@ String formatarPeso(String? valorKg) {
   return '${NumberFormat.decimalPattern('pt_BR').format(numero)} kg';
 }
 
+// Listagem de lotes (estoque_screen.dart) - achado 2026-09-29: quantidade
+// vinha crua da API (string tipo "240.8000"), sem NENHUMA formatação -
+// pt-BR lê ponto como separador de milhar, então "240.8000" parecia
+// "240800,0", 1000x maior que o valor real. Mesmo padrão de
+// formatarQuantidadeLote em frontend/src/lib/formatacao.ts (2026-09-28):
+// sempre 3 casas decimais, mesmo com zero à direita (0,9 -> "0,900").
+String formatarQuantidadeLote(String valor) {
+  final numero = double.tryParse(valor);
+  if (numero == null) return valor;
+  return NumberFormat('#,##0.000', 'pt_BR').format(numero);
+}
+
 // OS-MOBILE-34 (aba de documentos) - tamanho em bytes vindo da API vira
 // KB/MB legível.
 String formatarTamanhoArquivo(int bytes) {

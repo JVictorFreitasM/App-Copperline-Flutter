@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/formatacao.dart';
 import '../core/providers/estoque_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
@@ -112,7 +113,7 @@ class _EstoqueScreenState extends ConsumerState<EstoqueScreen> {
                       subtitulo: (item.lote != null || item.fabricadoEm != null)
                           ? 'Lote ${item.lote ?? "—"} · Fabricado em ${item.fabricadoEm ?? "—"}'
                           : null,
-                      valor: item.quantidade,
+                      valor: formatarQuantidadeLote(item.quantidade),
                     ),
                     const SizedBox(height: 8),
                   ],

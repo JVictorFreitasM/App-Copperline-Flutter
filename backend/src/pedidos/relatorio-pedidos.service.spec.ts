@@ -134,6 +134,40 @@ describe('RelatorioPedidosService.obter', () => {
     expect(resultado.periodo).toEqual({ dataInicial: '2026-01-01', dataFinal: '2026-01-31' });
   });
 
+  // Achado 2026-09-28/29 - pedido criado localmente (POST /pedidos) fica
+  // com dataHoraUltimaAlteracao null ate sincronizar de volta do Radar; um
+  // filtro "BETWEEN" simples nunca bate com NULL, entao esses pedidos
+  // sumiam do relatorio ate sincronizar. Filtro precisa incluir tambem
+  // "sem data do Radar ainda, mas sincronizadoEm no periodo".
+  it('filtra pedidos por dataHoraUltimaAlteracao OU (null + sincronizadoEm) no periodo', async () => {
+    const prisma = prismaFake();
+    const service = new RelatorioPedidosService(
+      prisma as never,
+      vendedorEscopoServiceFake({ tipo: 'TODOS' }) as never,
+    );
+
+    await service.obter(IDP_USER as never, 'u-admin', {
+      dataInicial: '2026-01-01',
+      dataFinal: '2026-01-31',
+    });
+
+    const periodoEsperado = {
+      gte: new Date('2026-01-01'),
+      lte: new Date('2026-01-31T23:59:59.999Z'),
+    };
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          vendedorId: { in: ['v1'] },
+          OR: [
+            { dataHoraUltimaAlteracao: periodoEsperado },
+            { dataHoraUltimaAlteracao: null, sincronizadoEm: periodoEsperado },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('deriva statusAprovacao PENDENTE e calcula dias/destaque quando aguardando aprovacao ha mais de 1 dia', async () => {
     const tresDiasAtras = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const prisma = prismaFake({

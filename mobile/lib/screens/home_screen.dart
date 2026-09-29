@@ -268,16 +268,36 @@ class _IndicadoresVisuais extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final metaAsync = ref.watch(metaProgressoProvider);
+    final metaMensalAsync = ref.watch(metaMensalProgressoProvider);
+    final metaSemanalAsync = ref.watch(metaSemanalProgressoProvider);
     final vendasAsync = ref.watch(vendasSemanaisProvider);
     final produtoEstoqueAsync = ref.watch(produtoFavoritoComEstoqueProvider);
 
+    // Mensal e semanal podem coexistir (pedido do usuário, 2026-09-29) -
+    // cada uma some independentemente quando não configurada, mesmo
+    // critério "sem dado real, sem card" do resto da home.
     final cards = <Widget?>[
-      metaAsync.maybeWhen<Widget?>(
-        data: (meta) => meta == null
+      metaMensalAsync.maybeWhen<Widget?>(
+        data: (meta) => meta == null || meta.tipoMeta == null
             ? null
             : AppCard(
                 child: MetaGauge(
+                  periodicidade: meta.periodicidade,
+                  tipoMeta: meta.tipoMeta,
+                  valorVendido: meta.valorVendido,
+                  valorMeta: meta.valorMeta,
+                  percentualAtingido: meta.percentualAtingido,
+                ),
+              ),
+        orElse: () => null,
+      ),
+      metaSemanalAsync.maybeWhen<Widget?>(
+        data: (meta) => meta == null || meta.tipoMeta == null
+            ? null
+            : AppCard(
+                child: MetaGauge(
+                  periodicidade: meta.periodicidade,
+                  tipoMeta: meta.tipoMeta,
                   valorVendido: meta.valorVendido,
                   valorMeta: meta.valorMeta,
                   percentualAtingido: meta.percentualAtingido,

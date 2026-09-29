@@ -90,12 +90,26 @@ export class RelatorioPedidosService {
     }
 
     const vendedorIds = vendedores.map((v) => v.id);
+    const periodo = filtroPeriodo(dataInicialEfetiva, dataFinalEfetiva);
 
     const [pedidos, pedidosAguardandoAprovacao] = await Promise.all([
       this.prisma.pedido.findMany({
         where: {
           vendedorId: { in: vendedorIds },
-          dataHoraUltimaAlteracao: filtroPeriodo(dataInicialEfetiva, dataFinalEfetiva),
+          // Pedido criado localmente (POST /pedidos) fica com
+          // dataHoraUltimaAlteracao null ate sincronizar de volta do
+          // Radar (pode demorar dias, ver PedidoSyncStrategy) - um filtro
+          // "dataHoraUltimaAlteracao BETWEEN X AND Y" sozinho nunca bate
+          // com NULL, entao esses pedidos recem-criados sumiam do
+          // relatorio de hoje ate sincronizar (achado 2026-09-28, mesma
+          // familia do bug ja corrigido em pedidos.service.ts/
+          // dashboard.service.ts). Cai pra sincronizadoEm (nunca null)
+          // so quando dataHoraUltimaAlteracao e' null, sem afetar pedido
+          // ja sincronizado (que continua filtrado pela data real do Radar).
+          OR: [
+            { dataHoraUltimaAlteracao: periodo },
+            { dataHoraUltimaAlteracao: null, sincronizadoEm: periodo },
+          ],
         },
         include: {
           cliente: true,
@@ -105,7 +119,7 @@ export class RelatorioPedidosService {
             take: 1,
           },
         },
-        orderBy: { dataHoraUltimaAlteracao: 'desc' },
+        orderBy: [{ dataHoraUltimaAlteracao: 'desc' }, { sincronizadoEm: 'desc' }],
       }),
       // Contagem de pendentes ATUAIS (backlog de aprovação), independente
       // do período filtrado acima - "útil pra identificar gargalo de

@@ -1,14 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { ResultadoImagensLoteDto } from "@/lib/produtos";
-
-export interface EstadoUploadLote {
-  erro: string | null;
-  resultado: ResultadoImagensLoteDto | null;
-}
-
-export const ESTADO_UPLOAD_LOTE_INICIAL: EstadoUploadLote = { erro: null, resultado: null };
+import type { PaginatedResult } from "@/lib/pagination";
+import type { ProdutoDetalheDto, ResultadoImagensLoteDto } from "@/lib/produtos";
+import type { EstadoEdicaoManual, EstadoUploadLote } from "./estado-produtos-admin";
 
 // Protegido por requireRole('admin') via MiddlewareConsumer (ver
 // produtos.module.ts) - mesmo padrão de enviarImagemProduto
@@ -39,4 +35,89 @@ export async function enviarImagensEmLote(
       resultado: null,
     };
   }
+}
+
+export interface ProdutoBuscaImagem {
+  id: string;
+  nome: string | null;
+  codigo: string | null;
+}
+
+// Upload individual (movido de produtos/[id] pro admin, pedido do usuário
+// 2026-09-29 - "área pra adicionar imagem individualmente" dentro de
+// /admin/produtos) - busca por nome OU código em paralelo, mesmo padrão
+// de buscarProdutos (pedidos/novo/actions.ts), sem reaproveitar aquele
+// (vive em outra feature/rota, e o formato de retorno aqui é diferente -
+// precisa de id/nome/codigo separados, não um label já montado).
+export async function buscarProdutosParaImagem(query: string): Promise<ProdutoBuscaImagem[]> {
+  const termo = query.trim();
+  if (!termo) return [];
+
+  const buscarPor = async (campo: "nome" | "codigo"): Promise<ProdutoBuscaImagem[]> => {
+    try {
+      const resultado = await apiFetch<PaginatedResult<ProdutoBuscaImagem>>(
+        `/produtos?${campo}=${encodeURIComponent(termo)}&limit=8`,
+        { cache: "no-store" },
+      );
+      return resultado.data;
+    } catch {
+      return [];
+    }
+  };
+
+  const [porNome, porCodigo] = await Promise.all([buscarPor("nome"), buscarPor("codigo")]);
+  const vistos = new Set<string>();
+  const produtos: ProdutoBuscaImagem[] = [];
+  for (const produto of [...porNome, ...porCodigo]) {
+    if (vistos.has(produto.id)) continue;
+    vistos.add(produto.id);
+    produtos.push(produto);
+  }
+  return produtos;
+}
+
+// Detalhe do produto selecionado na busca acima - só pra saber se já tem
+// imagem (temImagem) e montar a URL de preview; leitura aberta (GET
+// /produtos/:id, mesmo endpoint da tela pública), sem checagem de role
+// extra aqui (o upload em si, abaixo, é que exige admin no backend).
+export async function obterProdutoParaImagem(produtoId: string): Promise<ProdutoDetalheDto | null> {
+  try {
+    return await apiFetch<ProdutoDetalheDto>(`/produtos/${encodeURIComponent(produtoId)}`, {
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Movido de produtos/[id]/actions.ts (pedido do usuário, 2026-09-29) -
+// upload individual agora vive só em /admin/produtos, junto do upload em
+// massa. Campos que NÃO vêm do WK Radar (imagem), editável só por admin,
+// via POST /admin/produtos/:id/imagem (backend já valida role admin via
+// requireRole, ver produtos.module.ts).
+export async function enviarImagemProduto(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const imagem = formData.get("imagem");
+  if (!(imagem instanceof File) || imagem.size === 0) {
+    return { erro: "Selecione uma imagem.", sucesso: null };
+  }
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}/imagem`, {
+      method: "POST",
+      body: formData,
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao enviar a imagem.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath("/admin/produtos");
+  return { erro: null, sucesso: "Imagem atualizada." };
 }

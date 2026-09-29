@@ -11,7 +11,6 @@ import { Card } from "@/components/design/card";
 import { SecondaryButton } from "@/components/design/button";
 import { EditarPrecoFabricacaoForm } from "./editar-preco-fabricacao-form";
 import { EditarTipoAcondicionamentoForm } from "./editar-tipo-acondicionamento-form";
-import { EnviarImagemForm } from "./enviar-imagem-form";
 import { PrecosPorTabela } from "./precos-por-tabela";
 import { SimularCalculo } from "./simular-calculo";
 
@@ -158,7 +157,13 @@ export default async function ProdutoDetalhePage({
                   tipoAtualId={produto.tipoAcondicionamentoId}
                   opcoes={tiposAcondicionamento}
                 />
-                <EnviarImagemForm produtoId={produto.id} />
+                <p className="text-xs text-muted">
+                  Envio/troca de imagem do produto agora fica em{" "}
+                  <Link href="/admin/produtos" className="font-medium text-primary hover:underline">
+                    Produtos (admin)
+                  </Link>
+                  .
+                </p>
               </Card>
             )}
 

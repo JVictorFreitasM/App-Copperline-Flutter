@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import { Card } from "@/components/design/card";
-import { enviarImagensEmLote, ESTADO_UPLOAD_LOTE_INICIAL } from "./actions";
+import { enviarImagensEmLote } from "./actions";
+import { ESTADO_UPLOAD_LOTE_INICIAL } from "./estado-produtos-admin";
 
 // Upload em massa (pedido do usuário, 2026-09-29) - nome de cada arquivo
 // (sem extensão) precisa ser o CÓDIGO do produto (ex: 50397.jpg), não o
