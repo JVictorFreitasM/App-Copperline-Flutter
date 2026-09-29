@@ -106,6 +106,17 @@ const ROTULOS_TIPO: Record<string, string> = {
   INVALIDO: "Inválido",
 };
 
+// Mesmo shape de backend/src/produtos/produto-manual.service.ts
+// (ResultadoImagensLoteDto) - upload em massa de imagem de produto
+// (pedido do usuário, 2026-09-29), aba "Importar imagens" de
+// /admin/produtos.
+export interface ResultadoImagensLoteDto {
+  aplicados: { codigo: string; produtoId: string }[];
+  naoEncontrados: string[];
+  ambiguos: string[];
+  invalidos: { codigo: string; motivo: string }[];
+}
+
 export function rotuloTipoProduto(tipo: string | null): string {
   if (!tipo) {
     return "—";

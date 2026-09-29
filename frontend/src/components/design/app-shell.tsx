@@ -101,6 +101,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
                 icone: <IconeCamadas />,
               },
               { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
+              { href: "/admin/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
               {
                 href: "/admin/pagamento",
                 rotulo: "Forma e condição de pagamento",

@@ -16,11 +16,15 @@ function produtoFake(overrides: Record<string, unknown> = {}) {
 
 function prismaFake(
   produto: unknown,
-  overrides: { tipoAcondicionamento?: Record<string, unknown> | null } = {},
+  overrides: {
+    tipoAcondicionamento?: Record<string, unknown> | null;
+    findManyResultado?: unknown[];
+  } = {},
 ) {
   return {
     produto: {
       findUnique: jest.fn().mockResolvedValue(produto),
+      findMany: jest.fn().mockResolvedValue(overrides.findManyResultado ?? []),
       update: jest.fn().mockImplementation(({ data }) => ({ ...produtoFake(), ...data })),
     },
     tipoAcondicionamento: {
@@ -149,6 +153,118 @@ describe('ProdutoManualService.salvarImagem', () => {
       where: { id: 'p1' },
       data: { imagemCaminho: '/uploads/novo.jpg', imagemTipoMime: 'image/png' },
     });
+  });
+});
+
+function prismaLoteFake(porCodigo: Record<string, Record<string, unknown>[]>) {
+  return {
+    produto: {
+      findMany: jest.fn().mockImplementation(({ where }: { where: { codigo: string } }) =>
+        Promise.resolve(porCodigo[where.codigo] ?? []),
+      ),
+      update: jest.fn().mockResolvedValue(undefined),
+    },
+  };
+}
+
+function arquivoFake(nome: string, mimetype = 'image/jpeg'): Express.Multer.File {
+  return { originalname: nome, mimetype, buffer: Buffer.from('conteudo') } as Express.Multer.File;
+}
+
+// Pedido do usuario (2026-09-29) - nome do arquivo (sem extensao) =
+// Produto.codigo. Regras confirmadas: sem match -> naoEncontrados; mais
+// de um match (codigo nao e' @unique) -> ambiguos, NENHUM recebe a
+// imagem; produto ja com imagem -> sobrescreve sem perguntar.
+describe('ProdutoManualService.salvarImagensEmLote', () => {
+  it('aplica a imagem no produto cujo codigo bate com o nome do arquivo', async () => {
+    const prisma = prismaLoteFake({ '50397': [produtoFake({ id: 'p1', codigo: '50397' })] });
+    const imagemStorage = imagemStorageFake();
+    const service = new ProdutoManualService(prisma as never, imagemStorage as never);
+
+    const resultado = await service.salvarImagensEmLote([arquivoFake('50397.jpg')]);
+
+    expect(imagemStorage.salvar).toHaveBeenCalledWith(expect.any(Buffer), '50397.jpg');
+    expect(prisma.produto.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { imagemCaminho: '/uploads/novo.jpg', imagemTipoMime: 'image/jpeg' },
+    });
+    expect(resultado.aplicados).toEqual([{ codigo: '50397', produtoId: 'p1' }]);
+    expect(resultado.naoEncontrados).toEqual([]);
+    expect(resultado.ambiguos).toEqual([]);
+  });
+
+  it('reporta em naoEncontrados quando nenhum produto tem esse codigo, sem tocar no disco', async () => {
+    const prisma = prismaLoteFake({});
+    const imagemStorage = imagemStorageFake();
+    const service = new ProdutoManualService(prisma as never, imagemStorage as never);
+
+    const resultado = await service.salvarImagensEmLote([arquivoFake('99999.jpg')]);
+
+    expect(imagemStorage.salvar).not.toHaveBeenCalled();
+    expect(resultado.naoEncontrados).toEqual(['99999']);
+    expect(resultado.aplicados).toEqual([]);
+  });
+
+  it('reporta em ambiguos quando o codigo bate com mais de um produto, sem aplicar em nenhum', async () => {
+    const prisma = prismaLoteFake({
+      '50397': [
+        produtoFake({ id: 'p1', codigo: '50397' }),
+        produtoFake({ id: 'p2', codigo: '50397' }),
+      ],
+    });
+    const imagemStorage = imagemStorageFake();
+    const service = new ProdutoManualService(prisma as never, imagemStorage as never);
+
+    const resultado = await service.salvarImagensEmLote([arquivoFake('50397.jpg')]);
+
+    expect(imagemStorage.salvar).not.toHaveBeenCalled();
+    expect(prisma.produto.update).not.toHaveBeenCalled();
+    expect(resultado.ambiguos).toEqual(['50397']);
+    expect(resultado.aplicados).toEqual([]);
+  });
+
+  it('rejeita tipo MIME nao permitido sem consultar o banco', async () => {
+    const prisma = prismaLoteFake({ '50397': [produtoFake({ id: 'p1', codigo: '50397' })] });
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    const resultado = await service.salvarImagensEmLote([
+      arquivoFake('50397.pdf', 'application/pdf'),
+    ]);
+
+    expect(prisma.produto.findMany).not.toHaveBeenCalled();
+    expect(resultado.invalidos).toEqual([
+      { codigo: '50397', motivo: 'Tipo de arquivo não permitido: application/pdf' },
+    ]);
+  });
+
+  it('sobrescreve a imagem existente e remove a antiga do disco', async () => {
+    const prisma = prismaLoteFake({
+      '50397': [produtoFake({ id: 'p1', codigo: '50397', imagemCaminho: '/uploads/antigo.jpg' })],
+    });
+    const imagemStorage = imagemStorageFake();
+    const service = new ProdutoManualService(prisma as never, imagemStorage as never);
+
+    await service.salvarImagensEmLote([arquivoFake('50397.jpg')]);
+
+    expect(imagemStorage.remover).toHaveBeenCalledWith('/uploads/antigo.jpg');
+  });
+
+  it('processa varios arquivos independentemente, misturando aplicado/nao-encontrado/ambiguo', async () => {
+    const prisma = prismaLoteFake({
+      '111': [produtoFake({ id: 'p1', codigo: '111' })],
+      '222': [produtoFake({ id: 'p2', codigo: '222' }), produtoFake({ id: 'p3', codigo: '222' })],
+    });
+    const service = new ProdutoManualService(prisma as never, imagemStorageFake() as never);
+
+    const resultado = await service.salvarImagensEmLote([
+      arquivoFake('111.jpg'),
+      arquivoFake('222.jpg'),
+      arquivoFake('333.jpg'),
+    ]);
+
+    expect(resultado.aplicados).toEqual([{ codigo: '111', produtoId: 'p1' }]);
+    expect(resultado.ambiguos).toEqual(['222']);
+    expect(resultado.naoEncontrados).toEqual(['333']);
   });
 });
 

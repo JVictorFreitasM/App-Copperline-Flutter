@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import puppeteer from 'puppeteer-core';
 import { ComunicadoPedidoPdfService } from '../configuracoes/comunicado-pedido-pdf.service';
 import { DadosEmpresaPdfService } from '../configuracoes/dados-empresa-pdf.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import type { PedidoDetalheDto, PedidoItemDto } from './dto/pedido-response.dto';
 import { PedidosService } from './pedidos.service';
@@ -45,7 +46,11 @@ function formatarDataHora(data: Date | string | null): string {
 }
 
 function formatarUnidade(unidade: string | null): string {
-  if (unidade === 'METRO') return '(M)';
+  // Quantidade exibida (item.quantidadeVenda) ja esta em KM pra item METRO
+  // (retalho) - ver quantidadeVendaExterna em criar-pedido.service.ts. So
+  // a letra mudou (pedido do usuario, 2026-09-28) - continua vindo do
+  // mesmo campo, sem recalculo nenhum.
+  if (unidade === 'METRO') return '(KM)';
   if (unidade === 'PECA') return '(UN)';
   return '';
 }
@@ -103,6 +108,7 @@ export class PedidoPdfService {
     private readonly pedidosService: PedidosService,
     private readonly dadosEmpresaPdfService: DadosEmpresaPdfService,
     private readonly comunicadoPedidoPdfService: ComunicadoPedidoPdfService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async gerarPdf(id: string, escopo: EscopoClientes): Promise<{ buffer: Buffer; nomeArquivo: string }> {
@@ -112,7 +118,10 @@ export class PedidoPdfService {
       this.comunicadoPedidoPdfService.obter(),
     ]);
 
-    const html = await this.montarHtml(pedido, dadosEmpresa, comunicado.texto);
+    const imagensProdutos = await this.obterImagensProdutos(
+      pedido.itens.map((item) => item.produto?.id).filter((id): id is string => !!id),
+    );
+    const html = await this.montarHtml(pedido, dadosEmpresa, comunicado.texto, imagensProdutos);
     const buffer = await this.renderizarPdf(html);
 
     return {
@@ -130,10 +139,43 @@ export class PedidoPdfService {
     return this.logoBase64;
   }
 
+  // Pedido do usuario (2026-09-29): a mesma imagem cadastrada via upload
+  // (individual ou em massa, ver ProdutoManualService) aparece no lugar do
+  // icone generico no PDF. Busca em lote (1 query pra todos os produtos do
+  // pedido, nao 1 por item) + le os bytes do disco e ja embute como data
+  // URI (mesma tecnica da logo, ver obterLogoBase64) - produto sem imagem
+  // cadastrada simplesmente nao entra no Map, e linhaProduto cai no SVG
+  // generico (fallback combinado com o usuario).
+  private async obterImagensProdutos(produtoIds: string[]): Promise<Map<string, string>> {
+    const idsUnicos = [...new Set(produtoIds)];
+    if (idsUnicos.length === 0) {
+      return new Map();
+    }
+
+    const produtos = await this.prisma.produto.findMany({
+      where: { id: { in: idsUnicos }, imagemCaminho: { not: null }, imagemTipoMime: { not: null } },
+      select: { id: true, imagemCaminho: true, imagemTipoMime: true },
+    });
+
+    const imagens = new Map<string, string>();
+    for (const produto of produtos) {
+      try {
+        const bytes = await readFile(produto.imagemCaminho as string);
+        imagens.set(produto.id, `data:${produto.imagemTipoMime};base64,${bytes.toString('base64')}`);
+      } catch (erro) {
+        this.logger.warn(
+          `Falha ao ler imagem do produto '${produto.id}' pro PDF - cai no icone generico: ${erro instanceof Error ? erro.message : erro}`,
+        );
+      }
+    }
+    return imagens;
+  }
+
   private async montarHtml(
     pedido: PedidoDetalheDto,
     dadosEmpresa: { razaoSocial: string; cnpj: string; endereco: string; cep: string; telefone: string },
     comunicado: string,
+    imagensProdutos: Map<string, string>,
   ): Promise<string> {
     const logo = await this.obterLogoBase64();
     const endereco = (pedido.cliente?.enderecos as EnderecoBruto[] | undefined)?.[0];
@@ -251,7 +293,9 @@ export class PedidoPdfService {
       </tr>
     </thead>
     <tbody>
-      ${pedido.itens.map((item) => linhaProduto(item)).join('')}
+      ${pedido.itens
+        .map((item) => linhaProduto(item, item.produto?.id ? imagensProdutos.get(item.produto.id) : undefined))
+        .join('')}
     </tbody>
   </table>
 
@@ -307,12 +351,15 @@ export class PedidoPdfService {
   }
 }
 
-function linhaProduto(item: PedidoItemDto): string {
+function linhaProduto(item: PedidoItemDto, imagemDataUri: string | undefined): string {
   const quantidade = item.quantidadeVenda ? Number(item.quantidadeVenda).toLocaleString('pt-BR') : '—';
+  const icone = imagemDataUri
+    ? `<img src="${imagemDataUri}" alt="" width="40" height="40" style="object-fit:cover; border-radius:50%;" />`
+    : ICONE_PRODUTO_SVG;
   return `
     <tr>
       <td class="produto">
-        ${ICONE_PRODUTO_SVG}
+        ${icone}
         <div>
           <div class="nome-produto">${escaparHtml(item.produto?.nome ?? '—')}</div>
           <div class="meta-produto">Código: ${escaparHtml(item.produto?.codigo ?? '—')}</div>

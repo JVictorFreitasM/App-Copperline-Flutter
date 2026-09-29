@@ -1,3 +1,4 @@
+import { parse as parseCaminho } from 'node:path';
 import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoImagemStorageService } from './produto-imagem-storage.service';
@@ -9,6 +10,17 @@ import { paraProdutoDetalheDto, type ProdutoDetalheDto } from './dto/produto-res
 // mesmo criterio de TIPOS_MIME_PERMITIDOS em documentos.service.ts.
 export const TIPOS_MIME_IMAGEM_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const TAMANHO_MAXIMO_IMAGEM_BYTES = 5 * 1024 * 1024;
+// Limite de arquivos por chamada de upload em massa - nao tecnico
+// (Multer/Node aguentam mais), so' pra manter uma leva de import em massa
+// num tamanho revisavel; acima disso, o admin faz em mais de uma leva.
+export const MAXIMO_ARQUIVOS_LOTE = 300;
+
+export interface ResultadoImagensLoteDto {
+  aplicados: { codigo: string; produtoId: string }[];
+  naoEncontrados: string[];
+  ambiguos: string[];
+  invalidos: { codigo: string; motivo: string }[];
+}
 
 // Campos de Produto que NAO vem do WK Radar (precoFabricacao,
 // imagemCaminho/imagemTipoMime) - fora do escopo de produto.sync.ts de
@@ -87,6 +99,76 @@ export class ProdutoManualService {
     }
 
     return paraProdutoDetalheDto(atualizado);
+  }
+
+  // Upload em massa (pedido do usuario, 2026-09-29): nome do arquivo (sem
+  // extensao) = Produto.codigo. Regras confirmadas com o usuario:
+  // - codigo sem produto nenhum -> "naoEncontrados", nada aplicado;
+  // - codigo com MAIS de um produto (codigo nao e' @unique no schema,
+  //   confirmado - dois produtos podem compartilhar o mesmo codigo
+  //   comercial) -> "ambiguos", nenhum dos dois recebe a imagem (evita
+  //   aplicar a imagem errada silenciosamente);
+  // - produto que ja tem imagem -> sobrescreve sem perguntar, mesmo
+  //   comportamento do upload individual (salvarImagem acima).
+  // Sequencial (nao Promise.all) de proposito - dezenas/centenas de
+  // arquivos em paralelo disputariam o pool de conexoes do Prisma e o
+  // disco a toa; upload em lote nao e' um caminho sensivel a latencia por
+  // arquivo do jeito que uma API teria que ser.
+  async salvarImagensEmLote(
+    arquivos: Express.Multer.File[],
+  ): Promise<ResultadoImagensLoteDto> {
+    const resultado: ResultadoImagensLoteDto = {
+      aplicados: [],
+      naoEncontrados: [],
+      ambiguos: [],
+      invalidos: [],
+    };
+
+    for (const arquivo of arquivos) {
+      const codigo = parseCaminho(arquivo.originalname).name;
+
+      if (
+        !TIPOS_MIME_IMAGEM_PERMITIDOS.includes(
+          arquivo.mimetype as (typeof TIPOS_MIME_IMAGEM_PERMITIDOS)[number],
+        )
+      ) {
+        resultado.invalidos.push({
+          codigo,
+          motivo: `Tipo de arquivo não permitido: ${arquivo.mimetype}`,
+        });
+        continue;
+      }
+
+      const candidatos = await this.prisma.produto.findMany({
+        where: { codigo },
+      });
+      if (candidatos.length === 0) {
+        resultado.naoEncontrados.push(codigo);
+        continue;
+      }
+      if (candidatos.length > 1) {
+        resultado.ambiguos.push(codigo);
+        continue;
+      }
+
+      const produto = candidatos[0];
+      const caminhoAntigo = produto.imagemCaminho;
+      const novoCaminho = await this.imagemStorage.salvar(
+        arquivo.buffer,
+        arquivo.originalname,
+      );
+      await this.prisma.produto.update({
+        where: { id: produto.id },
+        data: { imagemCaminho: novoCaminho, imagemTipoMime: arquivo.mimetype },
+      });
+      if (caminhoAntigo) {
+        await this.imagemStorage.remover(caminhoAntigo);
+      }
+
+      resultado.aplicados.push({ codigo, produtoId: produto.id });
+    }
+
+    return resultado;
   }
 
   async obterImagem(
