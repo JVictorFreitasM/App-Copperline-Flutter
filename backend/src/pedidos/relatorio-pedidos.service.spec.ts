@@ -319,3 +319,26 @@ describe('RelatorioPedidosService.obter', () => {
     expect(resultado.vendedores).toEqual([]);
   });
 });
+
+// Pedido do usuario (2026-09-29) - uso interno pelo job de notificacao
+// diaria (RelatorioDiarioNotificacaoService), sem idpUser/permissao
+// nenhuma (quem chama e' o cron, nao uma requisicao de usuario).
+describe('RelatorioPedidosService.obterParaVendedoresAtivos', () => {
+  it('busca so vendedor ATIVO (nunca inativo), sem exigir idpUser', async () => {
+    const prisma = prismaFake({
+      vendedores: [{ id: 'v1', nome: 'Vendedor Um' }],
+      pedidosPeriodo: [pedidoBruto({ vendedorId: 'v1' })],
+    });
+    const service = new RelatorioPedidosService(prisma as never, vendedorEscopoServiceFake() as never);
+
+    const resultado = await service.obterParaVendedoresAtivos();
+
+    expect(prisma.vendedor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { inativo: false } }),
+    );
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]).toEqual(
+      expect.objectContaining({ vendedorId: 'v1', totalPedidos: 1 }),
+    );
+  });
+});

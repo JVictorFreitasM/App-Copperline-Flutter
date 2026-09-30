@@ -121,3 +121,66 @@ export async function enviarImagemProduto(
   revalidatePath("/admin/produtos");
   return { erro: null, sucesso: "Imagem atualizada." };
 }
+
+// Movido de produtos/[id]/actions.ts (pedido do usuário, 2026-09-29) -
+// "Dados administrativos" agora vive inteiro em /admin/produtos. Campos
+// que NAO vem do WK Radar (precoFabricacao/tipoAcondicionamentoId),
+// editaveis so por admin, via PATCH /admin/produtos/:id (backend ja
+// valida role admin via requireRole, ver produtos.module.ts).
+export async function atualizarPrecoFabricacao(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const valorRaw = String(formData.get("precoFabricacao") ?? "").trim();
+  const valor = Number(valorRaw);
+  if (!valorRaw || Number.isNaN(valor) || valor < 0) {
+    return { erro: "Informe um valor válido (maior ou igual a zero).", sucesso: null };
+  }
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precoFabricacao: valor }),
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar o preço.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath("/admin/produtos");
+  return { erro: null, sucesso: "Preço de fabricação atualizado." };
+}
+
+// OS-novas-implementacoes.md Bloco 4 - mesmo endpoint de
+// atualizarPrecoFabricacao (PATCH /admin/produtos/:id aceita os dois
+// campos independentemente, ver AtualizarProdutoManualDto no backend),
+// formulário separado só pra não misturar dois conceitos numa mesma tela.
+export async function atualizarTipoAcondicionamento(
+  produtoId: string,
+  _estadoAnterior: EstadoEdicaoManual,
+  formData: FormData,
+): Promise<EstadoEdicaoManual> {
+  const valor = String(formData.get("tipoAcondicionamentoId") ?? "").trim();
+
+  try {
+    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipoAcondicionamentoId: valor || null }),
+      cache: "no-store",
+    });
+  } catch (error) {
+    return {
+      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar.",
+      sucesso: null,
+    };
+  }
+
+  revalidatePath("/admin/produtos");
+  return { erro: null, sucesso: "Tipo de acondicionamento atualizado." };
+}

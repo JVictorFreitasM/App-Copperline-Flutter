@@ -3,26 +3,35 @@
 import { useActionState, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import { Card } from "@/components/design/card";
+import type { TipoAcondicionamentoDto } from "@/lib/tipos-acondicionamento";
 import {
   buscarProdutosParaImagem,
   enviarImagemProduto,
   obterProdutoParaImagem,
   type ProdutoBuscaImagem,
 } from "./actions";
+import { EditarPrecoFabricacaoForm } from "./editar-preco-fabricacao-form";
+import { EditarTipoAcondicionamentoForm } from "./editar-tipo-acondicionamento-form";
 import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-produtos-admin";
 
 const DEBOUNCE_MS = 300;
 
 interface ProdutoSelecionado extends ProdutoBuscaImagem {
   temImagem: boolean;
+  precoFabricacao: string | null;
+  tipoAcondicionamentoId: string | null;
 }
 
-// Upload individual (movido de produtos/[id] pro admin, pedido do usuário
-// 2026-09-29) - busca o produto por nome/código (mesmo padrão de
-// SelecionarItemPopup em pedidos/novo, só que sem popup - lista inline
-// mesmo, área pequena o bastante pra não precisar de modal) e mostra a
-// imagem atual (se tiver) + formulário de envio pro produto escolhido.
-export function UploadIndividualForm() {
+// Consolida os 3 campos que NAO vem do WK Radar (preço de fabricação,
+// tipo de acondicionamento, imagem) - movido de produtos/[id] pro admin
+// (pedido do usuário, 2026-09-29). Busca o produto por nome/código (mesmo
+// padrão de SelecionarItemPopup em pedidos/novo, só que sem popup - lista
+// inline mesmo, área pequena o bastante pra não precisar de modal).
+export function DadosAdministrativosProduto({
+  tiposAcondicionamento,
+}: {
+  tiposAcondicionamento: TipoAcondicionamentoDto[];
+}) {
   const [query, setQuery] = useState("");
   const [opcoes, setOpcoes] = useState<ProdutoBuscaImagem[]>([]);
   const [buscando, setBuscando] = useState(false);
@@ -54,14 +63,20 @@ export function UploadIndividualForm() {
     setQuery(`${produto.nome ?? "—"}${produto.codigo ? ` (${produto.codigo})` : ""}`);
     const detalhe = await obterProdutoParaImagem(produto.id);
     setVersaoImagem(0);
-    setSelecionado({ ...produto, temImagem: detalhe?.temImagem ?? false });
+    setSelecionado({
+      ...produto,
+      temImagem: detalhe?.temImagem ?? false,
+      precoFabricacao: detalhe?.precoFabricacao ?? null,
+      tipoAcondicionamentoId: detalhe?.tipoAcondicionamentoId ?? null,
+    });
   }
 
   return (
     <Card>
-      <h2 className="mb-1 text-sm font-semibold text-ink">Adicionar imagem individualmente</h2>
+      <h2 className="mb-1 text-sm font-semibold text-ink">Dados administrativos (não vêm do ERP)</h2>
       <p className="mb-3 text-xs text-muted">
-        Busque um produto por nome ou código pra enviar (ou substituir) a imagem dele.
+        Busque um produto por nome ou código pra editar preço de fabricação, tipo de acondicionamento
+        e imagem.
       </p>
 
       <input
@@ -91,28 +106,40 @@ export function UploadIndividualForm() {
       )}
 
       {selecionado && (
-        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl bg-background p-4">
-          {selecionado.temImagem && (
-            // eslint-disable-next-line @next/next/no-img-element -- imagem enviada pelo usuário, sem otimização/CDN configurados pra upload dinâmico
-            <img
-              src={`/api/produtos/${selecionado.id}/imagem?v=${versaoImagem}`}
-              alt={selecionado.nome ?? "Produto"}
-              className="h-20 w-20 rounded-xl object-cover"
-            />
-          )}
-          <div className="flex flex-1 flex-col gap-2">
-            <p className="text-sm font-medium text-ink">
-              {selecionado.nome ?? "—"}
-              {selecionado.codigo ? ` (${selecionado.codigo})` : ""}
-            </p>
-            <EnviarImagemProdutoForm
-              produtoId={selecionado.id}
-              onEnviado={() => {
-                setSelecionado((atual) => (atual ? { ...atual, temImagem: true } : atual));
-                setVersaoImagem((atual) => atual + 1);
-              }}
-            />
+        <div className="mt-4 flex flex-col gap-4 rounded-2xl bg-background p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {selecionado.temImagem && (
+              // eslint-disable-next-line @next/next/no-img-element -- imagem enviada pelo usuário, sem otimização/CDN configurados pra upload dinâmico
+              <img
+                src={`/api/produtos/${selecionado.id}/imagem?v=${versaoImagem}`}
+                alt={selecionado.nome ?? "Produto"}
+                className="h-20 w-20 rounded-xl object-cover"
+              />
+            )}
+            <div className="flex flex-1 flex-col gap-2">
+              <p className="text-sm font-medium text-ink">
+                {selecionado.nome ?? "—"}
+                {selecionado.codigo ? ` (${selecionado.codigo})` : ""}
+              </p>
+              <EnviarImagemProdutoForm
+                produtoId={selecionado.id}
+                onEnviado={() => {
+                  setSelecionado((atual) => (atual ? { ...atual, temImagem: true } : atual));
+                  setVersaoImagem((atual) => atual + 1);
+                }}
+              />
+            </div>
           </div>
+
+          <EditarPrecoFabricacaoForm
+            produtoId={selecionado.id}
+            valorAtual={selecionado.precoFabricacao}
+          />
+          <EditarTipoAcondicionamentoForm
+            produtoId={selecionado.id}
+            tipoAtualId={selecionado.tipoAcondicionamentoId}
+            opcoes={tiposAcondicionamento}
+          />
         </div>
       )}
     </Card>
@@ -137,13 +164,16 @@ function EnviarImagemProdutoForm({
 
   return (
     <form action={acao} className="flex flex-wrap items-end gap-3">
-      <input
-        type="file"
-        name="imagem"
-        required
-        accept="image/jpeg,image/png,image/webp"
-        className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-solid file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-solid"
-      />
+      <label className="flex w-72 flex-col gap-1 text-xs font-medium text-muted">
+        Imagem do produto
+        <input
+          type="file"
+          name="imagem"
+          required
+          accept="image/jpeg,image/png,image/webp"
+          className="text-sm text-ink file:mr-3 file:rounded-full file:border-0 file:bg-solid file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-solid"
+        />
+      </label>
       <PrimaryButton type="submit" disabled={pending}>
         {pending ? "Enviando..." : "Enviar imagem"}
       </PrimaryButton>

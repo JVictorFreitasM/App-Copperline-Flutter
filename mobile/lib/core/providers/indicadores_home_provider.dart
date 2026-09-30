@@ -7,7 +7,10 @@ import 'aprovacoes_provider.dart';
 import 'favoritos_provider.dart';
 import 'produtos_provider.dart';
 
-String _mesAnoAtual() => DateTime.now().toIso8601String().substring(0, 7);
+// Publica (nao mais privada) desde que ranking_provider.dart passou a
+// precisar do mesmo "YYYY-MM" (GET /equipe/ranking?mesAno=), pedido do
+// usuario 2026-09-30 - evita duplicar a mesma linha de calculo de data.
+String mesAnoAtual() => DateTime.now().toIso8601String().substring(0, 7);
 
 // "YYYY-Www" da semana ISO-8601 atual (segunda a domingo) - mesmo
 // algoritmo de backend/src/metas/filtro-semana.ts (semanaIsoAtual) e
@@ -36,7 +39,7 @@ final metaMensalProgressoProvider = FutureProvider<MetaProgresso?>((ref) async {
 
   final apiClient = ref.watch(apiClientProvider);
   final json = await apiClient.getJson(
-    '/vendedores/${Uri.encodeComponent(vendedorId)}/meta-progresso?periodicidade=MENSAL&periodo=${_mesAnoAtual()}',
+    '/vendedores/${Uri.encodeComponent(vendedorId)}/meta-progresso?periodicidade=MENSAL&periodo=${mesAnoAtual()}',
   );
   return MetaProgresso.fromJson(json);
 });

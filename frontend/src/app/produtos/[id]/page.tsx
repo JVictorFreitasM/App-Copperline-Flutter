@@ -2,15 +2,12 @@ import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import { rotuloTipoProduto, rotuloTipoVenda, type ProdutoDetalheDto } from "@/lib/produtos";
-import type { TipoAcondicionamentoDto } from "@/lib/tipos-acondicionamento";
 import { formatarMoeda, formatarPeso } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge, BadgeAtivoInativo } from "@/components/badge";
 import { ListaGenerica } from "@/components/dado-generico";
 import { Card } from "@/components/design/card";
 import { SecondaryButton } from "@/components/design/button";
-import { EditarPrecoFabricacaoForm } from "./editar-preco-fabricacao-form";
-import { EditarTipoAcondicionamentoForm } from "./editar-tipo-acondicionamento-form";
 import { PrecosPorTabela } from "./precos-por-tabela";
 import { SimularCalculo } from "./simular-calculo";
 
@@ -24,14 +21,13 @@ export default async function ProdutoDetalhePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const usuario = await exigirUsuarioAutenticado("/produtos");
+  await exigirUsuarioAutenticado("/produtos");
 
   const { id } = await params;
 
   let produto: ProdutoDetalheDto | null = null;
   let naoEncontrado = false;
   let erro: string | null = null;
-  let tiposAcondicionamento: TipoAcondicionamentoDto[] = [];
 
   try {
     produto = await apiFetch<ProdutoDetalheDto>(`/produtos/${encodeURIComponent(id)}`, {
@@ -42,21 +38,6 @@ export default async function ProdutoDetalhePage({
       naoEncontrado = true;
     } else {
       erro = error instanceof ApiError ? error.message : "Erro desconhecido ao consultar a API.";
-    }
-  }
-
-  // So busca o catalogo (leitura aberta, GET /tipos-acondicionamento) se o
-  // produto existe e quem esta vendo e admin (unico papel que edita) - sem
-  // gastar essa chamada a toa pro vendedor comum, que so le a tela.
-  if (produto && usuario.role === "admin") {
-    try {
-      tiposAcondicionamento = await apiFetch<TipoAcondicionamentoDto[]>(
-        "/tipos-acondicionamento",
-        { cache: "no-store" },
-      );
-    } catch {
-      // Falha aqui nao derruba a tela inteira - so o seletor fica sem
-      // opcoes (usuario ve erro claro se tentar salvar mesmo assim).
     }
   }
 
@@ -142,30 +123,6 @@ export default async function ProdutoDetalhePage({
                 </p>
               )}
             </Card>
-
-            {usuario.role === "admin" && (
-              <Card className="flex flex-col gap-4">
-                <h2 className="text-sm font-semibold text-ink">
-                  Dados administrativos (não vêm do ERP)
-                </h2>
-                <EditarPrecoFabricacaoForm
-                  produtoId={produto.id}
-                  valorAtual={produto.precoFabricacao}
-                />
-                <EditarTipoAcondicionamentoForm
-                  produtoId={produto.id}
-                  tipoAtualId={produto.tipoAcondicionamentoId}
-                  opcoes={tiposAcondicionamento}
-                />
-                <p className="text-xs text-muted">
-                  Envio/troca de imagem do produto agora fica em{" "}
-                  <Link href="/admin/produtos" className="font-medium text-primary hover:underline">
-                    Produtos (admin)
-                  </Link>
-                  .
-                </p>
-              </Card>
-            )}
 
             <SimularCalculo produtoId={produto.id} />
 

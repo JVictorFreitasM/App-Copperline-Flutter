@@ -4,10 +4,11 @@ import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import type { TipoAcondicionamentoDto } from "@/lib/tipos-acondicionamento";
 import { atualizarTipoAcondicionamento } from "./actions";
-import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-edicao-manual";
+import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-produtos-admin";
 
-// Mesmo padrão de EditarPrecoFabricacaoForm - admin-only (checagem real no
-// backend, requireRole('admin')). OS-novas-implementacoes.md Bloco 4.
+// Movido de produtos/[id] pro admin (pedido do usuário, 2026-09-29) -
+// mesmo padrão de EditarPrecoFabricacaoForm. OS-novas-implementacoes.md
+// Bloco 4.
 export function EditarTipoAcondicionamentoForm({
   produtoId,
   tipoAtualId,
@@ -22,12 +23,12 @@ export function EditarTipoAcondicionamentoForm({
 
   return (
     <form action={acao} className="flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+      <label className="flex w-72 flex-col gap-1 text-xs font-medium text-muted">
         Tipo de acondicionamento
         <select
           name="tipoAcondicionamentoId"
           defaultValue={tipoAtualId ?? ""}
-          className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+          className="w-full rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
         >
           <option value="">Nenhum</option>
           {opcoes.map((opcao) => (

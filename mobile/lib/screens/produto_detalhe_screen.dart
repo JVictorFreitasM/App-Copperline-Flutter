@@ -83,9 +83,29 @@ class ProdutoDetalheScreen extends ConsumerWidget {
                     Text('Tipo: ${rotuloTipoProduto(produto.tipo)}'),
                     const SizedBox(height: 4),
                     Text('GTIN: ${produto.gtin ?? "—"}'),
+                    if (produto.tipoAcondicionamentoId != null) ...[
+                      const SizedBox(height: 4),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final tiposAsync = ref.watch(tiposAcondicionamentoProvider);
+                          return tiposAsync.when(
+                            loading: () => const Text('Acondicionamento: carregando...'),
+                            error: (_, _) => const Text('Acondicionamento: —'),
+                            data: (tipos) {
+                              final tipo = tipos
+                                  .where((t) => t.id == produto.tipoAcondicionamentoId)
+                                  .firstOrNull;
+                              return Text('Acondicionamento: ${tipo?.descricao ?? "—"}');
+                            },
+                          );
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              _PrecosPorTabela(produtoId: produto.id),
               if (produto.temGrade) ...[
                 const SizedBox(height: 16),
                 AppCard(
@@ -105,6 +125,56 @@ class ProdutoDetalheScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Comparativo de preço por tabela" (OS-novas-implementacoes.md Bloco 1,
+/// equivalente a `frontend/src/app/produtos/[id]/precos-por-tabela.tsx`) -
+/// sem clienteId (mesmo escopo do web hoje: compara contra toda tabela
+/// ativa, a variante escopada por cliente fica pra quando existir um fluxo
+/// de pedido com cliente em contexto). Falha na consulta não quebra o
+/// resto da tela (mesmo critério do web - silenciosamente não mostra a
+/// seção), já que é um complemento, não o dado principal da tela.
+class _PrecosPorTabela extends ConsumerWidget {
+  const _PrecosPorTabela({required this.produtoId});
+
+  final String produtoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final precosAsync = ref.watch(produtoPrecosProvider(produtoId));
+
+    return precosAsync.when(
+      loading: () => const AppCard(
+        child: Text('Carregando preços por tabela...', style: TextStyle(color: AppColors.muted)),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (precos) {
+        if (precos.isEmpty) return const SizedBox.shrink();
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Preço por tabela', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              for (final preco in precos) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Tabela ${preco.codigo}', style: const TextStyle(color: AppColors.muted)),
+                    Text(
+                      preco.preco != null ? formatarMoeda(preco.preco) : '—',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

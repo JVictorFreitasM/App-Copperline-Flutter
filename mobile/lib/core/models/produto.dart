@@ -47,6 +47,7 @@ class ProdutoDetalhe extends ProdutoResumo {
     required this.idGrade1,
     required this.idGrade2,
     required this.idGrade3,
+    required this.tipoAcondicionamentoId,
   });
 
   factory ProdutoDetalhe.fromJson(Map<String, dynamic> json) {
@@ -61,12 +62,14 @@ class ProdutoDetalhe extends ProdutoResumo {
       idGrade1: json['idGrade1'] as String?,
       idGrade2: json['idGrade2'] as String?,
       idGrade3: json['idGrade3'] as String?,
+      tipoAcondicionamentoId: json['tipoAcondicionamentoId'] as String?,
     );
   }
 
   final String? idGrade1;
   final String? idGrade2;
   final String? idGrade3;
+  final String? tipoAcondicionamentoId;
 
   bool get temGrade => idGrade1 != null || idGrade2 != null || idGrade3 != null;
 }

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/providers/aprovacoes_provider.dart';
+import '../../core/providers/notificacoes_provider.dart';
 import '../../theme/app_colors.dart';
 import '../busca_screen.dart';
 import '../clientes_screen.dart';
@@ -11,7 +14,12 @@ import '../produtos_screen.dart';
 import '../rastreio_config_screen.dart';
 import '../roteiro_screen.dart';
 import '../tabelas_preco_screen.dart';
+import 'coberturas_screen.dart';
 import 'documentos_screen.dart';
+import 'notas_fiscais_screen.dart';
+import 'notificacoes_screen.dart';
+import 'oportunidades_screen.dart';
+import 'ranking_equipe_screen.dart';
 import 'relatorio_screen.dart';
 
 /// Casca de navegação (replica a referência "Nexo Comercial",
@@ -126,13 +134,50 @@ class _FaixaOffline extends ConsumerWidget {
   }
 }
 
-class _CabecalhoApp extends StatelessWidget implements PreferredSizeWidget {
+// Intervalo de poll da contagem de não lidas (mesmo critério do sino web,
+// `notificacao-sino.tsx`, INTERVALO_POLL_MS = 60s) - trade-off entre "badge
+// atualizado" e não martelar o backend; sem push/websocket de contagem em
+// tempo real ainda.
+const _intervaloPollNotificacoes = Duration(seconds: 60);
+
+class _CabecalhoApp extends ConsumerStatefulWidget implements PreferredSizeWidget {
   const _CabecalhoApp({required this.titulo});
 
   final String titulo;
 
   @override
+  ConsumerState<_CabecalhoApp> createState() => _CabecalhoAppState();
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+class _CabecalhoAppState extends ConsumerState<_CabecalhoApp> {
+  Timer? _timerPoll;
+
+  @override
+  void initState() {
+    super.initState();
+    _timerPoll = Timer.periodic(_intervaloPollNotificacoes, (_) {
+      ref.invalidate(contagemNaoLidasProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timerPoll?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Pedido do usuário (2026-09-30) - antes era um ponto vermelho fixo,
+    // decorativo, sem contagem real nenhuma; agora reflete GET
+    // /notificacoes/contagem-nao-lidas de verdade (ver
+    // notificacoes_provider.dart). Sem badge quando zero/carregando/erro -
+    // nunca inventa um número.
+    final quantidade = ref.watch(contagemNaoLidasProvider).value ?? 0;
+
     return AppBar(
       titleSpacing: 4,
       title: Column(
@@ -148,33 +193,50 @@ class _CabecalhoApp extends StatelessWidget implements PreferredSizeWidget {
               color: AppColors.muted,
             ),
           ),
-          Text(titulo, style: Theme.of(context).textTheme.headlineMedium),
+          Text(widget.titulo, style: Theme.of(context).textTheme.headlineMedium),
         ],
       ),
       actions: [
         IconButton(
           tooltip: 'Notificações',
-          icon: const Stack(
+          icon: Stack(
             clipBehavior: Clip.none,
             children: [
-              Icon(Icons.notifications_outlined),
-              Positioned(
-                right: -1,
-                top: -1,
-                child: CircleAvatar(radius: 4, backgroundColor: AppColors.red),
-              ),
+              const Icon(Icons.notifications_outlined),
+              if (quantidade > 0)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16),
+                    child: Text(
+                      quantidade > 99 ? '99+' : '$quantidade',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen())),
+          onPressed: () {
+            ref.invalidate(contagemNaoLidasProvider);
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const NotificacoesScreen()));
+          },
         ),
       ],
     );
   }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
 class _MenuLateral extends ConsumerWidget {
@@ -324,6 +386,20 @@ class _MenuLateral extends ConsumerWidget {
                 ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen()));
               },
             ),
+            // Faltava no mobile (auditoria 2026-09-30) - vendedor não
+            // conseguia ver nem baixar o PDF da NF-e pelo celular, só na
+            // web. Mesmo padrão de item de menu que Documentos acima.
+            _ItemMenu(
+              icone: Icons.receipt_long_outlined,
+              rotulo: 'Notas fiscais',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const NotasFiscaisScreen()));
+              },
+            ),
             _ItemMenu(
               icone: Icons.sell_outlined,
               rotulo: 'Tabelas de preço',
@@ -333,6 +409,55 @@ class _MenuLateral extends ConsumerWidget {
                 Navigator.of(
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const TabelasPrecoScreen()));
+              },
+            ),
+            // Faltavam por completo no mobile (auditoria 2026-09-30) -
+            // Oportunidades, Cobertura e Ranking só existiam na web.
+            _ItemMenu(
+              icone: Icons.lightbulb_outline,
+              rotulo: 'Oportunidades',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const OportunidadesScreen()));
+              },
+            ),
+            _ItemMenu(
+              icone: Icons.people_alt_outlined,
+              rotulo: 'Cobertura',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const CoberturasScreen()));
+              },
+            ),
+            _ItemMenu(
+              icone: Icons.leaderboard_outlined,
+              rotulo: 'Ranking de equipe',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const RankingEquipeScreen()));
+              },
+            ),
+            // Sino do cabeçalho agora abre o histórico de notificações
+            // (NotificacoesScreen), não mais esta tela - configuração de
+            // push em primeiro plano continua existindo, só mudou de lugar.
+            _ItemMenu(
+              icone: Icons.settings_outlined,
+              rotulo: 'Configurar notificações',
+              ativo: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen()));
               },
             ),
             const Spacer(),

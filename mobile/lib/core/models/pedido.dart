@@ -1,3 +1,5 @@
+import 'nota_fiscal.dart';
+
 /// Mesmo shape de `backend/src/pedidos/dto/pedido-response.dto.ts` -
 /// duplicado aqui por não haver pacote compartilhado entre mobile e back
 /// (mesmo padrão já usado no web, `frontend/src/lib/pedidos.ts`).
@@ -82,6 +84,7 @@ class PedidoItem {
     required this.valorTotal,
     required this.situacao,
     required this.produto,
+    required this.observacoes,
   });
 
   factory PedidoItem.fromJson(Map<String, dynamic> json) {
@@ -95,6 +98,7 @@ class PedidoItem {
       produto: json['produto'] == null
           ? null
           : ProdutoResumoPedido.fromJson(json['produto'] as Map<String, dynamic>),
+      observacoes: json['observacoes'] as String?,
     );
   }
 
@@ -105,6 +109,7 @@ class PedidoItem {
   final String? valorTotal;
   final String? situacao;
   final ProdutoResumoPedido? produto;
+  final String? observacoes;
 }
 
 class PedidoDetalhe extends PedidoResumo {
@@ -119,6 +124,8 @@ class PedidoDetalhe extends PedidoResumo {
     required this.itens,
     required this.pesoLiquidoTotalKg,
     required this.pesoBrutoTotalKg,
+    required this.notasFiscais,
+    required this.observacoes,
   });
 
   factory PedidoDetalhe.fromJson(Map<String, dynamic> json) {
@@ -137,6 +144,14 @@ class PedidoDetalhe extends PedidoResumo {
           .toList(),
       pesoLiquidoTotalKg: json['pesoLiquidoTotalKg'] as String?,
       pesoBrutoTotalKg: json['pesoBrutoTotalKg'] as String?,
+      // Pedido do usuario (2026-09-30) - ausente em snapshot local antigo
+      // (offline) vira lista vazia, tratado igual "nenhuma nota vinculada
+      // ainda" (mesmo criterio de `itens`/pesos acima).
+      notasFiscais: (json['notasFiscais'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(NotaFiscalResumoPedido.fromJson)
+          .toList(),
+      observacoes: json['observacoes'] as String?,
     );
   }
 
@@ -146,6 +161,13 @@ class PedidoDetalhe extends PedidoResumo {
   // CriarPedidoService.calcularPesoTotal).
   final String? pesoLiquidoTotalKg;
   final String? pesoBrutoTotalKg;
+  final List<NotaFiscalResumoPedido> notasFiscais;
+  final String? observacoes;
+
+  // Mesmo criterio do web (esperaNotaFiscal, pedidos/[id]/page.tsx) -
+  // FATURADO/PARCIALMENTE_FATURADO deve mostrar a secao mesmo sem nenhuma
+  // nota vinculada ainda, pra deixar claro que algo esta pendente.
+  bool get esperaNotaFiscal => situacao == 'FATURADO' || situacao == 'PARCIALMENTE_FATURADO';
 }
 
 /// Mesmo shape de `backend/src/produtos/produto-calculo.service.ts`

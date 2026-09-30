@@ -120,6 +120,16 @@ export class NotificacaoDispatchService {
       return this.dispositivosDoUsuario(solicitacao?.vendedorSolicitante.usuarioId ?? null);
     }
 
+    if (evento.tipo === 'RELATORIO_MANHA_PEDIDOS' || evento.tipo === 'RELATORIO_FIM_DIA_PEDIDOS') {
+      // referenciaId = Vendedor.id (ver RelatorioDiarioNotificacaoService) -
+      // so o proprio vendedor, nunca broadcast.
+      const vendedor = await this.prisma.vendedor.findUnique({
+        where: { id: evento.referenciaId },
+        select: { usuarioId: true },
+      });
+      return this.dispositivosDoUsuario(vendedor?.usuarioId ?? null);
+    }
+
     // PEDIDO_SITUACAO_ALTERADA / NOTA_FISCAL_REJEITADA: broadcast pra
     // todo mundo registrado (decisao confirmada com o usuario - sem
     // vinculo Cliente<->Usuario no sistema hoje).

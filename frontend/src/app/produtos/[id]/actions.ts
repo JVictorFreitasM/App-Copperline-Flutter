@@ -1,9 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { ProdutoDetalheDto, ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
-import type { EstadoEdicaoManual } from "./estado-edicao-manual";
+import type { ResultadoCalculoQuantidadeDto } from "@/lib/produtos";
 
 // Estado do useActionState no Client Component (simular-calculo.tsx) -
 // mesmo padrão de ResultadoConsultaEstoque (estoque/actions.ts): um
@@ -65,71 +63,6 @@ export async function simularCalculo(
       mensagem: error instanceof ApiError ? error.message : "Erro desconhecido ao simular o cálculo.",
     };
   }
-}
-
-// Campos que NAO vem do WK Radar (precoFabricacao/imagem, pedido do
-// usuario) - editaveis so por admin, via PATCH/POST /admin/produtos/:id
-// (backend ja valida role admin via requireRole, ver produtos.module.ts;
-// aqui e' so' a chamada, sem checagem de role duplicada no front).
-// Tipo/estado inicial ficam em ./estado-edicao-manual.ts (não aqui - um
-// arquivo "use server" só pode exportar funções async).
-
-export async function atualizarPrecoFabricacao(
-  produtoId: string,
-  _estadoAnterior: EstadoEdicaoManual,
-  formData: FormData,
-): Promise<EstadoEdicaoManual> {
-  const valorRaw = String(formData.get("precoFabricacao") ?? "").trim();
-  const valor = Number(valorRaw);
-  if (!valorRaw || Number.isNaN(valor) || valor < 0) {
-    return { erro: "Informe um valor válido (maior ou igual a zero).", sucesso: null };
-  }
-
-  try {
-    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ precoFabricacao: valor }),
-      cache: "no-store",
-    });
-  } catch (error) {
-    return {
-      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar o preço.",
-      sucesso: null,
-    };
-  }
-
-  revalidatePath(`/produtos/${produtoId}`);
-  return { erro: null, sucesso: "Preço de fabricação atualizado." };
-}
-
-// OS-novas-implementacoes.md Bloco 4 - mesmo endpoint de
-// atualizarPrecoFabricacao (PATCH /admin/produtos/:id aceita os dois
-// campos independentemente, ver AtualizarProdutoManualDto no backend),
-// formulário separado só pra não misturar dois conceitos numa mesma tela.
-export async function atualizarTipoAcondicionamento(
-  produtoId: string,
-  _estadoAnterior: EstadoEdicaoManual,
-  formData: FormData,
-): Promise<EstadoEdicaoManual> {
-  const valor = String(formData.get("tipoAcondicionamentoId") ?? "").trim();
-
-  try {
-    await apiFetch<ProdutoDetalheDto>(`/admin/produtos/${encodeURIComponent(produtoId)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipoAcondicionamentoId: valor || null }),
-      cache: "no-store",
-    });
-  } catch (error) {
-    return {
-      erro: error instanceof ApiError ? error.message : "Erro desconhecido ao salvar.",
-      sucesso: null,
-    };
-  }
-
-  revalidatePath(`/produtos/${produtoId}`);
-  return { erro: null, sucesso: "Tipo de acondicionamento atualizado." };
 }
 
 // apiFetch (lib/api.ts) embute o corpo cru da resposta de erro na mensagem

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, ModalFooter } from "@/components/design/modal";
 import { formatarMoeda, formatarPercentual } from "@/lib/formatacao";
-import { calcularItem } from "./actions";
+import { calcularItem, simularDesconto, type SimulacaoDescontoDto } from "./actions";
 import type { ItemPedidoState, OpcaoBusca } from "./tipos";
 
 const METROS_POR_KM = 1000;
+const DEBOUNCE_DESCONTO_MS = 300;
 
 // Popup de detalhe/confirmação de item (referência do usuário, img.jpeg) -
 // abre ao escolher um produto no SelecionarItemPopup. Calcula em tempo
@@ -38,6 +39,8 @@ export function ItemDetalhePopup({
     valorUnitario: number;
     valorFinal: number;
   } | null>(null);
+  const [simulacaoDesconto, setSimulacaoDesconto] = useState<SimulacaoDescontoDto | null>(null);
+  const timerDesconto = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reabre pré-preenchido quando é edição de um item já adicionado, ou
   // limpo quando é um produto novo - roda a cada abertura (open muda de
@@ -61,8 +64,27 @@ export function ItemDetalhePopup({
       setCalculo(null);
     }
     setErro(null);
+    setSimulacaoDesconto(null);
+    if (timerDesconto.current) clearTimeout(timerDesconto.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, produto?.id]);
+
+  // Aviso PROATIVO de que esse desconto vai exigir aprovação, antes de
+  // confirmar o pedido inteiro (POST /pedidos/simular-desconto, sem efeito
+  // colateral nenhum). Debounced à parte do recálculo de preço em si (que
+  // já é chamado a cada tecla, sem debounce - ver recalcular abaixo).
+  function avisarSeNecessitaAprovacao(descontoValor: string) {
+    setSimulacaoDesconto(null);
+    if (timerDesconto.current) clearTimeout(timerDesconto.current);
+    const desconto = Number(descontoValor);
+    if (!desconto || desconto <= 0) return;
+    timerDesconto.current = setTimeout(async () => {
+      const resultado = await simularDesconto(desconto);
+      if (resultado.status === "sucesso") {
+        setSimulacaoDesconto(resultado.resultado);
+      }
+    }, DEBOUNCE_DESCONTO_MS);
+  }
 
   async function recalcular(kmValor: string, descontoValor: string) {
     setCalculo(null);
@@ -126,10 +148,19 @@ export function ItemDetalhePopup({
               onChange={(evento) => {
                 setPercentualDesconto(evento.target.value);
                 void recalcular(km, evento.target.value);
+                avisarSeNecessitaAprovacao(evento.target.value);
               }}
               className="w-32 rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
             />
           </label>
+
+          {simulacaoDesconto?.necessitaAprovacao && (
+            <p className="text-xs font-medium text-ink">
+              {simulacaoDesconto.aprovadorEsperado?.nome
+                ? `Esse desconto vai precisar de aprovação de ${simulacaoDesconto.aprovadorEsperado.nome}.`
+                : "Esse desconto vai precisar de aprovação antes de ser enviado ao ERP."}
+            </p>
+          )}
 
           <label className="flex flex-col gap-1 text-sm text-muted">
             Observação do item

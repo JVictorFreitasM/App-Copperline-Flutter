@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
 import '../local_db/offline_fallback.dart';
+import '../models/cliente.dart';
 import '../models/pedido.dart';
 import '../pagination.dart';
 import 'clientes_provider.dart' show limitePorPagina;
@@ -67,6 +68,18 @@ final pedidoDetalheProvider = FutureProvider.family<PedidoDetalhe, String>((ref,
   return PedidoDetalhe.fromJson(json);
 });
 
+// GET /clientes/:id/tabelas-preco (web: tabela-preco-popup.tsx) - só os
+// códigos, sem descrição (mesmo shape do backend). Lista vazia = sem
+// tabela específica pro cliente, cai no fallback global de sempre.
+final tabelasPrecoClienteProvider = FutureProvider.family<List<String>, String>((
+  ref,
+  clienteId,
+) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(clienteId)}/tabelas-preco');
+  return (json['codigos'] as List).cast<String>();
+});
+
 // Criação de pedido (OS-BACKEND-25, criar_pedido_screen.dart) - dois
 // endpoints reaproveitados, sem nenhum novo no backend: cálculo por item
 // (POST /produtos/:id/calcular, mesmo usado na simulação da tela de
@@ -83,10 +96,24 @@ class CriarPedidoService {
   Future<ResultadoCalculoQuantidade> calcular({
     required String produtoId,
     required double metrosDesejados,
+    // Pedido do usuário (2026-09-30) - desconto é POR ITEM desde
+    // d3abf2d (backend, CriarPedidoItemDto.percentualDesconto), não mais
+    // um percentual único do pedido inteiro. Repassado aqui pro cálculo
+    // já vir com o valor líquido certo (mesmo padrão do web,
+    // item-detalhe-popup.tsx `recalcular`).
+    double? percentualDesconto,
+    // Tabela de preços escolhida pro pedido (ver selecionarTabelaPreco em
+    // criar_pedido_screen.dart) - ausente cai no fallback global de
+    // sempre (mesmo comportamento de antes desta OS).
+    String? codigoTabela,
   }) async {
     final json = await _apiClient.postJson(
       '/produtos/${Uri.encodeComponent(produtoId)}/calcular',
-      {'metrosDesejados': metrosDesejados},
+      {
+        'metrosDesejados': metrosDesejados,
+        if (percentualDesconto != null) 'percentualDesconto': percentualDesconto,
+        if (codigoTabela != null) 'codigoTabela': codigoTabela,
+      },
     );
     return ResultadoCalculoQuantidade.fromJson(json);
   }
@@ -106,25 +133,60 @@ class CriarPedidoService {
   // rascunho em vez de enviar ao ERP.
   Future<({String pedidoId, String status})> criar({
     required String clienteId,
-    required double percentualDesconto,
     required String formaPagamentoId,
     required String condicaoPagamentoId,
+    // Cada item já traz seu próprio 'percentualDesconto' (obrigatório,
+    // CriarPedidoItemDto) - não existe mais um percentual único do pedido
+    // (ver comentário em calcular() acima).
     required List<Map<String, dynamic>> itens,
     double? latitude,
     double? longitude,
     bool? salvarComoOrcamento,
+    String? observacoes,
+    // Pedido do usuário (2026-09-30) - paridade com o fluxo web
+    // (criar-pedido-form.tsx): tabela de preços explícita, contato do
+    // cliente e "em nome de qual vendedor da equipe" (só supervisor/
+    // gerente usa este último - checado no backend, nunca só no client).
+    String? codigoTabelaPreco,
+    String? contatoId,
+    String? vendedorId,
   }) async {
     final json = await _apiClient.postJson('/pedidos', {
       'clienteId': clienteId,
-      'percentualDesconto': percentualDesconto,
       'formaPagamentoId': formaPagamentoId,
       'condicaoPagamentoId': condicaoPagamentoId,
       'itens': itens,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
       if (salvarComoOrcamento != null) 'salvarComoOrcamento': salvarComoOrcamento,
+      // Pedido do usuario (2026-09-30) - Pedido.observacoes ja existia no
+      // backend (CriarPedidoDto, max 2000) e no web, so faltava no mobile.
+      if (observacoes != null && observacoes.isNotEmpty) 'observacoes': observacoes,
+      if (codigoTabelaPreco != null) 'codigoTabelaPreco': codigoTabelaPreco,
+      if (contatoId != null) 'contatoId': contatoId,
+      if (vendedorId != null) 'vendedorId': vendedorId,
     });
     return (pedidoId: json['pedidoId'] as String, status: json['status'] as String);
+  }
+
+  // POST /clientes/:id/contatos (web: adicionar-contato-popup.tsx) - só
+  // `nome` é obrigatório do lado do backend; o resto é opcional.
+  Future<ContatoCliente> criarContato({
+    required String clienteId,
+    required String nome,
+    String? telefoneDdd,
+    String? telefoneNumero,
+    String? email,
+    String? funcao,
+  }) async {
+    final json = await _apiClient.postJson('/clientes/${Uri.encodeComponent(clienteId)}/contatos', {
+      'nome': nome,
+      if (telefoneDdd != null && telefoneDdd.isNotEmpty) 'telefoneDdd': telefoneDdd,
+      if (telefoneNumero != null && telefoneNumero.isNotEmpty) 'telefoneNumero': telefoneNumero,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (funcao != null && funcao.isNotEmpty) 'funcao': funcao,
+    });
+    return ContatoCliente.fromJson(json);
   }
 
   // Épico 4 - "transformar um Orçamento em Pedido". Mesmas 3 saídas de
@@ -149,4 +211,32 @@ class CriarPedidoService {
       'vendedorId': novoVendedorId,
     });
   }
+
+  // POST /pedidos/simular-desconto (pedido do usuário, 2026-09-30) - sem
+  // efeito colateral nenhum (nunca cria SolicitacaoDesconto), só avisa SE
+  // esse percentual vai exigir aprovação antes do vendedor confirmar o
+  // pedido de verdade. Mesmo endpoint que o backend já expõe pro web usar,
+  // mas que a tela web tampouco chamava ainda (gap também lá).
+  Future<SimulacaoDesconto> simularDesconto(double percentualDesconto) async {
+    final json = await _apiClient.postJson('/pedidos/simular-desconto', {
+      'percentualDesconto': percentualDesconto,
+    });
+    return SimulacaoDesconto.fromJson(json);
+  }
+}
+
+class SimulacaoDesconto {
+  const SimulacaoDesconto({required this.necessitaAprovacao, required this.aprovadorEsperadoNome});
+
+  factory SimulacaoDesconto.fromJson(Map<String, dynamic> json) {
+    final necessitaAprovacao = json['necessitaAprovacao'] as bool;
+    final aprovador = json['aprovadorEsperado'] as Map<String, dynamic>?;
+    return SimulacaoDesconto(
+      necessitaAprovacao: necessitaAprovacao,
+      aprovadorEsperadoNome: aprovador?['nome'] as String?,
+    );
+  }
+
+  final bool necessitaAprovacao;
+  final String? aprovadorEsperadoNome;
 }

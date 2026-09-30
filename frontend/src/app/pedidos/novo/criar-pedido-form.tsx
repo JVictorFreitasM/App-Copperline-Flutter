@@ -70,6 +70,7 @@ export function CriarPedidoForm({
   const [vendedorId, setVendedorId] = useState<string | undefined>(undefined);
   const [observacoesPedido, setObservacoesPedido] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [avisoEnvio, setAvisoEnvio] = useState<string | null>(null);
 
   // Primeira opção do dropdown é a própria conta (quando ela também é uma
   // vendedora ativa); as demais são os subordinados (decisão confirmada
@@ -145,7 +146,16 @@ export function CriarPedidoForm({
       });
 
       if (resultado.status === "sucesso") {
-        router.push(`/pedidos/${resultado.pedidoId}`);
+        // Pedido do usuário (2026-09-30) - antes navegava direto, sem
+        // diferenciar ENVIADO de AGUARDANDO_APROVACAO (situacaoPedido já
+        // vinha no resultado, mas nunca era lido). Mesmo critério do
+        // mobile: mostra o aviso por um instante antes de ir pro detalhe.
+        if (resultado.situacaoPedido === "AGUARDANDO_APROVACAO") {
+          setAvisoEnvio("Pedido enviado para aprovação do desconto.");
+        } else if (resultado.situacaoPedido === "ORCAMENTO") {
+          setAvisoEnvio("Orçamento salvo.");
+        }
+        setTimeout(() => router.push(`/pedidos/${resultado.pedidoId}`), 1200);
         return;
       }
       setErro(resultado.mensagem ?? "Erro desconhecido ao criar o pedido.");
@@ -382,11 +392,12 @@ export function CriarPedidoForm({
       </button>
 
       {erro && <p className="text-sm font-medium text-ink">{erro}</p>}
+      {avisoEnvio && <p className="text-sm font-medium text-ink">{avisoEnvio}</p>}
 
       <div className="flex justify-end">
         <button
           type="button"
-          disabled={pending || !podeSubmeter()}
+          disabled={pending || avisoEnvio !== null || !podeSubmeter()}
           onClick={onSubmit}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-solid px-5 py-2.5 text-sm font-medium text-on-solid transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
         >

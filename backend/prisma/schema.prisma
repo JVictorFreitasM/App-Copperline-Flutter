@@ -937,6 +937,16 @@ enum TipoEventoNotificacao {
   // gerente), DECIDIDA avisa de volta o vendedor solicitante.
   SOLICITACAO_DESCONTO_CRIADA
   SOLICITACAO_DESCONTO_DECIDIDA
+  // Pedido do usuario (2026-09-29) - job diario (RelatorioDiarioNotificacaoService,
+  // dias uteis, ver notificacoes/relatorio-diario-notificacao.scheduler.ts),
+  // direto ao proprio vendedor (referenciaId = Vendedor.id, nunca
+  // broadcast, mesmo criterio de VISITA_CANCELADA/SOLICITACAO_DESCONTO_*).
+  // MANHA = resumo do que precisa de acao pra comecar o dia; FIM_DIA =
+  // balanco do que aconteceu. Tipos separados (nao um so com "momento" em
+  // `dados`) pra filtro/historico ficar explicito sem precisar abrir o
+  // JSON de cada evento.
+  RELATORIO_MANHA_PEDIDOS
+  RELATORIO_FIM_DIA_PEDIDOS
 
   @@map("tipo_evento_notificacao")
 }

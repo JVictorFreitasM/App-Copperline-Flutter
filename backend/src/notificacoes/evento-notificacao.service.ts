@@ -102,6 +102,17 @@ async function resolverUsuariosAlvo(
     return usuarioId ? [usuarioId] : [];
   }
 
+  if (evento.tipo === 'RELATORIO_MANHA_PEDIDOS' || evento.tipo === 'RELATORIO_FIM_DIA_PEDIDOS') {
+    // referenciaId = Vendedor.id (ver RelatorioDiarioNotificacaoService) -
+    // so o proprio vendedor, nunca broadcast.
+    const vendedor = await tx.vendedor.findUnique({
+      where: { id: evento.referenciaId },
+      select: { usuarioId: true },
+    });
+    const usuarioId = vendedor?.usuarioId ?? null;
+    return usuarioId ? [usuarioId] : [];
+  }
+
   // PEDIDO_SITUACAO_ALTERADA / NOTA_FISCAL_REJEITADA: broadcast pra todo
   // usuario cadastrado - diferente do broadcast de push (que so alcanca
   // quem tem AO MENOS UM dispositivo registrado), aqui e' toda linha de

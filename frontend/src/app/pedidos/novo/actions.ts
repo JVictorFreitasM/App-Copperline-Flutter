@@ -92,6 +92,33 @@ export async function calcularItem(
   }
 }
 
+export interface SimulacaoDescontoDto {
+  necessitaAprovacao: boolean;
+  aprovadorEsperado?: { id: string; nome: string | null };
+}
+
+// Aviso PROATIVO de que o desconto do item vai exigir aprovação, antes de
+// confirmar o pedido (POST /pedidos/simular-desconto, sem efeito colateral
+// nenhum - nunca cria SolicitacaoDesconto). Pedido do usuário (2026-09-30) -
+// o formulário reagia só depois do envio, sem avisar durante a digitação.
+export async function simularDesconto(
+  percentualDesconto: number,
+): Promise<{ status: "sucesso"; resultado: SimulacaoDescontoDto } | { status: "erro" }> {
+  try {
+    const resultado = await apiFetch<SimulacaoDescontoDto>("/pedidos/simular-desconto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ percentualDesconto }),
+      cache: "no-store",
+    });
+    return { status: "sucesso", resultado };
+  } catch {
+    // Aviso é só um extra informativo - se a simulação falhar, o envio de
+    // verdade continua o juiz final (mesmo critério do mobile).
+    return { status: "erro" };
+  }
+}
+
 // Contatos já sincronizados do cliente (dropdown "Selecionar contato") -
 // GET /clientes/:id já traz `contatos` embutido, sem endpoint novo.
 export async function obterContatosCliente(clienteId: string): Promise<ContatoClienteDto[]> {

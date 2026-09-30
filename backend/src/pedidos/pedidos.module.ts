@@ -1,9 +1,14 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { ErpClientModule } from '../erp-client/erp-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { RELATORIO_DIARIO_QUEUE } from '../notificacoes/notificacao.constants';
+import { RelatorioDiarioNotificacaoProcessor } from '../notificacoes/relatorio-diario-notificacao.processor';
+import { RelatorioDiarioNotificacaoScheduler } from '../notificacoes/relatorio-diario-notificacao.scheduler';
+import { RelatorioDiarioNotificacaoService } from '../notificacoes/relatorio-diario-notificacao.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ProdutosModule } from '../produtos/produtos.module';
 import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoes-desconto.module';
@@ -23,6 +28,16 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
   // vendedor), TabelasPrecoModule (tabela selecionada pro envio ao ERP) e
   // ErpClientModule (PedidoErpClientService, OS-BACKEND-25) - todos
   // reaproveitados de OS's anteriores, ver criar-pedido.service.ts.
+  //
+  // RelatorioDiarioNotificacao* (pedido do usuario, 2026-09-29) vive AQUI
+  // (nao em NotificacoesModule) de proposito - depende de
+  // RelatorioPedidosService (mesmo modulo, DI direta) e so cria
+  // EventoNotificacao (funcao pura importada de
+  // notificacoes/evento-notificacao.service.ts, sem precisar importar o
+  // modulo inteiro); importar NotificacoesModule aqui criaria ciclo
+  // (PedidosModule -> ProdutosModule -> NotificacoesModule -> PedidosModule).
+  // Fila propria (RELATORIO_DIARIO_QUEUE), separada da fila de
+  // NotificacoesModule.
   imports: [
     PrismaModule,
     ProdutosModule,
@@ -32,6 +47,7 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
     VendedoresModule,
     ErpClientModule,
     ConfiguracoesModule,
+    BullModule.registerQueue({ name: RELATORIO_DIARIO_QUEUE }),
   ],
   controllers: [PedidosController],
   providers: [
@@ -40,6 +56,9 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
     PedidoErpClientService,
     RelatorioPedidosService,
     PedidoPdfService,
+    RelatorioDiarioNotificacaoService,
+    RelatorioDiarioNotificacaoProcessor,
+    RelatorioDiarioNotificacaoScheduler,
   ],
   // CriarPedidoService exportado pra MobileModule (OS-BACKEND-29)
   // reaproveitar na fila de acoes offline.

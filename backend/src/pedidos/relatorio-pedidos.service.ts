@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
+import type { Prisma } from '../../generated/prisma/client';
 import { filtroPeriodo } from '../dashboard/filtro-periodo';
 import { PrismaService } from '../prisma/prisma.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
@@ -60,6 +61,30 @@ export class RelatorioPedidosService {
         ? { id: { in: escopo.vendedorIds } }
         : {};
 
+    // 'TODOS'/'EQUIPE' e' o unico par possivel aqui - 'PROPRIO'/'NENHUM' ja
+    // foram rejeitados com ForbiddenException acima.
+    const escopoResposta: 'TODOS' | 'EQUIPE' = escopo.tipo === 'TODOS' ? 'TODOS' : 'EQUIPE';
+
+    return this.montarRelatorio(vendedorWhere, escopoResposta, filtro);
+  }
+
+  // Uso interno (RelatorioDiarioNotificacaoService, pedido do usuario
+  // 2026-09-29 - push de manha/fim de dia por vendedor) - relatorio de
+  // HOJE pra todo vendedor ATIVO, sem idpUser nenhum (quem chama e' o
+  // proprio sistema via cron, nao uma requisicao de usuario autenticado,
+  // entao nenhuma checagem de permissao faz sentido aqui). Vendedor
+  // inativo nunca recebe (sem usuario "correndo atras" de pedido que nao
+  // atende mais).
+  async obterParaVendedoresAtivos(): Promise<RelatorioVendedorDto[]> {
+    const resultado = await this.montarRelatorio({ inativo: false }, 'TODOS', {});
+    return resultado.vendedores;
+  }
+
+  private async montarRelatorio(
+    vendedorWhere: Prisma.VendedorWhereInput,
+    escopoResposta: 'TODOS' | 'EQUIPE',
+    filtro: RelatorioPedidosFiltro,
+  ): Promise<RelatorioPedidosDto> {
     const vendedores = await this.prisma.vendedor.findMany({
       where: vendedorWhere,
       orderBy: { nome: 'asc' },
@@ -73,10 +98,6 @@ export class RelatorioPedidosService {
     const hoje = new Date().toISOString().slice(0, 10);
     const dataInicialEfetiva = semPeriodoInformado ? hoje : filtro.dataInicial;
     const dataFinalEfetiva = semPeriodoInformado ? hoje : filtro.dataFinal;
-
-    // 'TODOS'/'EQUIPE' e' o unico par possivel aqui - 'PROPRIO'/'NENHUM' ja
-    // foram rejeitados com ForbiddenException acima.
-    const escopoResposta: 'TODOS' | 'EQUIPE' = escopo.tipo === 'TODOS' ? 'TODOS' : 'EQUIPE';
 
     if (vendedores.length === 0) {
       return {

@@ -5,6 +5,7 @@ function txFake(overrides: {
   visita?: Record<string, unknown> | null;
   solicitacao?: Record<string, unknown> | null;
   usuarios?: { id: string }[];
+  vendedor?: { usuarioId: string | null } | null;
 } = {}) {
   return {
     eventoNotificacao: {
@@ -29,6 +30,9 @@ function txFake(overrides: {
     },
     usuario: {
       findMany: jest.fn().mockResolvedValue(overrides.usuarios ?? []),
+    },
+    vendedor: {
+      findUnique: jest.fn().mockResolvedValue('vendedor' in overrides ? overrides.vendedor : null),
     },
   };
 }
@@ -144,5 +148,33 @@ describe('registrarEventoNotificacao', () => {
       data: [{ usuarioId: 'vendedor-1', eventoId: 'evento-1' }],
       skipDuplicates: true,
     });
+  });
+
+  it.each(['RELATORIO_MANHA_PEDIDOS', 'RELATORIO_FIM_DIA_PEDIDOS'] as const)(
+    '%s: cria so pro proprio vendedor (referenciaId = Vendedor.id)',
+    async (tipo) => {
+      const tx = txFake({ vendedor: { usuarioId: 'usuario-vendedor' } });
+
+      await registrarEventoNotificacao(tx as never, { ...INPUT_BASE, tipo });
+
+      expect(tx.vendedor.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'ref-1' } }),
+      );
+      expect(tx.notificacaoUsuario.createMany).toHaveBeenCalledWith({
+        data: [{ usuarioId: 'usuario-vendedor', eventoId: 'evento-1' }],
+        skipDuplicates: true,
+      });
+    },
+  );
+
+  it('RELATORIO_MANHA_PEDIDOS: nao cria nada quando o vendedor nao tem usuario vinculado', async () => {
+    const tx = txFake({ vendedor: { usuarioId: null } });
+
+    await registrarEventoNotificacao(tx as never, {
+      ...INPUT_BASE,
+      tipo: 'RELATORIO_MANHA_PEDIDOS',
+    });
+
+    expect(tx.notificacaoUsuario.createMany).not.toHaveBeenCalled();
   });
 });

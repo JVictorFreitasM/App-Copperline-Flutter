@@ -3,11 +3,12 @@
 import { useActionState } from "react";
 import { PrimaryButton } from "@/components/design/button";
 import { atualizarPrecoFabricacao } from "./actions";
-import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-edicao-manual";
+import { ESTADO_EDICAO_MANUAL_INICIAL } from "./estado-produtos-admin";
 
-// Admin-only (checagem real fica no backend, requireRole('admin') - ver
-// produtos.module.ts); a página já só renderiza este form quando
-// usuario.role === "admin" (ver page.tsx). Web apenas, pedido do usuário.
+// Movido de produtos/[id] pro admin (pedido do usuário, 2026-09-29) -
+// admin-only (checagem real fica no backend, requireRole('admin') - ver
+// produtos.module.ts); a página só renderiza isto dentro da área de
+// produto selecionado (a própria /admin/produtos já é admin-only).
 export function EditarPrecoFabricacaoForm({
   produtoId,
   valorAtual,
@@ -20,7 +21,7 @@ export function EditarPrecoFabricacaoForm({
 
   return (
     <form action={acao} className="flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+      <label className="flex w-72 flex-col gap-1 text-xs font-medium text-muted">
         Preço de fabricação (R$)
         <input
           type="number"
@@ -29,7 +30,7 @@ export function EditarPrecoFabricacaoForm({
           min="0"
           defaultValue={valorAtual ?? ""}
           placeholder="0,00"
-          className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
+          className="w-full rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
         />
       </label>
       <PrimaryButton type="submit" disabled={pending}>
