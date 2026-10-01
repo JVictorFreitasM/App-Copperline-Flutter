@@ -16,7 +16,6 @@ import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { AbasPedido } from "./abas-pedido";
 import { AprovarReprovarTudo } from "./aprovar-reprovar-tudo";
-import { ItemAprovacaoBotoes } from "./item-aprovacao-botoes";
 import { LinkPdfNotaFiscal } from "./link-pdf-nota-fiscal";
 
 // Tela de detalhe do pedido (layout de referencia ref1.jpeg, fornecida
@@ -78,10 +77,6 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
   // vinculado (ex: pedido sincronizado do Radar, que nunca preenche isso).
   const contato = pedido.contato ?? pedido.cliente?.contatos?.[0] ?? null;
   const vendedorExibido = pedido.vendedorResponsavel ?? pedido.vendedor;
-  // Pedido já faturado é decisão encerrada - não faz sentido oferecer
-  // aceitar/recusar item (nem em lote) depois disso (pedido do usuário,
-  // 2026-09-17).
-  const faturado = pedido.situacao === "FATURADO";
   // Pedido FATURADO ou PARCIALMENTE_FATURADO deve ter nota fiscal
   // disponível pra visualização/PDF/impressão (pedido do usuário,
   // 2026-09-23) - pode ter mais de uma (faturamento parcial: fatura o
@@ -99,7 +94,9 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         abaAtiva="pedido"
       />
 
-      {!faturado && <AprovarReprovarTudo pedidoId={pedido.id} />}
+      {pedido.solicitacaoDesconto && (
+        <AprovarReprovarTudo pedidoId={pedido.id} solicitacao={pedido.solicitacaoDesconto} />
+      )}
 
       <div className="rounded-card bg-surface p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -207,7 +204,7 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         </div>
       </div>
 
-      <TabelaItens pedidoId={pedido.id} itens={pedido.itens} faturado={faturado} />
+      <TabelaItens itens={pedido.itens} />
 
       {esperaNotaFiscal && <NotasFiscaisSecao notasFiscais={pedido.notasFiscais} />}
     </>
@@ -284,15 +281,7 @@ function EnderecoTexto({ endereco }: { endereco: EnderecoClientePedidoDto }) {
   );
 }
 
-function TabelaItens({
-  pedidoId,
-  itens,
-  faturado,
-}: {
-  pedidoId: string;
-  itens: PedidoItemDto[];
-  faturado: boolean;
-}) {
+function TabelaItens({ itens }: { itens: PedidoItemDto[] }) {
   if (itens.length === 0) {
     return <EstadoVazio mensagem="Nenhum item neste pedido." />;
   }
@@ -302,7 +291,6 @@ function TabelaItens({
       <table className="w-full min-w-[860px] text-left text-sm">
         <thead>
           <tr className="border-b border-line text-xs font-medium text-muted">
-            <th className="px-4 py-3"></th>
             <th className="px-4 py-3">Código</th>
             <th className="px-4 py-3">Qtd</th>
             <th className="px-4 py-3">Produto</th>
@@ -326,15 +314,6 @@ function TabelaItens({
             const pesoBrutoItem = calcularPesoItem(item.produto?.pesoBrutoKg, quantidadeEmMetros);
             return (
               <tr key={item.id} className="border-b border-line last:border-0">
-                <td className="px-4 py-3">
-                  {!faturado && (
-                    <ItemAprovacaoBotoes
-                      pedidoId={pedidoId}
-                      itemId={item.id}
-                      statusAprovacao={item.statusAprovacao}
-                    />
-                  )}
-                </td>
                 <td className="px-4 py-3 text-muted">{item.produto?.codigo ?? "—"}</td>
                 <td className="px-4 py-3 text-muted">
                   {item.quantidadeVenda === null

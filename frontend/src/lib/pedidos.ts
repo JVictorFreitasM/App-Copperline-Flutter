@@ -202,8 +202,21 @@ export interface NotaFiscalResumoPedidoDto {
   valorTotalNotaFiscal: string | null;
 }
 
+// Solicitação de desconto acima da alçada vinculada ao pedido (a mais
+// recente) - null quando o pedido nunca precisou de aprovação; é isso que
+// decide se os botões de aceitar/recusar aparecem.
+export interface SolicitacaoDescontoDoPedidoDto {
+  id: string;
+  status: "PENDENTE" | "APROVADO" | "REJEITADO";
+  percentualSolicitado: number;
+  papelExigido: "VENDEDOR" | "SUPERVISOR" | "GERENTE";
+  aprovadorEsperadoNome: string | null;
+  podeDecidir: boolean;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, "cliente"> {
   cliente: ClienteDetalhePedidoDto | null;
+  solicitacaoDesconto: SolicitacaoDescontoDoPedidoDto | null;
   itens: PedidoItemDto[];
   pesoLiquidoTotalKg: string | null;
   pesoBrutoTotalKg: string | null;

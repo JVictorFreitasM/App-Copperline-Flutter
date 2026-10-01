@@ -24,7 +24,33 @@ class AprovacoesScreen extends ConsumerStatefulWidget {
 class _AprovacoesScreenState extends ConsumerState<AprovacoesScreen> {
   String? _processandoId;
 
+  Future<bool> _confirmar({required bool aprovar}) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(aprovar ? 'Aceitar desconto' : 'Recusar desconto'),
+        content: Text(
+          aprovar
+              ? 'Confirma aceitar este desconto? Essa decisão não pode ser desfeita.'
+              : 'Confirma recusar este desconto? Essa decisão não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(aprovar ? 'Aceitar' : 'Recusar'),
+          ),
+        ],
+      ),
+    );
+    return confirmado == true;
+  }
+
   Future<void> _decidir(String id, {required bool aprovar}) async {
+    if (!await _confirmar(aprovar: aprovar) || !mounted) return;
     setState(() => _processandoId = id);
     try {
       final service = ref.read(solicitacoesDescontoServiceProvider);

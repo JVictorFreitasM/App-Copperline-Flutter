@@ -184,8 +184,24 @@ export interface NotaFiscalResumoPedidoDto {
   valorTotalNotaFiscal: string | null;
 }
 
+// Solicitacao de desconto acima da alcada do vendedor vinculada ao pedido
+// (a mais recente) - null quando o pedido nunca precisou de aprovacao. Os
+// botoes de aceitar/recusar so aparecem quando isso existe.
+export interface SolicitacaoDescontoDoPedidoDto {
+  id: string;
+  status: 'PENDENTE' | 'APROVADO' | 'REJEITADO';
+  percentualSolicitado: number;
+  papelExigido: 'VENDEDOR' | 'SUPERVISOR' | 'GERENTE';
+  aprovadorEsperadoNome: string | null;
+  // true so quando o usuario logado pode decidir AGORA (pendente, nao e o
+  // proprio solicitante, papel suficiente) - decisao de verdade segue
+  // validada no backend em SolicitacoesDescontoService.decidir.
+  podeDecidir: boolean;
+}
+
 export interface PedidoDetalheDto extends Omit<PedidoResumoDto, 'cliente'> {
   cliente: ClienteDetalhePedidoDto | null;
+  solicitacaoDesconto: SolicitacaoDescontoDoPedidoDto | null;
   itens: PedidoItemDto[];
   // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - null pra
   // pedido sincronizado do ERP (nunca calculado nesse caminho) ou quando
@@ -346,6 +362,7 @@ export function paraPedidoDetalheDto(
   return {
     ...paraPedidoResumoDto(pedido, temSolicitacaoDescontoPendente),
     cliente: paraClienteDetalhePedidoDto(pedido.cliente),
+    solicitacaoDesconto: null,
     pesoLiquidoTotalKg: pedido.pesoLiquidoTotalKg?.toString() ?? null,
     pesoBrutoTotalKg: pedido.pesoBrutoTotalKg?.toString() ?? null,
     percentualDescontoSolicitado: pedido.percentualDescontoSolicitado?.toString() ?? null,

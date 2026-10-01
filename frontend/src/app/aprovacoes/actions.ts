@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api";
+import { redirecionarParaLogin } from "@/lib/auth";
 
 const ROTA = "/aprovacoes";
 
@@ -17,6 +18,9 @@ async function decidir(id: string, acao: "aprovar" | "rejeitar"): Promise<Estado
       cache: "no-store",
     });
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return redirecionarParaLogin(ROTA);
+    }
     return {
       erro: error instanceof ApiError ? error.message : "Erro desconhecido ao decidir a solicitação.",
       sucesso: null,

@@ -91,7 +91,13 @@ export class PedidosController {
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
     const escopo = await this.resolverEscopo(idpUser);
-    return this.pedidosService.buscarPorId(id, escopo);
+    const pedido = await this.pedidosService.buscarPorId(id, escopo);
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const solicitacaoDesconto = await this.solicitacoesDescontoService.obterDoPedido(
+      pedido.id,
+      usuario.id,
+    );
+    return { ...pedido, solicitacaoDesconto };
   }
 
   // OS-BACKEND-33 - "/:id/historico" e' mais especifico que "/:id" (3

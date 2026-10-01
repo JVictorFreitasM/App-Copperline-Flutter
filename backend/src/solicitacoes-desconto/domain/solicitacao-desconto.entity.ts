@@ -147,6 +147,17 @@ export class SolicitacaoDesconto {
     }
   }
 
+  // Mesmas regras de validarDecisao, sem lancar - usado so pra decidir se a
+  // UI deve oferecer os botoes de aceitar/recusar.
+  podeSerDecididaPor(aprovador: AprovadorCandidato): boolean {
+    try {
+      this.validarDecisao(aprovador);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   aprovar(aprovador: AprovadorCandidato): StatusSolicitacaoDesconto {
     this.validarDecisao(aprovador);
     return 'APROVADO';

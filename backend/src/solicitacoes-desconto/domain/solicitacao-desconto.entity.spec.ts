@@ -146,3 +146,30 @@ describe('SolicitacaoDesconto.aprovar/rejeitar', () => {
     ).toThrow(SolicitacaoJaDecididaError);
   });
 });
+
+describe('SolicitacaoDesconto.podeSerDecididaPor', () => {
+  const props = {
+    id: 'sol-1',
+    vendedorSolicitanteId: 'vendedor-1',
+    papelExigido: 'SUPERVISOR' as const,
+    status: 'PENDENTE' as const,
+  };
+
+  it('true para papel suficiente, solicitacao pendente e aprovador diferente do solicitante', () => {
+    expect(
+      new SolicitacaoDesconto(props).podeSerDecididaPor({ id: 'sup-1', papel: 'SUPERVISOR' }),
+    ).toBe(true);
+  });
+
+  it('false para o proprio solicitante, papel insuficiente ou solicitacao ja decidida', () => {
+    const solicitacao = new SolicitacaoDesconto(props);
+    expect(solicitacao.podeSerDecididaPor({ id: 'vendedor-1', papel: 'SUPERVISOR' })).toBe(false);
+    expect(solicitacao.podeSerDecididaPor({ id: 'v-2', papel: 'VENDEDOR' })).toBe(false);
+    expect(
+      new SolicitacaoDesconto({ ...props, status: 'APROVADO' }).podeSerDecididaPor({
+        id: 'sup-1',
+        papel: 'SUPERVISOR',
+      }),
+    ).toBe(false);
+  });
+});

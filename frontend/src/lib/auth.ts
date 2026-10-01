@@ -53,6 +53,13 @@ export async function exigirUsuarioAutenticado(rotaAtual: string): Promise<Curre
     return user;
   }
 
+  return redirecionarParaLogin(rotaAtual);
+}
+
+// Também usado por Server Actions quando a API responde 401 (sessão do
+// backend expirou/foi perdida com o cookie ainda no navegador) - sem isso
+// o botão falha em silêncio, sem nada na tela.
+export async function redirecionarParaLogin(rotaAtual: string): Promise<never> {
   const headersList = await headers();
   const host = headersList.get("host");
   const proto = headersList.get("x-forwarded-proto") ?? "http";

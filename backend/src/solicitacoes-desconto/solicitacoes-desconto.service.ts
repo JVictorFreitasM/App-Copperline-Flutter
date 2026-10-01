@@ -46,6 +46,9 @@ export interface SolicitacaoDescontoResumoDto extends SolicitacaoDescontoDto {
   } | null;
 }
 
+export type { SolicitacaoDescontoDoPedidoDto } from '../pedidos/dto/pedido-response.dto';
+import type { SolicitacaoDescontoDoPedidoDto } from '../pedidos/dto/pedido-response.dto';
+
 export type AvaliarDescontoResultado =
   | { necessitaAprovacao: false }
   | { necessitaAprovacao: true; solicitacao: SolicitacaoDescontoDto };
@@ -242,6 +245,43 @@ export class SolicitacoesDescontoService {
     };
   }
 
+  // Solicitacao mais recente do pedido + se o usuario logado pode decidi-la
+  // agora (GET /pedidos/:id). null quando o pedido nunca precisou de
+  // aprovacao de desconto.
+  async obterDoPedido(
+    pedidoId: string,
+    usuarioId: string,
+  ): Promise<SolicitacaoDescontoDoPedidoDto | null> {
+    const registro = await this.prisma.solicitacaoDesconto.findFirst({
+      where: { pedidoId },
+      orderBy: { criadoEm: 'desc' },
+      include: { aprovadorEsperado: { select: { nome: true } } },
+    });
+    if (!registro) return null;
+
+    const vendedorLogado = await this.prisma.vendedor.findFirst({
+      where: { usuarioId },
+      select: { id: true, papel: true },
+    });
+    const podeDecidir =
+      vendedorLogado !== null &&
+      new SolicitacaoDesconto({
+        id: registro.id,
+        vendedorSolicitanteId: registro.vendedorSolicitanteId,
+        papelExigido: registro.papelExigido,
+        status: registro.status,
+      }).podeSerDecididaPor({ id: vendedorLogado.id, papel: vendedorLogado.papel });
+
+    return {
+      id: registro.id,
+      status: registro.status,
+      percentualSolicitado: registro.percentualSolicitado.toNumber(),
+      papelExigido: registro.papelExigido,
+      aprovadorEsperadoNome: registro.aprovadorEsperado?.nome ?? null,
+      podeDecidir,
+    };
+  }
+
   async aprovar(
     solicitacaoId: string,
     aprovadorUsuarioId: string,
@@ -334,6 +374,19 @@ export class SolicitacoesDescontoService {
             statusAnterior: 'AGUARDANDO_APROVACAO',
             statusNovo: novoStatus,
             alteradoPor: aprovadorUsuarioId,
+          },
+        });
+      }
+
+      // A decisao vale pro pedido inteiro: itens refletem o resultado (a
+      // tela de detalhe mostra o status de cada item).
+      if (resultado.pedidoId) {
+        await tx.pedidoItem.updateMany({
+          where: { pedidoId: resultado.pedidoId },
+          data: {
+            statusAprovacao: novoStatus,
+            decididoPorId: aprovadorUsuarioId,
+            decididoEm: new Date(),
           },
         });
       }

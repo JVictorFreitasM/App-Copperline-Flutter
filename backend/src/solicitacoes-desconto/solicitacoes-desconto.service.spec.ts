@@ -121,6 +121,7 @@ function prismaFake(overrides: {
     pedidoHistoricoStatus: {
       create: jest.fn().mockResolvedValue(undefined),
     },
+    pedidoItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     eventoNotificacao: {
       create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
         id: 'evento-1',
@@ -132,6 +133,7 @@ function prismaFake(overrides: {
       return callback({
         solicitacaoDesconto: this.solicitacaoDesconto,
         pedidoHistoricoStatus: this.pedidoHistoricoStatus,
+        pedidoItem: this.pedidoItem,
         eventoNotificacao: this.eventoNotificacao,
         notificacaoUsuario: this.notificacaoUsuario,
       });
@@ -475,6 +477,10 @@ describe('SolicitacoesDescontoService.aprovar/rejeitar', () => {
         statusNovo: 'APROVADO',
         alteradoPor: 'u-sup',
       },
+    });
+    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
+      where: { pedidoId: 'pedido-1' },
+      data: expect.objectContaining({ statusAprovacao: 'APROVADO', decididoPorId: 'u-sup' }),
     });
   });
 
