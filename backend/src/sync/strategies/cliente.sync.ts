@@ -9,7 +9,11 @@ import type {
   SyncStrategy,
   SyncWindow,
 } from '../sync-strategy.interface';
-import type { ClienteMapeado, WkRadarCliente } from './cliente.types';
+import type {
+  ClienteMapeado,
+  ContatoMapeado,
+  WkRadarCliente,
+} from './cliente.types';
 
 // ErpClientService.baseUrl ja inclui {host}/wk.api/api (ver skill
 // wk-radar-client, secao "Base de URL") - aqui so o sufixo do recurso.
@@ -90,15 +94,10 @@ export class ClienteSyncStrategy implements SyncStrategy<
       inscricaoEstadual: bruto.inscricoesLegais?.inscricaoEstadual ?? null,
       inativo: bruto.inativo,
       enderecos: bruto.enderecos ?? [],
-      contatos: (bruto.contatos ?? []).map((contato) => ({
-        idExternoErp: contato.id,
-        codigoIntegrador: contato.codigoIntegrador ?? null,
-        nome: contato.nome ?? null,
-        email: contato.email ?? null,
-        telefoneDdd: contato.telefoneDDD ?? null,
-        telefoneNumero: contato.telefoneNumero ?? null,
-        funcao: contato.funcao ?? null,
-      })),
+      contatos: [
+        ...contatosDoRadar(bruto),
+        ...contatosDosTelefonesDeEndereco(bruto),
+      ],
       vendedoresExternoIds: bruto.detalhes?.idVendedores ?? [],
       limiteCredito: bruto.informacoesFinanceiras?.limiteCredito ?? null,
       dataLimiteCredito: bruto.informacoesFinanceiras?.dataLimiteCredito
@@ -204,6 +203,60 @@ export class ClienteSyncStrategy implements SyncStrategy<
 
     return vendedor.id;
   }
+}
+
+function contatosDoRadar(bruto: WkRadarCliente): ContatoMapeado[] {
+  return (bruto.contatos ?? []).map((contato) => ({
+    idExternoErp: contato.id,
+    codigoIntegrador: contato.codigoIntegrador ?? null,
+    nome: contato.nome ?? null,
+    email: contato.email ?? null,
+    telefoneDdd: contato.telefoneDDD ?? null,
+    telefoneNumero: contato.telefoneNumero ?? null,
+    funcao: contato.funcao ?? null,
+  }));
+}
+
+// Telefones cadastrados no ENDERECO do cliente (enderecos[].telefones) nao
+// sao "contatos" no Radar (sem id proprio), mas o vendedor precisa escolhe-los
+// na lista de contatos da criacao do pedido - e contatoId do pedido e' FK pra
+// ContatoCliente, entao viram linhas aqui. idExternoErp sintetico e
+// deterministico ("ENDERECO-<cliente>-<ddd><numero>", mesmo criterio do
+// prefixo "LOCAL-") pra o upsert ser idempotente; nunca sobe pro Radar.
+// Telefone que ja existe como contato de verdade do Radar nao e' duplicado.
+function contatosDosTelefonesDeEndereco(bruto: WkRadarCliente): ContatoMapeado[] {
+  const chave = (ddd: string | null | undefined, numero: string) =>
+    `${(ddd ?? '').replace(/\D/g, '').replace(/^0+/, '')}${numero.replace(/\D/g, '')}`;
+  const jaExistentes = new Set(
+    (bruto.contatos ?? [])
+      .filter((contato) => contato.telefoneNumero)
+      .map((contato) => chave(contato.telefoneDDD, contato.telefoneNumero as string)),
+  );
+
+  const contatos: ContatoMapeado[] = [];
+  for (const endereco of bruto.enderecos ?? []) {
+    for (const telefone of endereco.telefones ?? []) {
+      if (!telefone.numero) continue;
+      const identificador = chave(telefone.ddd, telefone.numero);
+      if (jaExistentes.has(identificador)) continue;
+      jaExistentes.add(identificador);
+
+      contatos.push({
+        idExternoErp: `ENDERECO-${bruto.id}-${identificador}`,
+        codigoIntegrador: null,
+        // Telefone no nome: a lista de contatos do pedido so mostra o nome, e
+        // dois telefones do mesmo cliente ficariam indistinguiveis.
+        nome: `${bruto.nomeFantasia || bruto.razaoSocial || 'Telefone'} - ${
+          telefone.ddd ? `(${telefone.ddd}) ` : ''
+        }${telefone.numero}`,
+        email: endereco.email || null,
+        telefoneDdd: telefone.ddd || null,
+        telefoneNumero: telefone.numero,
+        funcao: 'Telefone do endereço',
+      });
+    }
+  }
+  return contatos;
 }
 
 // Tipo do client de transacao do Prisma (this.prisma.$transaction(tx => ...))

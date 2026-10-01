@@ -62,6 +62,42 @@ describe('ClienteSyncStrategy.map', () => {
     expect(mapeado.homepage).toBeNull();
   });
 
+  it('transforma telefones do endereco em contatos, sem duplicar telefone que ja e contato do Radar', () => {
+    const mapeado = strategy.map({
+      id: '17104896',
+      nomeFantasia: 'SWAN',
+      inativo: false,
+      enderecos: [
+        {
+          email: 'mccswan@terra.com.br',
+          telefones: [
+            { ddd: '086', numero: '999886470' },
+            { ddd: '086', numero: '999346426' },
+            { ddd: '086', numero: '999346426' },
+            { ddd: '086', numero: '' },
+          ],
+        },
+      ],
+      contatos: [
+        { id: 'c1', nome: 'Maria', telefoneDDD: '86', telefoneNumero: '99988-6470' },
+      ],
+    });
+
+    expect(mapeado.contatos.map((c) => c.idExternoErp)).toEqual([
+      'c1',
+      'ENDERECO-17104896-86999346426',
+    ]);
+    expect(mapeado.contatos[1]).toEqual({
+      idExternoErp: 'ENDERECO-17104896-86999346426',
+      codigoIntegrador: null,
+      nome: 'SWAN - (086) 999346426',
+      email: 'mccswan@terra.com.br',
+      telefoneDdd: '086',
+      telefoneNumero: '999346426',
+      funcao: 'Telefone do endereço',
+    });
+  });
+
   it('mapeia informacoesExtras2.idTabelaPrecoProduto', () => {
     const bruto: WkRadarCliente = {
       id: '123',
