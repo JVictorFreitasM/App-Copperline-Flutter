@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import { LlmClientService } from '../llm-client/llm-client.service';
@@ -79,11 +85,24 @@ export class ClienteResumoLlmService {
     }
 
     const dados = await this.coletarDados(clienteId);
-    const resultado = await this.llmClientService.gerarJson(
-      SYSTEM_PROMPT,
-      JSON.stringify(dados),
-      ClienteResumoSchema,
-    );
+    // Falha do provedor de IA (chave invalida/expirada, certificado, fora do
+    // ar) nao e' erro do servidor em si - sem esse tratamento o app mostrava
+    // um generico "Internal server error". O detalhe fica no log.
+    let resultado: z.infer<typeof ClienteResumoSchema>;
+    try {
+      resultado = await this.llmClientService.gerarJson(
+        SYSTEM_PROMPT,
+        JSON.stringify(dados),
+        ClienteResumoSchema,
+      );
+    } catch (error) {
+      new Logger(ClienteResumoLlmService.name).error(
+        `Falha ao gerar resumo de IA do cliente ${clienteId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new ServiceUnavailableException(
+        'Serviço de IA indisponível no momento. Tente novamente mais tarde.',
+      );
+    }
 
     const resumo: ClienteResumoLlmDto = {
       clienteId,

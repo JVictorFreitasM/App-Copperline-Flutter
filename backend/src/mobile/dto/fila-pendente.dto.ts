@@ -6,7 +6,10 @@ import {
   IsIn,
   IsISO8601,
   IsObject,
+  IsOptional,
+  IsString,
   IsUUID,
+  Length,
   ValidateNested,
 } from 'class-validator';
 
@@ -51,6 +54,16 @@ export class AcaoFilaDto {
   // so PRO ITEM em questao, nunca rejeita a chamada inteira.
   @IsObject()
   payload!: Record<string, unknown>;
+
+  // SHA-256 (hex) que o DISPOSITIVO calculou sobre {idLocal,tipo,timestamp,
+  // payload} em JSON canonico (ver hash-acao.ts). O servidor recalcula
+  // sobre o que RECEBEU: se diferir (corpo truncado/corrompido em transito),
+  // a acao NAO e processada e o app reenvia - nunca grava dado pela metade.
+  // Opcional so' pra versoes antigas do app; o app novo sempre manda.
+  @IsOptional()
+  @IsString()
+  @Length(64, 64)
+  hash?: string;
 }
 
 export class EnviarFilaPendenteDto {
@@ -62,9 +75,17 @@ export class EnviarFilaPendenteDto {
   acoes!: AcaoFilaDto[];
 }
 
+// Comprovante (ack) do que o servidor recebeu de uma acao - o app so'
+// considera a acao entregue quando ack.hash bate com o hash que ele enviou.
+export interface AckAcaoFilaDto {
+  hash: string;
+  bytes: number;
+}
+
 export interface ResultadoAcaoFilaDto {
   idLocal: string;
   status: 'SUCESSO' | 'ERRO';
   resultado?: unknown;
   erro?: string;
+  ack?: AckAcaoFilaDto;
 }

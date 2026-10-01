@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../api_client.dart';
+import '../api_exception.dart';
 import 'acao_pendente.dart';
+import 'hash_acao.dart';
 import 'local_database.dart';
 
 const _uuid = Uuid();
@@ -57,63 +59,89 @@ class FilaPendenteService {
     return resultado.first['total'] as int;
   }
 
-  /// Envia tudo que está PENDENTE/ERRO num POST só (mesmo endpoint
-  /// aceita até 500 por vez, TAMANHO_MAXIMO_FILA no backend). Falha de
-  /// REDE (offline de verdade) não marca nada como ERRO - as ações
-  /// continuam PENDENTE pra próxima tentativa; só um ERRO reportado PELO
-  /// SERVIDOR pra um item específico marca aquele item como ERRO (ver
-  /// ResultadoAcaoFilaDto no backend).
+  /// Envia as ações PENDENTE/ERRO em ordem, UMA POR REQUISIÇÃO (o endpoint
+  /// aceita lote, mas um lote único trava tudo por causa de uma ação ruim -
+  /// ex: check-in com foto grande rejeitado com 413 bloqueava pedidos e
+  /// rastreio que estavam atrás dele na fila). Por ação:
+  /// - rede caiu (sem resposta) ou sessão expirada (401/403): para aqui e
+  ///   mantém tudo PENDENTE (volta a tentar na próxima chamada; sessão
+  ///   expirada se resolve ao logar de novo, nada se perde);
+  /// - servidor respondeu SUCESSO: CONFIRMADA;
+  /// - servidor respondeu ERRO pro item, ou rejeitou a requisição (413,
+  ///   422...): marca ERRO com a mensagem (visível pro usuário) e segue
+  ///   pras próximas - uma ação ruim não bloqueia as outras.
   Future<void> sincronizar() async {
     final pendentes = await listarPendentes();
-    if (pendentes.isEmpty) {
-      return;
-    }
 
-    final List<Map<String, dynamic>> resultados;
-    try {
-      resultados = await _apiClient.postJsonList('/mobile/fila-pendente', {
-        'acoes': pendentes
-            .map(
-              (a) => {
-                'idLocal': a.idLocal,
-                'tipo': a.tipo.valor,
-                'timestamp': a.timestamp,
-                'payload': a.payload,
-              },
-            )
-            .toList(),
-      });
-    } catch (_) {
-      // Sem conexao/erro de rede - tenta de novo na proxima chamada de
-      // sincronizar() (ver offline_provider.dart, disparado ao reconectar).
-      return;
-    }
+    for (final acao in pendentes) {
+      // Hash do que ESTE aparelho está enviando - o servidor recalcula sobre
+      // o que recebeu e devolve no ack; só o ack igual a este hash confirma
+      // a ação (à prova de corpo truncado/corrompido e de resposta perdida).
+      final hashEnviado = hashDaAcao(
+        idLocal: acao.idLocal,
+        tipo: acao.tipo.valor,
+        timestamp: acao.timestamp,
+        payload: acao.payload,
+      );
+      final List<Map<String, dynamic>> resultados;
+      try {
+        resultados = await _apiClient.postJsonList('/mobile/fila-pendente', {
+          'acoes': [
+            {
+              'idLocal': acao.idLocal,
+              'tipo': acao.tipo.valor,
+              'timestamp': acao.timestamp,
+              'payload': acao.payload,
+              'hash': hashEnviado,
+            },
+          ],
+        });
+      } on ApiException catch (erro) {
+        final semResposta = erro.statusCode == null;
+        final sessaoInvalida = erro.statusCode == 401 || erro.statusCode == 403;
+        if (semResposta || sessaoInvalida) {
+          return;
+        }
+        // Servidor respondeu e rejeitou ESTA ação (ex: 413 payload grande,
+        // 4xx/5xx) - não adianta repetir igual, mas não pode travar o resto.
+        await _marcarErro(acao.idLocal, erro.message);
+        continue;
+      } catch (_) {
+        // Falha inesperada de transporte - trata como rede.
+        return;
+      }
 
-    final db = _localDatabase.db;
-    final batch = db.batch();
-    for (final item in resultados) {
-      final idLocal = item['idLocal'] as String;
-      final status = item['status'] as String;
-      if (status == 'SUCESSO') {
-        batch.update(
-          'acoes_pendentes',
-          {'status': StatusAcaoPendente.confirmada.valor, 'erro': null},
-          where: 'id_local = ?',
-          whereArgs: [idLocal],
-        );
-      } else {
-        batch.update(
-          'acoes_pendentes',
-          {
-            'status': StatusAcaoPendente.erro.valor,
-            'erro': item['erro'] as String? ?? 'Erro desconhecido',
-          },
-          where: 'id_local = ?',
-          whereArgs: [idLocal],
-        );
+      for (final item in resultados) {
+        if (item['idLocal'] != acao.idLocal) continue;
+        if (item['status'] == 'SUCESSO') {
+          // Sem ack válido a ação NÃO é dada como entregue: continua PENDENTE
+          // e o próximo reenvio devolve o resultado já gravado (mesmo idLocal
+          // nunca duplica no servidor).
+          final ack = item['ack'];
+          final hashRecebido = ack is Map ? ack['hash'] : null;
+          if (hashRecebido != hashEnviado) {
+            continue;
+          }
+          await _localDatabase.db.update(
+            'acoes_pendentes',
+            {'status': StatusAcaoPendente.confirmada.valor, 'erro': null},
+            where: 'id_local = ?',
+            whereArgs: [acao.idLocal],
+          );
+        } else {
+          await _marcarErro(acao.idLocal, item['erro'] as String? ?? 'Erro desconhecido');
+        }
       }
     }
-    await batch.commit(noResult: true);
+  }
+
+  Future<void> _marcarErro(String idLocal, String mensagem) async {
+    await _localDatabase.db.update(
+      'acoes_pendentes',
+      {'status': StatusAcaoPendente.erro.valor, 'erro': mensagem},
+      where: 'id_local = ?',
+      whereArgs: [idLocal],
+    );
   }
 
   AcaoPendente _paraAcaoPendente(Map<String, dynamic> linha) {

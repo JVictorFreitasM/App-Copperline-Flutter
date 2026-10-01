@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
 import '../local_db/acao_pendente.dart';
+import '../local_db/dados_comerciais_service.dart';
 import '../local_db/fila_pendente_service.dart';
 import '../local_db/local_database.dart';
 import '../local_db/snapshot_service.dart';
@@ -17,6 +18,14 @@ final snapshotServiceProvider = FutureProvider<SnapshotService>((ref) async {
   final apiClient = ref.watch(apiClientProvider);
   final db = await ref.watch(localDatabaseProvider.future);
   return SnapshotService(apiClient, db);
+});
+
+/// Carteira com detalhe + tabelas de preço por cliente (uso offline) - ver
+/// DadosComerciaisService.
+final dadosComerciaisServiceProvider = FutureProvider<DadosComerciaisService>((ref) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final db = await ref.watch(localDatabaseProvider.future);
+  return DadosComerciaisService(apiClient, db);
 });
 
 final filaPendenteServiceProvider = FutureProvider<FilaPendenteService>((ref) async {
@@ -89,6 +98,7 @@ class OfflineSyncNotifier {
     final semRede = resultados.every((r) => r == ConnectivityResult.none);
     if (_semRedeAnteriormente && !semRede) {
       sincronizarAgora();
+      _atualizarDadosOffline();
     }
     _semRedeAnteriormente = semRede;
   }
@@ -98,6 +108,18 @@ class OfflineSyncNotifier {
     if (await fila.contarPendentes() > 0) {
       await sincronizarAgora();
     }
+  }
+
+  // Voltou a rede: reenvia a fila (acima) e renova o espelho local
+  // (snapshot + carteira/tabelas) - best-effort, falha silenciosa mantém o
+  // que já estava salvo.
+  Future<void> _atualizarDadosOffline() async {
+    try {
+      final snapshot = await _ref.read(snapshotServiceProvider.future);
+      await snapshot.baixar();
+      final dados = await _ref.read(dadosComerciaisServiceProvider.future);
+      await dados.baixar();
+    } catch (_) {}
   }
 
   Future<void> sincronizarAgora() async {

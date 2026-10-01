@@ -1,6 +1,7 @@
 import { FilaPendenteService } from './fila-pendente.service';
 import type { AcaoFilaDto } from './dto/fila-pendente.dto';
 import type { IdpUser } from '@copperline/idp-client';
+import { comprovanteDaAcao } from './hash-acao';
 
 const IDP_USER: IdpUser = { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' };
 
@@ -58,6 +59,73 @@ function montarService(prisma: ReturnType<typeof prismaFake>) {
   );
 }
 
+describe('FilaPendenteService.processar - ack/integridade', () => {
+  it('devolve o ack (hash + bytes) do que recebeu e grava o hash junto do resultado', async () => {
+    const prisma = prismaFake();
+    const service = montarService(prisma);
+    const esperado = comprovanteDaAcao(acao());
+
+    const [resultado] = await service.processar('u1', IDP_USER, [
+      acao({ hash: esperado.hash }),
+    ]);
+
+    expect(resultado.status).toBe('SUCESSO');
+    expect(resultado.ack).toEqual(esperado);
+    expect(prisma.acaoFilaProcessada.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ payloadHash: esperado.hash }) }),
+    );
+  });
+
+  it('hash do app diferente do recebido: NAO processa nem registra (app reenvia)', async () => {
+    const prisma = prismaFake();
+    const rastreioService = rastreioServiceFake();
+    const service = new FilaPendenteService(
+      prisma as never,
+      criarPedidoServiceFake() as never,
+      visitasServiceFake() as never,
+      rastreioService as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash: 'a'.repeat(64) })]);
+
+    expect(resultado.status).toBe('ERRO');
+    expect(resultado.erro).toContain('Integridade');
+    expect(rastreioService.registrarLote).not.toHaveBeenCalled();
+    expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
+  });
+
+  it('mesmo idLocal ja processado com conteudo DIFERENTE vira conflito (nunca devolve sucesso de outra acao)', async () => {
+    const prisma = prismaFake({
+      jaProcessada: {
+        status: 'SUCESSO',
+        resultado: { loteId: 'lote-1' },
+        erro: null,
+        payloadHash: 'b'.repeat(64),
+      },
+    });
+    const service = montarService(prisma);
+
+    const [resultado] = await service.processar('u1', IDP_USER, [acao()]);
+
+    expect(resultado.status).toBe('ERRO');
+    expect(resultado.erro).toContain('Conflito');
+  });
+
+  it('reenvio do mesmo conteudo devolve o hash GRAVADO na primeira vez', async () => {
+    const hash = comprovanteDaAcao(acao()).hash;
+    const prisma = prismaFake({
+      jaProcessada: { status: 'SUCESSO', resultado: { loteId: 'lote-1' }, erro: null, payloadHash: hash },
+    });
+    const service = montarService(prisma);
+
+    const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash })]);
+
+    expect(resultado.ack?.hash).toBe(hash);
+    expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('FilaPendenteService.processar - idempotencia', () => {
   it('reenviar o mesmo idLocal devolve o resultado ja gravado, sem re-executar (criterio de aceite)', async () => {
     const prisma = prismaFake({
@@ -81,7 +149,13 @@ describe('FilaPendenteService.processar - idempotencia', () => {
     expect(rastreioService.registrarLote).not.toHaveBeenCalled();
     expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
     expect(resultado).toEqual([
-      { idLocal: 'acao-1', status: 'SUCESSO', resultado: { loteId: 'lote-1', quantidade: 2 }, erro: undefined },
+      {
+        idLocal: 'acao-1',
+        status: 'SUCESSO',
+        resultado: { loteId: 'lote-1', quantidade: 2 },
+        erro: undefined,
+        ack: { hash: comprovanteDaAcao(acao()).hash, bytes: comprovanteDaAcao(acao()).bytes },
+      },
     ]);
   });
 

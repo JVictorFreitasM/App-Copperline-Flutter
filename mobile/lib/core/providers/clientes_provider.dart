@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
+import '../local_db/dados_comerciais_service.dart';
 import '../local_db/offline_fallback.dart';
 import '../models/cliente.dart';
 import '../models/timeline_evento.dart';
@@ -72,9 +73,28 @@ final clientesProvider = FutureProvider.family<
 
 final clienteDetalheProvider = FutureProvider.family<ClienteDetalhe, String>((ref, id) async {
   final apiClient = ref.watch(apiClientProvider);
-  final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(id)}');
-  return ClienteDetalhe.fromJson(json);
+  try {
+    final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(id)}');
+    return ClienteDetalhe.fromJson(json);
+  } catch (_) {
+    // Sem rede - detalhe (contatos, endereços...) do espelho local da
+    // carteira (DadosComerciaisService). 404 de cliente fora da carteira
+    // também cai aqui e só devolve algo se o cliente realmente está no
+    // espelho; senão relança o erro original.
+    final dados = await ref.read(dadosComerciaisServiceProvider.future);
+    final local = await dados.clienteDetalhe(id);
+    if (local == null) rethrow;
+    return local;
+  }
 });
+
+/// Produtos com o preço de cada tabela do cliente (offline-first: lê só do
+/// espelho local, que é baixado junto com a carteira).
+final produtosDoClienteProvider =
+    FutureProvider.family<List<ProdutoComPrecosDoCliente>, String>((ref, clienteId) async {
+      final dados = await ref.watch(dadosComerciaisServiceProvider.future);
+      return dados.produtosDoCliente(clienteId);
+    });
 
 // Estatísticas de carteira (OS-MOBILE-25, GET /clientes/:id/estatisticas,
 // OS-BACKEND-26) - mesmo default de meses do backend

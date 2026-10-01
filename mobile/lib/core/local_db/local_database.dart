@@ -30,7 +30,7 @@ class LocalDatabase {
     final caminho = caminhoOverride ?? join(await getDatabasesPath(), 'copperline_offline.db');
     final db = await openDatabase(
       caminho,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE clientes (id TEXT PRIMARY KEY, dados TEXT NOT NULL)
@@ -50,6 +50,7 @@ class LocalDatabase {
         await db.execute('''
           CREATE TABLE snapshot_meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)
         ''');
+        await _criarTabelasDadosComerciais(db);
         await db.execute('''
           CREATE TABLE acoes_pendentes (
             id_local TEXT PRIMARY KEY,
@@ -72,10 +73,39 @@ class LocalDatabase {
             CREATE TABLE IF NOT EXISTS estoque (codigo TEXT PRIMARY KEY, dados TEXT NOT NULL)
           ''');
         }
+        // v3: carteira com detalhe + tabelas de preço por cliente (ver
+        // dados_comerciais_service.dart).
+        if (oldVersion < 3) {
+          await _criarTabelasDadosComerciais(db);
+        }
       },
     );
     _instancia = LocalDatabase._(db);
     return _instancia!;
+  }
+
+  // Dados comerciais offline (GET /mobile/dados-comerciais): detalhe de cada
+  // cliente da carteira (JSON cru, mesmo critério do espelho acima), itens
+  // de cada tabela de preço e quais tabelas pertencem a cada cliente.
+  static Future<void> _criarTabelasDadosComerciais(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS clientes_detalhe (id TEXT PRIMARY KEY, dados TEXT NOT NULL)
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS tabelas_preco_itens (
+        tabela TEXT NOT NULL,
+        codigo_item TEXT NOT NULL,
+        preco TEXT NOT NULL,
+        PRIMARY KEY (tabela, codigo_item)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS clientes_tabelas (
+        cliente_id TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        PRIMARY KEY (cliente_id, codigo)
+      )
+    ''');
   }
 
   Database get db => _db;

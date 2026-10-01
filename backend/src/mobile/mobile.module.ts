@@ -12,6 +12,7 @@ import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { FilaPendenteService } from './fila-pendente.service';
 import { MobileController } from './mobile.controller';
+import { MobileDadosComerciaisService } from './mobile-dados-comerciais.service';
 import { MobileSnapshotService } from './mobile-snapshot.service';
 
 @Module({
@@ -29,7 +30,7 @@ import { MobileSnapshotService } from './mobile-snapshot.service';
     ConfiguracoesModule,
   ],
   controllers: [MobileController],
-  providers: [MobileSnapshotService, FilaPendenteService],
+  providers: [MobileSnapshotService, MobileDadosComerciaisService, FilaPendenteService],
 })
 export class MobileModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

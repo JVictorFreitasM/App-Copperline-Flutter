@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import compression from 'compression';
@@ -9,8 +10,17 @@ import { AppModule } from './app.module';
 import { IDP_AUTH } from './idp-auth/idp-auth.constants';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // bodyParser desligado pra poder dar um limite MAIOR so' na fila offline
+  // (abaixo) - o padrao do Express (100kb) rejeitava com 413 qualquer
+  // check-in com foto (base64 de varios MB), e o app tratava isso como
+  // "sem internet", deixando a acao presa na fila pra sempre.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
   const configService = app.get(ConfigService);
+  app.use('/mobile/fila-pendente', json({ limit: '20mb' }));
+  app.use(json({ limit: '1mb' }));
+  app.use(urlencoded({ extended: true, limit: '1mb' }));
 
   // CORS explicito (achado da auditoria de seguranca) - sem isso a
   // politica fica implicita/permissiva por omissao. FRONTEND_PUBLIC_URL

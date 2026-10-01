@@ -28,18 +28,20 @@ String _saudacao() {
   return 'Boa noite';
 }
 
-const _diasSemana = [
-  'segunda',
-  'terça',
-  'quarta',
-  'quinta',
-  'sexta',
-  'sábado',
-  'domingo',
-];
+const _diasSemana = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 const _meses = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
 ];
 
 String _dataPorExtenso() {
@@ -123,9 +125,8 @@ class HomeScreen extends ConsumerWidget {
           const _IndicadorAcoesPendentes(),
           const _CardPrioridade(),
           _CampoBuscaAtalho(
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
+            onTap: () =>
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BuscaScreen())),
           ),
           const _IndicadoresVisuais(),
           const SizedBox(height: 24),
@@ -169,9 +170,18 @@ class HomeScreen extends ConsumerWidget {
                 icone: Icons.location_on_outlined,
                 titulo: 'Check-in',
                 subtitulo: 'Escolher cliente',
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const ClientesScreen())),
+                // ClientesScreen é conteúdo de aba (sem Scaffold próprio) -
+                // empurrada direto numa rota ficava sem Material/fundo (tela
+                // preta + "No Material widget found" no TextField) e sem
+                // barra pra voltar. Precisa do Scaffold em volta.
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Escolher cliente')),
+                      body: const SafeArea(child: ClientesScreen()),
+                    ),
+                  ),
+                ),
               ),
               _AcaoRapida(
                 // Antes apontava pra ClientesScreen, igual ao card de
@@ -202,9 +212,7 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Resumo de hoje', style: Theme.of(context).textTheme.titleMedium),
-            ],
+            children: [Text('Resumo de hoje', style: Theme.of(context).textTheme.titleMedium)],
           ),
           const SizedBox(height: 14),
           resumo.when(
@@ -379,9 +387,8 @@ class _CardPrioridade extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const AprovacoesScreen())),
+        onTap: () =>
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AprovacoesScreen())),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -408,9 +415,7 @@ class _CardPrioridade extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      total == 1
-                          ? '1 aprovação aguardando'
-                          : '$total aprovações aguardando',
+                      total == 1 ? '1 aprovação aguardando' : '$total aprovações aguardando',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
@@ -442,20 +447,14 @@ class _Metrica extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.only(left: 10),
       decoration: BoxDecoration(
-        border: ultimo
-            ? null
-            : const Border(right: BorderSide(color: AppColors.line)),
+        border: ultimo ? null : const Border(right: BorderSide(color: AppColors.line)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             valor,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: -0.5),
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
@@ -506,11 +505,7 @@ class _AcaoRapida extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
-                  icone,
-                  size: 17,
-                  color: destaque ? Colors.white : AppColors.primary,
-                ),
+                child: Icon(icone, size: 17, color: destaque ? Colors.white : AppColors.primary),
               ),
               const Spacer(),
               Text(

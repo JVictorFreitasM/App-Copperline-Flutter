@@ -76,8 +76,18 @@ final tabelasPrecoClienteProvider = FutureProvider.family<List<String>, String>(
   clienteId,
 ) async {
   final apiClient = ref.watch(apiClientProvider);
-  final json = await apiClient.getJson('/clientes/${Uri.encodeComponent(clienteId)}/tabelas-preco');
-  return (json['codigos'] as List).cast<String>();
+  try {
+    final json = await apiClient.getJson(
+      '/clientes/${Uri.encodeComponent(clienteId)}/tabelas-preco',
+    );
+    return (json['codigos'] as List).cast<String>();
+  } catch (_) {
+    // Sem rede - tabelas do cliente do espelho local (DadosComerciaisService).
+    final dados = await ref.read(dadosComerciaisServiceProvider.future);
+    final local = await dados.tabelasDoCliente(clienteId);
+    if (local == null) rethrow;
+    return local;
+  }
 });
 
 // Criação de pedido (OS-BACKEND-25, criar_pedido_screen.dart) - dois

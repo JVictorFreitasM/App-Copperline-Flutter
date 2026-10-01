@@ -1537,6 +1537,10 @@ model AcaoFilaProcessada {
   // (ver FilaPendenteService.processarUma).
   resultado    Json?
   erro         String?
+  // SHA-256 do conteudo recebido na primeira execucao (ver hash-acao.ts) -
+  // base do ack: reenvio do mesmo idLocal devolve este hash, e conteudo
+  // diferente com o mesmo idLocal e' detectado como conflito.
+  payloadHash  String?        @map("payload_hash")
   processadoEm DateTime       @default(now()) @map("processado_em")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])

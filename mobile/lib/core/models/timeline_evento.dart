@@ -21,7 +21,10 @@ class TimelineEvento {
     return TimelineEvento(
       tipo: json['tipo'] as String,
       data: json['data'] as String,
-      pedidoNumero: json['numero'] as String?,
+      // `numero` é String no evento de pedido e INTEIRO no de nota fiscal -
+      // o cast direto `as String?` quebrava a linha do tempo inteira assim
+      // que o cliente tinha uma nota fiscal.
+      pedidoNumero: json['tipo'] == 'NOTA_FISCAL' ? null : json['numero']?.toString(),
       situacao: json['situacao'] as String?,
       valorTotal: json['valorTotal'] as String?,
       statusAnterior: json['statusAnterior'] as String?,

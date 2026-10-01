@@ -103,7 +103,7 @@ describe('ClienteResumoLlmService.obterResumo', () => {
     );
   });
 
-  it('propaga o erro do LlmClientService sem inventar um resumo alternativo', async () => {
+  it('converte falha do LlmClientService em 503 claro, sem inventar um resumo alternativo', async () => {
     const llmClient = { gerarJson: jest.fn().mockRejectedValue(new Error('sem chave configurada')) };
     const service = new ClienteResumoLlmService(
       prismaFake() as never,
@@ -111,7 +111,7 @@ describe('ClienteResumoLlmService.obterResumo', () => {
       redisFake() as never,
     );
 
-    await expect(service.obterResumo('c1', ESCOPO_TODOS)).rejects.toThrow('sem chave configurada');
+    await expect(service.obterResumo('c1', ESCOPO_TODOS)).rejects.toThrow('Serviço de IA indisponível');
   });
 
   it('lanca NotFoundException sem consultar o banco quando o escopo e NENHUM', async () => {

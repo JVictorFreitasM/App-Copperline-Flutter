@@ -94,12 +94,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     _debounceCliente = Timer(_debounceBusca, () async {
       try {
         final resultado = await ref.read(
-          clientesProvider((
-            pagina: 1,
-            nome: valor,
-            cpfCnpj: null,
-            filtro: null,
-          )).future,
+          clientesProvider((pagina: 1, nome: valor, cpfCnpj: null, filtro: null)).future,
         );
         if (!mounted) return;
         setState(() {
@@ -199,6 +194,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       item.produto = null;
       item.calculo = null;
       item.erroCalculo = null;
+      item.calculoOffline = false;
     });
     item.debounce?.cancel();
     if (valor.trim().isEmpty) {
@@ -248,6 +244,8 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     setState(() {
       item.calculo = null;
       item.erroCalculo = null;
+      item.calculoOffline = false;
+      item.precoTabelaOffline = null;
     });
     final produto = item.produto;
     final km = double.tryParse(item.metrosController.text.replaceAll(',', '.'));
@@ -273,7 +271,14 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       if (!mounted) return;
       setState(() {
         item.calculando = false;
-        item.erroCalculo = erro.message;
+        // Sem resposta nenhuma do servidor (offline): não é erro do item -
+        // permite seguir e enfileirar o pedido (ver _enfileirarOffline).
+        if (erro.statusCode == null) {
+          item.calculoOffline = true;
+          _carregarPrecoOffline(item);
+        } else {
+          item.erroCalculo = erro.message;
+        }
       });
     } catch (erro) {
       if (!mounted) return;
@@ -282,6 +287,23 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
         item.erroCalculo = '$erro';
       });
     }
+  }
+
+  // Offline: mostra o preço de tabela do produto (tabela escolhida do
+  // cliente, ou o preço padrão do cadastro) lido do banco local.
+  Future<void> _carregarPrecoOffline(_ItemPedido item) async {
+    final produto = item.produto;
+    if (produto == null) return;
+    try {
+      final dados = await ref.read(dadosComerciaisServiceProvider.future);
+      final codigoTabela = _codigoTabelaPreco;
+      final codigoProduto = produto.codigo;
+      final preco = (codigoTabela != null && codigoProduto != null)
+          ? await dados.precoNaTabela(codigoTabela, codigoProduto)
+          : produto.precoVenda;
+      if (!mounted) return;
+      setState(() => item.precoTabelaOffline = preco ?? produto.precoVenda);
+    } catch (_) {}
   }
 
   void _onMudarMetros(_ItemPedido item, String valor) {
@@ -302,9 +324,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     if (percentual == null || percentual <= 0) return;
     item.debounceDesconto = Timer(_debounceBusca, () async {
       try {
-        final resultado = await ref
-            .read(criarPedidoServiceProvider)
-            .simularDesconto(percentual);
+        final resultado = await ref.read(criarPedidoServiceProvider).simularDesconto(percentual);
         if (!mounted) return;
         setState(() => item.simulacaoDesconto = resultado);
       } catch (_) {
@@ -318,8 +338,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
   // Já vem líquido do backend (cada item calcula com seu próprio
   // percentualDesconto, ver _recalcularItem) - sem desconto adicional a
   // aplicar aqui em cima.
-  double get _subtotal =>
-      _itens.fold(0, (soma, item) => soma + (item.calculo?.valorFinal ?? 0));
+  double get _subtotal => _itens.fold(0, (soma, item) => soma + (item.calculo?.valorFinal ?? 0));
 
   // Mesmo shape de CriarPedidoItemDto (backend) - reaproveitado tanto no
   // envio direto quanto no payload enfileirado offline (ver
@@ -337,7 +356,12 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       return false;
     }
     if (_itens.isEmpty) return false;
-    return _itens.every((item) => item.produto != null && item.calculo != null && item.erroCalculo == null);
+    return _itens.every(
+      (item) =>
+          item.produto != null &&
+          (item.calculo != null || item.calculoOffline) &&
+          item.erroCalculo == null,
+    );
   }
 
   Future<void> _onSubmeter({bool salvarComoOrcamento = false}) async {
@@ -359,7 +383,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       setState(() => _erro = 'Adicione pelo menos um item.');
       return;
     }
-    if (itensValidos.any((item) => item.calculo == null)) {
+    if (itensValidos.any((item) => item.calculo == null && !item.calculoOffline)) {
       setState(() => _erro = 'Aguarde o cálculo de todos os itens (ou corrija os que deram erro).');
       return;
     }
@@ -399,28 +423,30 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
           ? null
           : _observacoesController.text.trim();
 
-      final resultado = await ref.read(criarPedidoServiceProvider).criar(
-        clienteId: _cliente!.id,
-        formaPagamentoId: _formaPagamentoId!,
-        condicaoPagamentoId: _condicaoPagamentoId!,
-        itens: itensPayload,
-        latitude: latitude,
-        longitude: longitude,
-        salvarComoOrcamento: salvarComoOrcamento,
-        observacoes: observacoes,
-        codigoTabelaPreco: _codigoTabelaPreco,
-        contatoId: _contatoId,
-        vendedorId: _vendedorId,
-      );
+      final resultado = await ref
+          .read(criarPedidoServiceProvider)
+          .criar(
+            clienteId: _cliente!.id,
+            formaPagamentoId: _formaPagamentoId!,
+            condicaoPagamentoId: _condicaoPagamentoId!,
+            itens: itensPayload,
+            latitude: latitude,
+            longitude: longitude,
+            salvarComoOrcamento: salvarComoOrcamento,
+            observacoes: observacoes,
+            codigoTabelaPreco: _codigoTabelaPreco,
+            contatoId: _contatoId,
+            vendedorId: _vendedorId,
+          );
       if (!mounted) return;
       if (resultado.status == 'ORCAMENTO') {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Orçamento salvo.')));
       } else if (resultado.status == 'AGUARDANDO_APROVACAO') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pedido enviado para aprovação do desconto.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Pedido enviado para aprovação do desconto.')));
       }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => PedidoDetalheScreen(id: resultado.pedidoId)),
@@ -527,15 +553,20 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
-                    '${item.produto!.titulo} - '
-                    '${_formatarQuantidadeCalculo(item.calculo!)} - '
-                    '${formatarMoeda('${item.calculo!.valorFinal}')}',
+                    item.calculo == null
+                        ? '${item.produto!.titulo} - ${item.metrosController.text} km - '
+                              'preço calculado ao enviar'
+                        : '${item.produto!.titulo} - '
+                              '${_formatarQuantidadeCalculo(item.calculo!)} - '
+                              '${formatarMoeda('${item.calculo!.valorFinal}')}',
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
               const Divider(),
               Text(
-                'Total: ${formatarMoeda('$_subtotal')}',
+                itensValidos.any((item) => item.calculo == null)
+                    ? 'Total calculado ao enviar (sem conexão agora)'
+                    : 'Total: ${formatarMoeda('$_subtotal')}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ],
@@ -686,10 +717,26 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                         padding: EdgeInsets.only(top: 4),
                         child: Text('Calculando...', style: TextStyle(color: AppColors.muted)),
                       ),
+                    if (item.calculoOffline)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          item.precoTabelaOffline == null
+                              ? 'Sem conexão: o preço será calculado quando o pedido for enviado.'
+                              : 'Sem conexão - preço de tabela'
+                                    '${_codigoTabelaPreco != null ? ' ($_codigoTabelaPreco)' : ''}: '
+                                    '${formatarMoeda(item.precoTabelaOffline)}. '
+                                    'O total é calculado quando o pedido for enviado.',
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                      ),
                     if (item.erroCalculo != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(item.erroCalculo!, style: const TextStyle(color: AppColors.red)),
+                        child: Text(
+                          item.erroCalculo!,
+                          style: const TextStyle(color: AppColors.red),
+                        ),
                       ),
                     if (item.calculo != null)
                       Padding(
@@ -714,7 +761,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                         child: Text(
                           item.simulacaoDesconto!.aprovadorEsperadoNome != null
                               ? 'Esse desconto vai precisar de aprovação de '
-                                  '${item.simulacaoDesconto!.aprovadorEsperadoNome}.'
+                                    '${item.simulacaoDesconto!.aprovadorEsperadoNome}.'
                               : 'Esse desconto vai precisar de aprovação antes de ser enviado ao ERP.',
                           style: const TextStyle(fontSize: 12, color: AppColors.amber),
                         ),
@@ -885,6 +932,13 @@ class _ItemPedido {
   bool calculando = false;
   ResultadoCalculoQuantidade? calculo;
   String? erroCalculo;
+  // true quando o cálculo de preço não rodou por falta de conexão - o item
+  // segue válido (o backend recalcula o preço de qualquer jeito quando o
+  // pedido é criado/sincronizado), só não há valor pra mostrar agora.
+  bool calculoOffline = false;
+  // Preço unitário de TABELA lido do espelho local quando offline (só
+  // informativo - o total sai do backend ao enviar).
+  String? precoTabelaOffline;
   SimulacaoDesconto? simulacaoDesconto;
   Timer? debounce;
   Timer? debounceDesconto;
@@ -993,10 +1047,7 @@ class _DialogNovoContatoState extends State<_DialogNovoContato> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
         FilledButton(onPressed: _confirmar, child: const Text('Adicionar')),
       ],
     );

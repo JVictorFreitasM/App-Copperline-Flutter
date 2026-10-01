@@ -21,6 +21,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_card.dart';
 import '../widgets/cartao_cliente.dart';
+import 'cliente_produtos_precos_screen.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
@@ -55,6 +56,19 @@ class ClienteDetalheScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(18),
             children: [
               CartaoCliente(cliente: cliente),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ClienteProdutosPrecosScreen(
+                      clienteId: cliente.id,
+                      titulo: cliente.titulo,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.sell_outlined, size: 18),
+                label: const Text('Produtos e preços do cliente'),
+              ),
               const SizedBox(height: 16),
               _CardVisita(cliente: cliente),
               const SizedBox(height: 16),
@@ -215,7 +229,9 @@ class _CardEstatisticas extends ConsumerWidget {
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 1.6,
+        // 1.6 estourava 5px na vertical em telas estreitas (valor/label
+        // quebrando linha) - mais alto que largo o suficiente pro conteúdo.
+        childAspectRatio: 1.35,
         children: [
           StatCard(
             icone: Icons.calendar_month_outlined,
@@ -292,9 +308,7 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
   @override
   Widget build(BuildContext context) {
     final visitasHoje = ref.watch(minhasVisitasProvider(_hojeIso()));
-    final checkinsPendentes = ref.watch(
-      acoesPendentesPorTipoProvider(TipoAcaoFila.checkinVisita),
-    );
+    final checkinsPendentes = ref.watch(acoesPendentesPorTipoProvider(TipoAcaoFila.checkinVisita));
 
     return AppCard(
       child: Column(
@@ -315,11 +329,7 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
               'Não foi possível verificar visitas de hoje: $erro',
               style: const TextStyle(fontSize: 12, color: AppColors.muted),
             ),
-            data: (visitas) => _conteudo(
-              context,
-              visitas,
-              checkinsPendentes.value ?? const [],
-            ),
+            data: (visitas) => _conteudo(context, visitas, checkinsPendentes.value ?? const []),
           ),
         ],
       ),
@@ -337,9 +347,9 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
     List<Visita> visitasHoje,
     List<AcaoPendente> checkinsPendentes,
   ) {
-    final checkinPendenteAqui = checkinsPendentes.where(
-      (a) => a.payload['clienteId'] == widget.cliente.id,
-    ).firstOrNull;
+    final checkinPendenteAqui = checkinsPendentes
+        .where((a) => a.payload['clienteId'] == widget.cliente.id)
+        .firstOrNull;
 
     if (checkinPendenteAqui != null) {
       final comErro = checkinPendenteAqui.status == StatusAcaoPendente.erro;
@@ -440,9 +450,7 @@ class _CardVisitaState extends ConsumerState<_CardVisita> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Definir localização'),
-        content: const Text(
-          'Vai gravar a sua posição atual como o "pin" deste cliente. Confirma?',
-        ),
+        content: const Text('Vai gravar a sua posição atual como o "pin" deste cliente. Confirma?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -892,9 +900,7 @@ Future<({String nota, String? caminhoFoto})?> _pedirNotaOpcional(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: () async {
-                      final novaFoto = await ImagePicker().pickImage(
-                        source: ImageSource.camera,
-                      );
+                      final novaFoto = await ImagePicker().pickImage(source: ImageSource.camera);
                       if (novaFoto == null) return;
                       setDialogState(() => fotoAtual = novaFoto.path);
                     },

@@ -9,6 +9,8 @@ import { RastreioService } from '../rastreio/rastreio.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { VisitasService } from '../visitas/visitas.service';
 import type { AcaoFilaDto, ResultadoAcaoFilaDto } from './dto/fila-pendente.dto';
+import { comprovanteDaAcao } from './hash-acao';
+import type { ComprovanteAcao } from './hash-acao';
 import {
   CancelarVisitaOfflineDto,
   CheckinVisitaOfflineDto,
@@ -51,10 +53,34 @@ export class FilaPendenteService {
     idpUser: IdpUser,
     acao: AcaoFilaDto,
   ): Promise<ResultadoAcaoFilaDto> {
+    const comprovante = comprovanteDaAcao(acao);
+
+    // Integridade (ack): o app mandou o hash do que ENVIOU; se o que chegou
+    // gera outro hash, o corpo foi truncado/corrompido - nada e' processado
+    // nem registrado (o reenvio com o conteudo certo precisa poder rodar).
+    if (acao.hash && acao.hash !== comprovante.hash) {
+      return {
+        idLocal: acao.idLocal,
+        status: 'ERRO',
+        erro: 'Integridade: o conteúdo recebido difere do enviado - reenvie a ação',
+        ack: comprovante,
+      };
+    }
+
     const existente = await this.prisma.acaoFilaProcessada.findUnique({
       where: { usuarioId_idLocal: { usuarioId, idLocal: acao.idLocal } },
     });
     if (existente) {
+      // Mesmo idLocal com conteudo DIFERENTE do que foi processado: nao e'
+      // reenvio, e' conflito - nunca devolve sucesso de outra acao.
+      if (existente.payloadHash && existente.payloadHash !== comprovante.hash) {
+        return {
+          idLocal: acao.idLocal,
+          status: 'ERRO',
+          erro: 'Conflito: este idLocal já foi processado com conteúdo diferente',
+          ack: comprovante,
+        };
+      }
       // Reenvio (retry de rede no meio do envio anterior, criterio de
       // aceite) - devolve o resultado JA CONGELADO, nunca re-executa.
       return {
@@ -62,15 +88,23 @@ export class FilaPendenteService {
         status: existente.status,
         resultado: existente.resultado ?? undefined,
         erro: existente.erro ?? undefined,
+        ack: { hash: existente.payloadHash ?? comprovante.hash, bytes: comprovante.bytes },
       };
     }
 
     try {
       const resultado = await this.executar(usuarioId, idpUser, acao);
-      return await this.registrarResultado(usuarioId, acao, 'SUCESSO', resultado);
+      return await this.registrarResultado(usuarioId, acao, comprovante, 'SUCESSO', resultado);
     } catch (error) {
       const mensagem = extrairMensagemErro(error);
-      return await this.registrarResultado(usuarioId, acao, 'ERRO', undefined, mensagem);
+      return await this.registrarResultado(
+        usuarioId,
+        acao,
+        comprovante,
+        'ERRO',
+        undefined,
+        mensagem,
+      );
     }
   }
 
@@ -82,6 +116,7 @@ export class FilaPendenteService {
   private async registrarResultado(
     usuarioId: string,
     acao: AcaoFilaDto,
+    comprovante: ComprovanteAcao,
     status: 'SUCESSO' | 'ERRO',
     resultado?: unknown,
     erro?: string,
@@ -95,9 +130,10 @@ export class FilaPendenteService {
           status,
           resultado: resultado as Prisma.InputJsonValue,
           erro,
+          payloadHash: comprovante.hash,
         },
       });
-      return { idLocal: acao.idLocal, status, resultado, erro };
+      return { idLocal: acao.idLocal, status, resultado, erro, ack: comprovante };
     } catch {
       const jaGravado = await this.prisma.acaoFilaProcessada.findUnique({
         where: { usuarioId_idLocal: { usuarioId, idLocal: acao.idLocal } },
@@ -108,6 +144,7 @@ export class FilaPendenteService {
           status: jaGravado.status,
           resultado: jaGravado.resultado ?? undefined,
           erro: jaGravado.erro ?? undefined,
+          ack: { hash: jaGravado.payloadHash ?? comprovante.hash, bytes: comprovante.bytes },
         };
       }
       throw new Error(`Falha ao registrar resultado da ação '${acao.idLocal}'`);
