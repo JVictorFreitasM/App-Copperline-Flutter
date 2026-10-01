@@ -7,10 +7,13 @@ export interface WkRadarEndereco {
   cep?: string | null;
   nomeEndereco?: string | null;
   numero?: number;
+  semNumero?: boolean;
   complemento?: string | null;
   bairro?: string | null;
   idMunicipio?: string | null;
   uf?: string | null;
+  telefones?: { ddd?: string | null; numero?: string | null }[] | null;
+  email?: string | null;
   [campo: string]: unknown;
 }
 
@@ -60,7 +63,11 @@ export interface WkRadarClienteInscricoesLegais {
 
 export interface WkRadarCliente {
   id: string;
+  codigo?: string | null;
   codigoIntegrador?: string | null;
+  email?: string | null;
+  contato?: string | null;
+  homepage?: string | null;
   cpfCnpj?: string | null;
   razaoSocial?: string | null;
   nomeFantasia?: string | null;
@@ -85,7 +92,11 @@ export interface ContatoMapeado {
 
 export interface ClienteMapeado {
   idExternoErp: string;
+  codigo: string | null;
   codigoIntegrador: string | null;
+  email: string | null;
+  contato: string | null;
+  homepage: string | null;
   cpfCnpj: string | null;
   razaoSocial: string | null;
   nomeFantasia: string | null;

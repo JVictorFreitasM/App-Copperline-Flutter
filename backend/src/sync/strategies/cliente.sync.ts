@@ -17,7 +17,11 @@ const ROTA_CLIENTE = '/empresarial/v1/cliente';
 
 const CAMPOS_CLIENTE = [
   'id',
+  'codigo',
   'codigoIntegrador',
+  'email',
+  'contato',
+  'homepage',
   'cpfCnpj',
   'razaoSocial',
   'nomeFantasia',
@@ -75,7 +79,11 @@ export class ClienteSyncStrategy implements SyncStrategy<
   map(bruto: WkRadarCliente): ClienteMapeado {
     return {
       idExternoErp: bruto.id,
+      codigo: bruto.codigo ?? null,
       codigoIntegrador: bruto.codigoIntegrador ?? null,
+      email: bruto.email || null,
+      contato: bruto.contato || null,
+      homepage: bruto.homepage || null,
       cpfCnpj: bruto.cpfCnpj ?? null,
       razaoSocial: bruto.razaoSocial ?? null,
       nomeFantasia: bruto.nomeFantasia ?? null,
@@ -109,6 +117,10 @@ export class ClienteSyncStrategy implements SyncStrategy<
         where: { idExternoErp: mapeado.idExternoErp },
         create: {
           idExternoErp: mapeado.idExternoErp,
+          codigo: mapeado.codigo,
+          email: mapeado.email,
+          contato: mapeado.contato,
+          homepage: mapeado.homepage,
           codigoIntegrador: mapeado.codigoIntegrador,
           cpfCnpj: mapeado.cpfCnpj,
           razaoSocial: mapeado.razaoSocial,
@@ -126,6 +138,10 @@ export class ClienteSyncStrategy implements SyncStrategy<
         // criado por PedidoSyncStrategy (OS 07) quando o cliente de verdade
         // chega aqui.
         update: {
+          codigo: mapeado.codigo,
+          email: mapeado.email,
+          contato: mapeado.contato,
+          homepage: mapeado.homepage,
           codigoIntegrador: mapeado.codigoIntegrador,
           cpfCnpj: mapeado.cpfCnpj,
           razaoSocial: mapeado.razaoSocial,

@@ -20,6 +20,7 @@ import '../core/formatacao.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
 import '../widgets/app_card.dart';
+import '../widgets/cartao_cliente.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
@@ -28,9 +29,8 @@ import '../widgets/timeline.dart';
 String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
 
 /// Detalhe do cliente (mobile, equivalente à OS-WEB-15) - mostra o que a
-/// listagem não mostra: contatos. Só leitura. Sem endereços (mesmo recorte
-/// do web: JSONB cru do WK Radar, sem schema estável pra um formulário
-/// fixo, ver `core/models/cliente.dart`).
+/// listagem não mostra: cartão de apresentação (identificação, contato e
+/// endereço, ver `widgets/cartao_cliente.dart`) e contatos. Só leitura.
 class ClienteDetalheScreen extends ConsumerWidget {
   const ClienteDetalheScreen({super.key, required this.id});
 
@@ -54,61 +54,8 @@ class ClienteDetalheScreen extends ConsumerWidget {
           data: (cliente) => ListView(
             padding: const EdgeInsets.all(18),
             children: [
-              // Cabeçalho centralizado (replica a referência "Nexo
-              // Comercial", Downloads/aplicativo-comercial-interno, tela
-              // cliente.jpg). Sem os 2 botões de ação da referência
-              // ("Novo pedido"/"Check-in") aqui em cima - criação de
-              // pedido não existe no app ainda (bloqueada por decisão de
-              // negócio) e check-in já tem seu próprio card funcional
-              // logo abaixo (_CardVisita), duplicar o atalho aqui só
-              // levaria a um botão sem destino real.
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        cliente.titulo.isNotEmpty ? cliente.titulo.substring(0, 1).toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      cliente.titulo,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    if (cliente.nomeFantasia != null && cliente.nomeFantasia != cliente.razaoSocial)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          cliente.nomeFantasia!,
-                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    BadgeAtivoInativo(inativo: cliente.inativo),
-                    const SizedBox(height: 8),
-                    Text(
-                      'CNPJ ${cliente.cpfCnpj ?? "—"}',
-                      style: const TextStyle(color: AppColors.muted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Divider(color: AppColors.line, height: 1),
-              const SizedBox(height: 18),
+              CartaoCliente(cliente: cliente),
+              const SizedBox(height: 16),
               _CardVisita(cliente: cliente),
               const SizedBox(height: 16),
               _CardAgendamento(cliente: cliente),

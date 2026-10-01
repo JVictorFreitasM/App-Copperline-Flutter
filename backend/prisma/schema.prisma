@@ -67,6 +67,16 @@ model Cliente {
   // real, 2026-09-28) - pedido pro PDF de impressao do pedido (IE do
   // cliente no bloco de identificacao).
   inscricaoEstadual String? @map("inscricao_estadual")
+  // Dados de contato/identificacao do cadastro do cliente no WK Radar
+  // (card de apresentacao do detalhe do cliente): `codigo` e' o codigo
+  // exibido ao usuario no ERP (ex: "10458"), diferente de `idExternoErp`
+  // (chave interna do Radar); email/contato/homepage sao do cadastro em si,
+  // separados dos contatos (ContatoCliente) e do email/telefones de cada
+  // endereco (que ficam dentro de `enderecos`).
+  codigo           String?
+  email            String?
+  contato          String?
+  homepage         String?
   inativo          Boolean  @default(false)
   // Enderecos nao tem id/codigoIntegrador proprio no WK Radar (ao contrario
   // de contatos) - sem identidade propria pra preservar, JSONB e suficiente.

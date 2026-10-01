@@ -25,7 +25,11 @@ describe('ClienteSyncStrategy.map', () => {
 
     expect(mapeado).toEqual({
       idExternoErp: '123',
+      codigo: null,
       codigoIntegrador: null,
+      email: null,
+      contato: null,
+      homepage: null,
       cpfCnpj: '12345678900',
       razaoSocial: 'Cliente Teste Ltda',
       nomeFantasia: null,
@@ -42,6 +46,22 @@ describe('ClienteSyncStrategy.map', () => {
 
   // Achado 2026-09-17 - tabela de preco NATIVA do cadastro do cliente,
   // schema real confirmado pelo usuario (informacoesExtras2).
+  it('mapeia codigo/email/contato/homepage do cadastro e trata string vazia como null', () => {
+    const mapeado = strategy.map({
+      id: '17104896',
+      codigo: '10458',
+      email: 'contato@swan.com.br',
+      contato: '',
+      homepage: '',
+      inativo: false,
+    });
+
+    expect(mapeado.codigo).toBe('10458');
+    expect(mapeado.email).toBe('contato@swan.com.br');
+    expect(mapeado.contato).toBeNull();
+    expect(mapeado.homepage).toBeNull();
+  });
+
   it('mapeia informacoesExtras2.idTabelaPrecoProduto', () => {
     const bruto: WkRadarCliente = {
       id: '123',
@@ -150,7 +170,11 @@ function prismaFake(vendedorExistente: { id: string; incompleto: boolean } | nul
 
 const MAPEADO_BASE = {
   idExternoErp: '123',
+  codigo: null,
   codigoIntegrador: null,
+  email: null,
+  contato: null,
+  homepage: null,
   cpfCnpj: null,
   razaoSocial: null,
   nomeFantasia: null,

@@ -43,9 +43,67 @@ export function paraContatoClienteDto(contato: ContatoCliente): ContatoClienteDt
   };
 }
 
+export interface TelefoneEnderecoDto {
+  ddd: string | null;
+  numero: string;
+}
+
+// Endereco ja normalizado a partir do JSONB cru do WK Radar
+// (Cliente.enderecos) - o front/mobile so renderizam, sem cada um repetir o
+// parse defensivo do shape solto. Cidade nao existe aqui: o Radar so manda
+// idMunicipio/codigoIBGE, sem o nome.
+export interface EnderecoClienteDto {
+  tipo: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  uf: string | null;
+  email: string | null;
+  telefones: TelefoneEnderecoDto[];
+}
+
 export interface ClienteDetalheDto extends ClienteResumoDto {
-  enderecos: unknown;
+  codigo: string | null;
+  email: string | null;
+  contato: string | null;
+  homepage: string | null;
+  inscricaoEstadual: string | null;
+  enderecos: EnderecoClienteDto[];
   contatos: ContatoClienteDto[];
+}
+
+const textoOuNull = (valor: unknown): string | null =>
+  typeof valor === 'string' && valor.trim() !== '' ? valor.trim() : null;
+
+export function paraEnderecosClienteDto(enderecosBrutos: unknown): EnderecoClienteDto[] {
+  if (!Array.isArray(enderecosBrutos)) return [];
+
+  return enderecosBrutos
+    .filter((bruto): bruto is Record<string, unknown> => typeof bruto === 'object' && bruto !== null)
+    .map((bruto) => {
+      const telefones = Array.isArray(bruto.telefones) ? bruto.telefones : [];
+      return {
+        tipo: textoOuNull(bruto.tipo),
+        cep: textoOuNull(bruto.cep),
+        logradouro: textoOuNull(bruto.nomeEndereco),
+        numero:
+          bruto.semNumero === true
+            ? 'S/N'
+            : typeof bruto.numero === 'number'
+              ? String(bruto.numero)
+              : null,
+        complemento: textoOuNull(bruto.complemento),
+        bairro: textoOuNull(bruto.bairro),
+        uf: textoOuNull(bruto.uf),
+        email: textoOuNull(bruto.email),
+        telefones: telefones.flatMap((telefone: Record<string, unknown>) => {
+          const numero = textoOuNull(telefone?.numero);
+          return numero ? [{ ddd: textoOuNull(telefone.ddd), numero }] : [];
+        }),
+      };
+    });
 }
 
 export function paraClienteResumoDto(cliente: Cliente): ClienteResumoDto {
@@ -68,7 +126,12 @@ export function paraClienteDetalheDto(
 ): ClienteDetalheDto {
   return {
     ...paraClienteResumoDto(cliente),
-    enderecos: cliente.enderecos,
+    codigo: cliente.codigo,
+    email: cliente.email,
+    contato: cliente.contato,
+    homepage: cliente.homepage,
+    inscricaoEstadual: cliente.inscricaoEstadual,
+    enderecos: paraEnderecosClienteDto(cliente.enderecos),
     contatos: cliente.contatos.map(paraContatoClienteDto),
   };
 }

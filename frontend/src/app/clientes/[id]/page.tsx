@@ -10,8 +10,7 @@ import type {
 import type { TimelineEvento } from "@/lib/timeline";
 import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
-import { Badge, BadgeAtivoInativo } from "@/components/badge";
-import { ListaGenerica } from "@/components/dado-generico";
+import { Badge } from "@/components/badge";
 import { Card } from "@/components/design/card";
 import { PrimaryButton } from "@/components/design/button";
 import { ListItem } from "@/components/design/list-item";
@@ -20,6 +19,7 @@ import { Timeline } from "@/components/design/timeline";
 import { IconeClipboard, IconeMoeda, IconePessoas } from "@/components/design/icons";
 import { TabelasPrecoCliente } from "./tabelas-preco-cliente";
 import { ResumoVisitas } from "./resumo-visitas";
+import { CartaoCliente } from "./cartao-cliente";
 
 // Opções fixas de período (OS-WEB-31, critério de aceite explícito: "1 e 6
 // meses") - 12 meses mantido como terceira opção (era o único valor antes
@@ -122,21 +122,7 @@ export default async function ClienteDetalhePage({
       ) : (
         cliente && (
           <>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-ink">
-                {cliente.razaoSocial ?? cliente.nomeFantasia ?? "—"}
-              </h1>
-              <BadgeAtivoInativo inativo={cliente.inativo} />
-            </div>
-            {cliente.nomeFantasia && cliente.nomeFantasia !== cliente.razaoSocial && (
-              <p className="-mt-4 text-sm text-muted">{cliente.nomeFantasia}</p>
-            )}
-
-            <Card className="text-sm text-ink">
-              <p>
-                <span className="font-medium">CPF/CNPJ:</span> {cliente.cpfCnpj ?? "—"}
-              </p>
-            </Card>
+            <CartaoCliente cliente={cliente} />
 
             <Form
               action={`/clientes/${encodeURIComponent(id)}`}
@@ -295,14 +281,6 @@ export default async function ClienteDetalhePage({
                   ))}
                 </div>
               )}
-            </section>
-
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-ink">Endereços</h2>
-              <ListaGenerica
-                valor={cliente.enderecos}
-                mensagemVazio="Nenhum endereço cadastrado."
-              />
             </section>
           </>
         )

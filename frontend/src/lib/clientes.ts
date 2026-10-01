@@ -22,11 +22,33 @@ export interface ContatoClienteDto {
   criadoLocalmente: boolean;
 }
 
-// `enderecos` é `unknown` no backend também (JSONB repassado cru do WK
-// Radar, sem schema estável - ver schema.prisma) - não fingir um shape
-// aqui que não temos como garantir.
+export interface TelefoneEnderecoDto {
+  ddd: string | null;
+  numero: string;
+}
+
+// Já normalizado pelo backend (paraEnderecosClienteDto) a partir do JSONB
+// cru do WK Radar - o front só renderiza. Sem nome de cidade: o Radar só
+// manda idMunicipio/codigoIBGE.
+export interface EnderecoClienteDto {
+  tipo: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  uf: string | null;
+  email: string | null;
+  telefones: TelefoneEnderecoDto[];
+}
+
 export interface ClienteDetalheDto extends ClienteResumoDto {
-  enderecos: unknown;
+  codigo: string | null;
+  email: string | null;
+  contato: string | null;
+  homepage: string | null;
+  inscricaoEstadual: string | null;
+  enderecos: EnderecoClienteDto[];
   contatos: ContatoClienteDto[];
 }
 

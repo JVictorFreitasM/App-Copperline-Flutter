@@ -236,7 +236,25 @@ describe('ClientesService.buscarPorId', () => {
         inativo: false,
         incompleto: false,
         sincronizadoEm: new Date('2026-01-01'),
-        enderecos: [],
+        enderecos: [
+          {
+            tipo: 'Padrao',
+            cep: '64003-077',
+            nomeEndereco: 'R JONATAS BATISTA',
+            semNumero: false,
+            numero: 2680,
+            complemento: '',
+            bairro: 'PORENQUANTO',
+            uf: 'PI',
+            telefones: [{ ddd: '086', numero: '999886470' }, { ddd: '086', numero: '' }],
+            email: 'mccswan@terra.com.br',
+          },
+        ],
+        codigo: '10458',
+        email: null,
+        contato: null,
+        homepage: null,
+        inscricaoEstadual: '194378144',
         contatos: [
           {
             id: 'c1',
@@ -253,6 +271,21 @@ describe('ClientesService.buscarPorId', () => {
 
     const resultado = await service.buscarPorId('1', ESCOPO_TODOS);
 
+    expect(resultado.codigo).toBe('10458');
+    expect(resultado.inscricaoEstadual).toBe('194378144');
+    expect(resultado.enderecos).toEqual([
+      {
+        tipo: 'Padrao',
+        cep: '64003-077',
+        logradouro: 'R JONATAS BATISTA',
+        numero: '2680',
+        complemento: null,
+        bairro: 'PORENQUANTO',
+        uf: 'PI',
+        email: 'mccswan@terra.com.br',
+        telefones: [{ ddd: '086', numero: '999886470' }],
+      },
+    ]);
     expect(resultado.contatos).toEqual([
       {
         id: 'c1',
