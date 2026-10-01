@@ -60,14 +60,17 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
       appBar: AppBar(
         title: const Text('Pedidos'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Novo pedido',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CriarPedidoScreen()),
-              );
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Novo pedido'),
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const CriarPedidoScreen()));
+              },
+            ),
           ),
         ],
       ),

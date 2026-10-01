@@ -48,22 +48,13 @@ const _itensNavPrincipal = [
   _ItemNav(rotulo: 'Início', icone: Icons.home_outlined, iconeAtivo: Icons.home),
   _ItemNav(rotulo: 'Clientes', icone: Icons.people_outline, iconeAtivo: Icons.people),
   _ItemNav(rotulo: 'Produtos', icone: Icons.inventory_2_outlined, iconeAtivo: Icons.inventory_2),
-  _ItemNav(
-    rotulo: 'Relatório',
-    icone: Icons.assignment_outlined,
-    iconeAtivo: Icons.assignment,
-  ),
+  _ItemNav(rotulo: 'Relatório', icone: Icons.assignment_outlined, iconeAtivo: Icons.assignment),
 ];
 
 class _AppShellState extends ConsumerState<AppShell> {
   int _aba = 0;
 
-  static const _telas = [
-    HomeScreen(),
-    ClientesScreen(),
-    ProdutosScreen(),
-    RelatorioScreen(),
-  ];
+  static const _telas = [HomeScreen(), ClientesScreen(), ProdutosScreen(), RelatorioScreen()];
 
   static const _titulos = ['Início', 'Clientes', 'Produtos', 'Relatório'];
 
@@ -80,7 +71,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       body: Column(
         children: [
           const _FaixaOffline(),
-          Expanded(child: IndexedStack(index: _aba, children: _telas)),
+          Expanded(
+            child: IndexedStack(index: _aba, children: _telas),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -331,136 +324,146 @@ class _MenuLateral extends ConsumerWidget {
                   ],
                 ),
               ),
-            const SizedBox(height: 6),
-            for (var i = 0; i < _itensNavPrincipal.length; i++)
-              _ItemMenu(
-                icone: _itensNavPrincipal[i].icone,
-                rotulo: _itensNavPrincipal[i].rotulo,
-                ativo: i == abaAtual,
-                onTap: () => aoSelecionar(i),
+            // Itens rolam (a lista cresceu e estourava a altura em telas
+            // menores - "bottom overflowed"); só o "Sair" fica fixo no rodapé.
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 6),
+                    for (var i = 0; i < _itensNavPrincipal.length; i++)
+                      _ItemMenu(
+                        icone: _itensNavPrincipal[i].icone,
+                        rotulo: _itensNavPrincipal[i].rotulo,
+                        ativo: i == abaAtual,
+                        onTap: () => aoSelecionar(i),
+                      ),
+                    _ItemMenu(
+                      icone: Icons.map_outlined,
+                      rotulo: 'Mapa',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const RoteiroScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.search,
+                      rotulo: 'Buscar',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const BuscaScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.my_location_outlined,
+                      rotulo: 'Rastreio',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const RastreioConfigScreen()));
+                      },
+                    ),
+                    // Faltava no menu lateral (OS-ajustes-layout-mobile, item 5) -
+                    // só existia como card de acesso rápido na Home. Mesmo padrão
+                    // de Mapa/Buscar/Rastreio acima.
+                    _ItemMenu(
+                      icone: Icons.description_outlined,
+                      rotulo: 'Documentos',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen()));
+                      },
+                    ),
+                    // Faltava no mobile (auditoria 2026-09-30) - vendedor não
+                    // conseguia ver nem baixar o PDF da NF-e pelo celular, só na
+                    // web. Mesmo padrão de item de menu que Documentos acima.
+                    _ItemMenu(
+                      icone: Icons.receipt_long_outlined,
+                      rotulo: 'Notas fiscais',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const NotasFiscaisScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.sell_outlined,
+                      rotulo: 'Tabelas de preço',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const TabelasPrecoScreen()));
+                      },
+                    ),
+                    // Faltavam por completo no mobile (auditoria 2026-09-30) -
+                    // Oportunidades, Cobertura e Ranking só existiam na web.
+                    _ItemMenu(
+                      icone: Icons.lightbulb_outline,
+                      rotulo: 'Oportunidades',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const OportunidadesScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.people_alt_outlined,
+                      rotulo: 'Cobertura',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const CoberturasScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.leaderboard_outlined,
+                      rotulo: 'Ranking de equipe',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const RankingEquipeScreen()));
+                      },
+                    ),
+                    // Sino do cabeçalho agora abre o histórico de notificações
+                    // (NotificacoesScreen), não mais esta tela - configuração de
+                    // push em primeiro plano continua existindo, só mudou de lugar.
+                    _ItemMenu(
+                      icone: Icons.settings_outlined,
+                      rotulo: 'Configurar notificações',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen()));
+                      },
+                    ),
+                  ],
+                ),
               ),
-            _ItemMenu(
-              icone: Icons.map_outlined,
-              rotulo: 'Mapa',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const RoteiroScreen()));
-              },
             ),
-            _ItemMenu(
-              icone: Icons.search,
-              rotulo: 'Buscar',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const BuscaScreen()));
-              },
-            ),
-            _ItemMenu(
-              icone: Icons.my_location_outlined,
-              rotulo: 'Rastreio',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const RastreioConfigScreen()));
-              },
-            ),
-            // Faltava no menu lateral (OS-ajustes-layout-mobile, item 5) -
-            // só existia como card de acesso rápido na Home. Mesmo padrão
-            // de Mapa/Buscar/Rastreio acima.
-            _ItemMenu(
-              icone: Icons.description_outlined,
-              rotulo: 'Documentos',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const DocumentosScreen()));
-              },
-            ),
-            // Faltava no mobile (auditoria 2026-09-30) - vendedor não
-            // conseguia ver nem baixar o PDF da NF-e pelo celular, só na
-            // web. Mesmo padrão de item de menu que Documentos acima.
-            _ItemMenu(
-              icone: Icons.receipt_long_outlined,
-              rotulo: 'Notas fiscais',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const NotasFiscaisScreen()));
-              },
-            ),
-            _ItemMenu(
-              icone: Icons.sell_outlined,
-              rotulo: 'Tabelas de preço',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const TabelasPrecoScreen()));
-              },
-            ),
-            // Faltavam por completo no mobile (auditoria 2026-09-30) -
-            // Oportunidades, Cobertura e Ranking só existiam na web.
-            _ItemMenu(
-              icone: Icons.lightbulb_outline,
-              rotulo: 'Oportunidades',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const OportunidadesScreen()));
-              },
-            ),
-            _ItemMenu(
-              icone: Icons.people_alt_outlined,
-              rotulo: 'Cobertura',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const CoberturasScreen()));
-              },
-            ),
-            _ItemMenu(
-              icone: Icons.leaderboard_outlined,
-              rotulo: 'Ranking de equipe',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const RankingEquipeScreen()));
-              },
-            ),
-            // Sino do cabeçalho agora abre o histórico de notificações
-            // (NotificacoesScreen), não mais esta tela - configuração de
-            // push em primeiro plano continua existindo, só mudou de lugar.
-            _ItemMenu(
-              icone: Icons.settings_outlined,
-              rotulo: 'Configurar notificações',
-              ativo: false,
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen()));
-              },
-            ),
-            const Spacer(),
             const Divider(color: Colors.white24, height: 1),
             _ItemMenu(
               icone: Icons.logout,
