@@ -16,6 +16,7 @@ import {
   AutoaprovacaoNaoPermitidaError,
   DescontoExcedeAlcadaMaximaError,
   NivelHierarquiaInsuficienteError,
+  papelAtendeExigido,
   SolicitacaoDesconto,
   SolicitacaoJaDecididaError,
 } from './domain/solicitacao-desconto.entity';
@@ -39,6 +40,9 @@ export interface SolicitacaoDescontoDto {
 // pra mostrar contexto legivel (nome de quem pediu, cliente, valor).
 export interface SolicitacaoDescontoResumoDto extends SolicitacaoDescontoDto {
   vendedorSolicitante: { id: string; nome: string | null };
+  // true so' quando o usuario logado tem a alcada exigida e nao e' o
+  // solicitante - a tela de Aprovacoes desabilita os botoes quando false.
+  podeDecidir: boolean;
   pedido: {
     id: string;
     valorTotal: string | null;
@@ -131,7 +135,24 @@ export class SolicitacoesDescontoService {
       },
     });
 
-    return registros.map(paraResumoDto);
+    // Quem pode decidir CADA solicitacao (a lista mostra tudo da equipe, mas um
+    // supervisor nao decide o que exige gerente) - a tela desabilita o botao.
+    const logado = await this.prisma.vendedor.findFirst({
+      where: { usuarioId },
+      select: { id: true, papel: true },
+    });
+    return registros.map((registro) =>
+      paraResumoDto(registro, {
+        podeDecidir:
+          logado !== null &&
+          new SolicitacaoDesconto({
+            id: registro.id,
+            vendedorSolicitanteId: registro.vendedorSolicitanteId,
+            papelExigido: registro.papelExigido,
+            status: registro.status,
+          }).podeSerDecididaPor({ id: logado.id, papel: logado.papel }),
+      }),
+    );
   }
 
   async avaliarDesconto(
@@ -169,6 +190,10 @@ export class SolicitacoesDescontoService {
     }
 
     const papelExigido = avaliacao.papelExigido;
+    const aprovadorEsperado = await this.resolverAprovadorEsperado(
+      solicitante.supervisorId,
+      papelExigido,
+    );
 
     const criada = await this.prisma.$transaction(async (tx) => {
       const registro = await tx.solicitacaoDesconto.create({
@@ -177,7 +202,9 @@ export class SolicitacoesDescontoService {
           percentualSolicitado: input.percentualSolicitado,
           vendedorSolicitanteId: solicitante.id,
           papelExigido,
-          aprovadorEsperadoId: solicitante.supervisorId,
+          // Quem tem a ALCADA exigida (nao necessariamente o supervisor
+          // direto): desconto de gerente notifica o gerente.
+          aprovadorEsperadoId: aprovadorEsperado?.id ?? solicitante.supervisorId,
         },
       });
 
@@ -236,13 +263,48 @@ export class SolicitacoesDescontoService {
       );
     }
 
+    const aprovador = await this.resolverAprovadorEsperado(
+      solicitante.supervisorId,
+      avaliacao.papelExigido,
+    );
     return {
       necessitaAprovacao: true,
       aprovadorEsperado: {
-        id: solicitante.supervisor.id,
-        nome: solicitante.supervisor.nome,
+        id: aprovador?.id ?? solicitante.supervisor.id,
+        nome: aprovador ? aprovador.nome : solicitante.supervisor.nome,
       },
     };
+  }
+
+  // Sobe a cadeia de supervisores a partir do supervisor direto ate' o
+  // PRIMEIRO com papel >= papelExigido - e' ele quem deve decidir (e ser
+  // notificado). Regra do negocio: se um item cai na alcada do gerente, o
+  // gerente decide o desconto de TODOS os itens (papelExigido ja e' o maior
+  // entre os itens). Sem ninguem com essa alcada na cadeia, cai no supervisor
+  // direto (comportamento anterior) - qualquer gerente do escopo ainda ve e
+  // decide a solicitacao na lista de Aprovacoes.
+  private async resolverAprovadorEsperado(
+    supervisorDiretoId: string | null,
+    papelExigido: PapelVendedor,
+  ): Promise<{ id: string; nome: string | null } | null> {
+    let atualId = supervisorDiretoId;
+    let primeiro: { id: string; nome: string | null } | null = null;
+    const visitados = new Set<string>();
+
+    while (atualId && !visitados.has(atualId) && visitados.size < 10) {
+      visitados.add(atualId);
+      const vendedor = await this.prisma.vendedor.findUnique({
+        where: { id: atualId },
+        select: { id: true, nome: true, papel: true, supervisorId: true },
+      });
+      if (!vendedor) break;
+      primeiro ??= { id: vendedor.id, nome: vendedor.nome };
+      if (papelAtendeExigido(vendedor.papel, papelExigido)) {
+        return { id: vendedor.id, nome: vendedor.nome };
+      }
+      atualId = vendedor.supervisorId;
+    }
+    return primeiro;
   }
 
   async obterDto(solicitacaoId: string): Promise<SolicitacaoDescontoDto> {
@@ -546,9 +608,10 @@ function paraResumoDto(registro: {
     valorTotal: { toString(): string } | null;
     cliente: { id: string; razaoSocial: string | null } | null;
   } | null;
-}): SolicitacaoDescontoResumoDto {
+}, extras: { podeDecidir: boolean }): SolicitacaoDescontoResumoDto {
   return {
     ...paraDto(registro),
+    podeDecidir: extras.podeDecidir,
     vendedorSolicitante: registro.vendedorSolicitante,
     pedido: registro.pedido
       ? {

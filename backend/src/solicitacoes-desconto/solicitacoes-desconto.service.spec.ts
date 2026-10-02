@@ -701,3 +701,154 @@ describe('SolicitacoesDescontoService.listarPendentes', () => {
     });
   });
 });
+
+// Cenario de negocio (2026-10-02): vendedor ate 15%, supervisor ate 30%,
+// gerente daí pra cima. Pedido com 2 itens - um na alcada do supervisor e outro
+// na do gerente - o GERENTE decide o desconto de TODOS os itens.
+describe('Alcada por hierarquia (vendedor 15% / supervisor 30% / gerente acima)', () => {
+  const CADEIA = [
+    { id: 'v1', usuarioId: 'u-v1', papel: 'VENDEDOR', supervisorId: 'sup1', nome: 'Vendedor' },
+    { id: 'sup1', usuarioId: 'u-sup', papel: 'SUPERVISOR', supervisorId: 'ger1', nome: 'Supervisor' },
+    { id: 'ger1', usuarioId: 'u-ger', papel: 'GERENTE', supervisorId: null, nome: 'Gerente' },
+  ];
+  const config = () =>
+    configuracaoDescontoServiceFake({
+      limitePercentual: 15,
+      percentualAlcadaSupervisao: 30,
+      percentualAlcadaGerencial: 100,
+    });
+
+  it('desconto na faixa do supervisor: o supervisor e o aprovador esperado', async () => {
+    const prisma = prismaFake({ vendedores: CADEIA });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      config() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.avaliarDesconto({
+      vendedorSolicitanteId: 'v1',
+      pedidoId: null,
+      percentualSolicitado: 25,
+    });
+
+    expect(resultado).toEqual(
+      expect.objectContaining({
+        necessitaAprovacao: true,
+        solicitacao: expect.objectContaining({ papelExigido: 'SUPERVISOR', aprovadorEsperadoId: 'sup1' }),
+      }),
+    );
+  });
+
+  it('2 itens (supervisor + gerente): o MAIOR vale - exige GERENTE e ele e o aprovador esperado/notificado', async () => {
+    const prisma = prismaFake({ vendedores: CADEIA });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      config() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    // CriarPedidoService passa o MAIOR desconto entre os itens (25% e 45%)
+    const resultado = await service.avaliarDesconto({
+      vendedorSolicitanteId: 'v1',
+      pedidoId: null,
+      percentualSolicitado: 45,
+    });
+
+    expect(resultado).toEqual(
+      expect.objectContaining({
+        solicitacao: expect.objectContaining({ papelExigido: 'GERENTE', aprovadorEsperadoId: 'ger1' }),
+      }),
+    );
+    expect(prisma.solicitacaoDesconto.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ papelExigido: 'GERENTE', aprovadorEsperadoId: 'ger1' }),
+    });
+  });
+
+  it('simulacao tambem mostra o gerente (nao o supervisor direto) quando a faixa e a dele', async () => {
+    const prisma = prismaFake({
+      vendedores: [
+        { ...CADEIA[0], supervisor: { id: 'sup1', nome: 'Supervisor' } },
+        CADEIA[1],
+        CADEIA[2],
+      ],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      config() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const resultado = await service.simular({
+      vendedorSolicitanteId: 'v1',
+      percentualSolicitado: 45,
+    });
+
+    expect(resultado).toEqual({
+      necessitaAprovacao: true,
+      aprovadorEsperado: { id: 'ger1', nome: 'Gerente' },
+    });
+  });
+
+  it('supervisor NAO decide solicitacao de gerente (403); o gerente decide', async () => {
+    const prisma = prismaFake({
+      vendedores: CADEIA,
+      solicitacoes: [
+        {
+          id: 'sol-g',
+          pedidoId: 'p1',
+          percentualSolicitado: decimalFake(45),
+          vendedorSolicitanteId: 'v1',
+          papelExigido: 'GERENTE',
+          aprovadorEsperadoId: 'ger1',
+          status: 'PENDENTE',
+          aprovadorId: null,
+          decididoEm: null,
+          criadoEm: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    const service = new SolicitacoesDescontoService(
+      prisma as never,
+      config() as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    await expect(service.autorizarDecisao('sol-g', 'u-sup')).rejects.toThrow(ForbiddenException);
+    await expect(service.autorizarDecisao('sol-g', 'u-ger')).resolves.toEqual(
+      expect.objectContaining({ aprovadorVendedor: expect.objectContaining({ id: 'ger1' }) }),
+    );
+  });
+
+  it('lista de pendentes marca podeDecidir=false pro supervisor e true pro gerente', async () => {
+    const solicitacao = {
+      id: 'sol-g',
+      pedidoId: 'p1',
+      percentualSolicitado: decimalFake(45),
+      vendedorSolicitanteId: 'v1',
+      papelExigido: 'GERENTE',
+      aprovadorEsperadoId: 'ger1',
+      status: 'PENDENTE',
+      aprovadorId: null,
+      decididoEm: null,
+      criadoEm: new Date('2026-01-01T00:00:00.000Z'),
+      vendedorSolicitante: { id: 'v1', nome: 'Vendedor' },
+      pedido: null,
+    };
+    const escopoEquipe = { tipo: 'EQUIPE', vendedorIds: ['v1', 'sup1'] };
+
+    const comoSupervisor = await new SolicitacoesDescontoService(
+      prismaFake({ vendedores: CADEIA, solicitacoes: [solicitacao] }) as never,
+      config() as never,
+      vendedorEscopoServiceFake(escopoEquipe) as never,
+    ).listarPendentes(IDP_USER_FAKE, 'u-sup');
+    const comoGerente = await new SolicitacoesDescontoService(
+      prismaFake({ vendedores: CADEIA, solicitacoes: [solicitacao] }) as never,
+      config() as never,
+      vendedorEscopoServiceFake({ tipo: 'EQUIPE', vendedorIds: ['v1', 'sup1', 'ger1'] }) as never,
+    ).listarPendentes(IDP_USER_FAKE, 'u-ger');
+
+    expect(comoSupervisor[0].podeDecidir).toBe(false);
+    expect(comoGerente[0].podeDecidir).toBe(true);
+  });
+});

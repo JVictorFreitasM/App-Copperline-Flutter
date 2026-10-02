@@ -10,10 +10,14 @@ class SolicitacaoDescontoResumo {
     required this.criadoEm,
     required this.vendedorSolicitante,
     required this.pedido,
+    this.papelExigido = 'SUPERVISOR',
+    this.podeDecidir = true,
   });
 
   factory SolicitacaoDescontoResumo.fromJson(Map<String, dynamic> json) {
     return SolicitacaoDescontoResumo(
+      papelExigido: json['papelExigido'] as String? ?? 'SUPERVISOR',
+      podeDecidir: json['podeDecidir'] as bool? ?? true,
       id: json['id'] as String,
       percentualSolicitado: (json['percentualSolicitado'] as num).toDouble(),
       status: json['status'] as String,
@@ -28,6 +32,11 @@ class SolicitacaoDescontoResumo {
   }
 
   final String id;
+
+  /// Papel mínimo que decide (SUPERVISOR/GERENTE) e se o usuário logado tem
+  /// essa alçada - sem ela os botões ficam inativos (o backend também recusa).
+  final String papelExigido;
+  final bool podeDecidir;
   final double percentualSolicitado;
   final String status;
   final String criadoEm;
@@ -47,7 +56,11 @@ class VendedorSolicitanteResumo {
 }
 
 class PedidoResumoSolicitacao {
-  const PedidoResumoSolicitacao({required this.id, required this.valorTotal, required this.cliente});
+  const PedidoResumoSolicitacao({
+    required this.id,
+    required this.valorTotal,
+    required this.cliente,
+  });
 
   factory PedidoResumoSolicitacao.fromJson(Map<String, dynamic> json) {
     return PedidoResumoSolicitacao(

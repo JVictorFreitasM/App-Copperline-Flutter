@@ -72,7 +72,11 @@ export default async function AprovacoesPage() {
                       {rotuloPapel(solicitacao.papelExigido)}
                     </p>
                   </div>
-                  <AprovarRejeitarForm solicitacaoId={solicitacao.id} />
+                  <AprovarRejeitarForm
+                    solicitacaoId={solicitacao.id}
+                    podeDecidir={solicitacao.podeDecidir}
+                    papelExigido={rotuloPapel(solicitacao.papelExigido)}
+                  />
                 </div>
               </Card>
             ))}

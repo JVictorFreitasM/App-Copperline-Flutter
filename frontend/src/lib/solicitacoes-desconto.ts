@@ -21,6 +21,9 @@ export interface SolicitacaoDescontoResumoDto {
   decididoEm: string | null;
   criadoEm: string;
   vendedorSolicitante: { id: string; nome: string | null };
+  // true so' quando o usuario logado tem a alçada exigida (um supervisor não
+  // decide o que exige gerente) e não é o solicitante.
+  podeDecidir: boolean;
   pedido: {
     id: string;
     valorTotal: string | null;

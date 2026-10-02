@@ -17,6 +17,12 @@ const NIVEL_PAPEL: Record<PapelVendedor, number> = {
   GERENTE: 2,
 };
 
+// O papel atende (>=) o papel exigido? - usado fora da entidade, ex: subir a
+// cadeia de supervisores ate' o primeiro com alcada pra decidir.
+export function papelAtendeExigido(papel: PapelVendedor, exigido: PapelVendedor): boolean {
+  return NIVEL_PAPEL[papel] >= NIVEL_PAPEL[exigido];
+}
+
 export class SolicitacaoJaDecididaError extends Error {}
 export class AutoaprovacaoNaoPermitidaError extends Error {}
 export class NivelHierarquiaInsuficienteError extends Error {}

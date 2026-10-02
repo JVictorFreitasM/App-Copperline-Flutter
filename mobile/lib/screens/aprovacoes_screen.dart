@@ -126,7 +126,8 @@ class _AprovacoesScreenState extends ConsumerState<AprovacoesScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              solicitacao.pedido?.cliente?.razaoSocial ?? 'Cliente não identificado',
+                              solicitacao.pedido?.cliente?.razaoSocial ??
+                                  'Cliente não identificado',
                               style: const TextStyle(fontSize: 12, color: AppColors.muted),
                             ),
                             const SizedBox(height: 6),
@@ -141,11 +142,19 @@ class _AprovacoesScreenState extends ConsumerState<AprovacoesScreen> {
                               style: const TextStyle(fontSize: 11, color: AppColors.muted),
                             ),
                             const SizedBox(height: 10),
+                            if (!solicitacao.podeDecidir) ...[
+                              Text(
+                                'Este desconto exige ${solicitacao.papelExigido == 'GERENTE' ? 'gerente' : 'supervisor'} '
+                                '- você não tem alçada para decidir.',
+                                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: processando
+                                    onPressed: processando || !solicitacao.podeDecidir
                                         ? null
                                         : () => _decidir(solicitacao.id, aprovar: false),
                                     child: const Text('Rejeitar'),
@@ -154,7 +163,7 @@ class _AprovacoesScreenState extends ConsumerState<AprovacoesScreen> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: FilledButton(
-                                    onPressed: processando
+                                    onPressed: processando || !solicitacao.podeDecidir
                                         ? null
                                         : () => _decidir(solicitacao.id, aprovar: true),
                                     child: Text(processando ? 'Enviando...' : 'Aprovar'),

@@ -22,7 +22,15 @@ type Acao = "aprovar" | "rejeitar";
 // Pedido do usuario (2026-10-02): clicar abre um popup de confirmacao antes
 // de decidir (decisao nao se desfaz), e os botoes ficam inativos depois. A
 // solicitacao inteira = todos os itens do pedido que ainda estao pendentes.
-export function AprovarRejeitarForm({ solicitacaoId }: { solicitacaoId: string }) {
+export function AprovarRejeitarForm({
+  solicitacaoId,
+  podeDecidir,
+  papelExigido,
+}: {
+  solicitacaoId: string;
+  podeDecidir: boolean;
+  papelExigido: string;
+}) {
   const [estadoAprovar, acaoAprovar, pendingAprovar] = useActionState(
     aprovarSolicitacao.bind(null, solicitacaoId),
     ESTADO_INICIAL,
@@ -40,7 +48,9 @@ export function AprovarRejeitarForm({ solicitacaoId }: { solicitacaoId: string }
   // Depois de decidida com sucesso os botoes ficam inativos (a linha some da
   // lista no proximo render do servidor, mas ate la nao pode decidir de novo).
   const decidida = Boolean(estadoAprovar.sucesso || estadoRejeitar.sucesso);
-  const inativo = pending || decidida;
+  // Sem alçada (ex: supervisor diante de desconto que exige gerente) os
+  // botões ficam inativos - o backend também recusa (403).
+  const inativo = pending || decidida || !podeDecidir;
 
   function confirmar() {
     const acao = acaoPendente;
@@ -64,6 +74,11 @@ export function AprovarRejeitarForm({ solicitacaoId }: { solicitacaoId: string }
           </PrimaryButton>
         </form>
       </div>
+      {!podeDecidir && (
+        <p className="text-xs text-muted">
+          Este desconto exige {papelExigido.toLowerCase()} - você não tem alçada para decidir.
+        </p>
+      )}
       {estado.sucesso && <p className="text-xs font-medium text-ink">{estado.sucesso}</p>}
       {estado.erro && <p className="text-xs font-medium text-muted">{estado.erro}</p>}
 
