@@ -28,6 +28,14 @@ final dadosComerciaisServiceProvider = FutureProvider<DadosComerciaisService>((r
   return DadosComerciaisService(apiClient, db);
 });
 
+/// Regra "o mesmo produto pode repetir no pedido?" (config de Orçamento do
+/// admin) - lida do banco local, então vale igual offline. Sem nada baixado
+/// ainda, assume o default do backend: não pode repetir.
+final permitirItensRepetidosProvider = FutureProvider<bool>((ref) async {
+  final dados = await ref.watch(dadosComerciaisServiceProvider.future);
+  return dados.permitirItensRepetidos();
+});
+
 final filaPendenteServiceProvider = FutureProvider<FilaPendenteService>((ref) async {
   final apiClient = ref.watch(apiClientProvider);
   final db = await ref.watch(localDatabaseProvider.future);

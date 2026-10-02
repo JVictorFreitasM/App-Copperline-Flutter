@@ -162,6 +162,7 @@ void main() {
   group('DadosComerciaisService (carteira + tabelas de preco offline)', () {
     final json = {
       'geradoEm': '2026-10-01T12:00:00.000Z',
+      'permitirItensRepetidos': false,
       'clientes': [
         {
           'id': 'c1',
@@ -268,6 +269,17 @@ void main() {
       expect(produtos, hasLength(1));
       expect(produtos.single.nome, 'CABO FLEXMEGA');
       expect(produtos.single.precosPorTabela, {'110': '2879.13', '111': '2500'});
+    });
+
+    test('permitirItensRepetidos: default NAO antes de baixar; depois vale o que o servidor mandou', () async {
+      final db = await LocalDatabase.abrir(caminhoOverride: inMemoryDatabasePath);
+      final semDados = DadosComerciaisService(_ApiClientFake(json), db);
+      expect(await semDados.permitirItensRepetidos(), isFalse);
+
+      await DadosComerciaisService(_ApiClientFake({...json, 'permitirItensRepetidos': true}), db)
+          .baixar();
+
+      expect(await semDados.permitirItensRepetidos(), isTrue);
     });
 
     test('tabelasDoCliente devolve null quando nada foi baixado (diferente de lista vazia)', () async {

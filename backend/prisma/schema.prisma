@@ -598,6 +598,11 @@ enum StatusPedidoLocal {
   // status novo - mesmo espirito de "sem deixar registro orfao" ja
   // usado pro envio que falha.
   ORCAMENTO
+  // Todos os itens com desconto acima da alcada foram RECUSADOS pelo
+  // aprovador - o pedido inteiro e' cancelado e nada vai ao Radar (ver
+  // DecisaoDescontoPedidoService). Fica gravado (nao apaga) pra historico
+  // e pra notificar o vendedor.
+  CANCELADO
 
   @@map("status_pedido_local")
 }

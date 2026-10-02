@@ -9,13 +9,14 @@ import {
   type NotaFiscalResumoPedidoDto,
   type PedidoDetalheDto,
   type PedidoItemDto,
+  type SolicitacaoDescontoDoPedidoDto,
 } from "@/lib/pedidos";
 import { configStatusNfe } from "@/lib/notas-fiscais";
 import { formatarData, formatarDataHora, formatarMoeda, formatarPeso, formatarTelefone } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { AbasPedido } from "./abas-pedido";
-import { AprovarReprovarTudo } from "./aprovar-reprovar-tudo";
+import { DecisaoDescontoTodos, ItemDecisaoBotoes, itemTemDecisao } from "./decisao-desconto";
 import { LinkPdfNotaFiscal } from "./link-pdf-nota-fiscal";
 
 // Tela de detalhe do pedido (layout de referencia ref1.jpeg, fornecida
@@ -94,8 +95,18 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         abaAtiva="pedido"
       />
 
+      {pedido.statusAprovacaoBucket === "CANCELADO" && (
+        <p className="rounded-card bg-surface p-4 text-sm text-ink shadow-sm">
+          Pedido cancelado: todos os itens tiveram o desconto recusado.
+        </p>
+      )}
+
       {pedido.solicitacaoDesconto && (
-        <AprovarReprovarTudo pedidoId={pedido.id} solicitacao={pedido.solicitacaoDesconto} />
+        <DecisaoDescontoTodos
+          pedidoId={pedido.id}
+          solicitacao={pedido.solicitacaoDesconto}
+          pendentes={pedido.itens.filter((item) => item.statusAprovacao === "PENDENTE").length}
+        />
       )}
 
       <div className="rounded-card bg-surface p-6 shadow-sm">
@@ -204,7 +215,11 @@ function ConteudoPedido({ pedido }: { pedido: PedidoDetalheDto }) {
         </div>
       </div>
 
-      <TabelaItens itens={pedido.itens} />
+      <TabelaItens
+        pedidoId={pedido.id}
+        itens={pedido.itens}
+        solicitacao={pedido.solicitacaoDesconto}
+      />
 
       {esperaNotaFiscal && <NotasFiscaisSecao notasFiscais={pedido.notasFiscais} />}
     </>
@@ -281,7 +296,15 @@ function EnderecoTexto({ endereco }: { endereco: EnderecoClientePedidoDto }) {
   );
 }
 
-function TabelaItens({ itens }: { itens: PedidoItemDto[] }) {
+function TabelaItens({
+  pedidoId,
+  itens,
+  solicitacao,
+}: {
+  pedidoId: string;
+  itens: PedidoItemDto[];
+  solicitacao: SolicitacaoDescontoDoPedidoDto | null;
+}) {
   if (itens.length === 0) {
     return <EstadoVazio mensagem="Nenhum item neste pedido." />;
   }
@@ -291,6 +314,7 @@ function TabelaItens({ itens }: { itens: PedidoItemDto[] }) {
       <table className="w-full min-w-[860px] text-left text-sm">
         <thead>
           <tr className="border-b border-line text-xs font-medium text-muted">
+            <th className="px-4 py-3">{solicitacao ? "Desconto" : ""}</th>
             <th className="px-4 py-3">Código</th>
             <th className="px-4 py-3">Qtd</th>
             <th className="px-4 py-3">Produto</th>
@@ -314,6 +338,22 @@ function TabelaItens({ itens }: { itens: PedidoItemDto[] }) {
             const pesoBrutoItem = calcularPesoItem(item.produto?.pesoBrutoKg, quantidadeEmMetros);
             return (
               <tr key={item.id} className="border-b border-line last:border-0">
+                <td className="px-4 py-3">
+                  {solicitacao && itemTemDecisao(item) ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted">
+                        {item.percentualDesconto !== null
+                          ? `${Number(item.percentualDesconto)}%`
+                          : "—"}
+                      </span>
+                      <ItemDecisaoBotoes
+                        pedidoId={pedidoId}
+                        item={item}
+                        podeDecidir={solicitacao.podeDecidir}
+                      />
+                    </div>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3 text-muted">{item.produto?.codigo ?? "—"}</td>
                 <td className="px-4 py-3 text-muted">
                   {item.quantidadeVenda === null

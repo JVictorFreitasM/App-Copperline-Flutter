@@ -7,6 +7,7 @@ import '../core/models/nota_fiscal.dart';
 import '../core/models/pedido.dart';
 import '../core/notas_fiscais/nota_fiscal_pdf_service.dart';
 import '../core/pedidos/pedido_pdf_service.dart';
+import '../core/providers/aprovacoes_provider.dart';
 import '../core/providers/pedidos_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_badge.dart';
@@ -43,7 +44,7 @@ class PedidoDetalheScreen extends ConsumerWidget {
                 : ErroConexao(mensagem: '$erro'),
           ),
           data: (pedido) {
-            final situacaoConfig = configSituacaoPedido(pedido.situacao);
+            final situacaoConfig = pedido.situacaoExibida;
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -63,6 +64,23 @@ class PedidoDetalheScreen extends ConsumerWidget {
                   '${formatarData(pedido.dataHoraUltimaAlteracao)}',
                   style: const TextStyle(color: AppColors.muted),
                 ),
+                if (pedido.isCancelado) ...[
+                  const SizedBox(height: 12),
+                  AppCard(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cancel_outlined, color: AppColors.red, size: 20),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Pedido cancelado: todos os itens tiveram o desconto recusado.',
+                            style: TextStyle(color: AppColors.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 AppCard(child: PedidoStepper(situacao: pedido.situacao)),
                 const SizedBox(height: 16),
@@ -93,10 +111,7 @@ class PedidoDetalheScreen extends ConsumerWidget {
                               const Text('Peso líquido', style: TextStyle(color: AppColors.muted)),
                               Text(
                                 formatarPeso(pedido.pesoLiquidoTotalKg),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -108,10 +123,7 @@ class PedidoDetalheScreen extends ConsumerWidget {
                               const Text('Peso bruto', style: TextStyle(color: AppColors.muted)),
                               Text(
                                 formatarPeso(pedido.pesoBrutoTotalKg),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -144,6 +156,15 @@ class PedidoDetalheScreen extends ConsumerWidget {
                                   '${formatarMoeda(item.valorUnitario)}',
                                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                                 ),
+                                if (pedido.solicitacaoDesconto != null &&
+                                    item.temDecisaoDeDesconto) ...[
+                                  const SizedBox(height: 6),
+                                  _DecisaoDescontoItem(
+                                    pedidoId: pedido.id,
+                                    item: item,
+                                    podeDecidir: pedido.solicitacaoDesconto!.podeDecidir,
+                                  ),
+                                ],
                                 if (item.observacoes != null && item.observacoes!.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   Text(
@@ -174,7 +195,9 @@ class PedidoDetalheScreen extends ConsumerWidget {
                   Text('Notas fiscais', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   if (pedido.notasFiscais.isEmpty)
-                    const EstadoVazio(mensagem: 'Nenhuma nota fiscal vinculada a este pedido ainda.')
+                    const EstadoVazio(
+                      mensagem: 'Nenhuma nota fiscal vinculada a este pedido ainda.',
+                    )
                   else
                     for (final nota in pedido.notasFiscais) ...[
                       _LinhaNotaFiscalPedido(nota: nota),
@@ -314,10 +337,123 @@ class _LinhaNotaFiscalPedidoState extends ConsumerState<_LinhaNotaFiscalPedido> 
           else
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('PDF indisponível', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+              child: Text(
+                'PDF indisponível',
+                style: TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Decisão do desconto de UM item (supervisor/gerente): mostra o % pedido e,
+/// enquanto pendente, os botões Recusar/Aceitar com confirmação; depois de
+/// decidido mostra o resultado e os botões somem (decisão não se desfaz).
+/// O backend valida a alçada - `podeDecidir` só decide se os botões aparecem.
+class _DecisaoDescontoItem extends ConsumerStatefulWidget {
+  const _DecisaoDescontoItem({
+    required this.pedidoId,
+    required this.item,
+    required this.podeDecidir,
+  });
+
+  final String pedidoId;
+  final PedidoItem item;
+  final bool podeDecidir;
+
+  @override
+  ConsumerState<_DecisaoDescontoItem> createState() => _DecisaoDescontoItemState();
+}
+
+class _DecisaoDescontoItemState extends ConsumerState<_DecisaoDescontoItem> {
+  bool _enviando = false;
+
+  Future<void> _decidir(bool aprovar) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(aprovar ? 'Aceitar desconto do item' : 'Recusar desconto do item'),
+        content: Text(
+          aprovar
+              ? 'Confirma aceitar o desconto deste item? Essa decisão não pode ser desfeita.'
+              : 'Confirma recusar o desconto deste item? O item sai do pedido. '
+                    'Essa decisão não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(aprovar ? 'Aceitar' : 'Recusar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    setState(() => _enviando = true);
+    try {
+      await ref
+          .read(solicitacoesDescontoServiceProvider)
+          .decidirItem(pedidoId: widget.pedidoId, itemId: widget.item.id, aprovar: aprovar);
+      ref.invalidate(pedidoDetalheProvider(widget.pedidoId));
+      ref.invalidate(solicitacoesPendentesProvider);
+    } on ApiException catch (erro) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final percentual = item.percentualDesconto == null
+        ? null
+        : double.tryParse(item.percentualDesconto!);
+    final textoPercentual = percentual == null
+        ? ''
+        : 'Desconto ${percentual % 1 == 0 ? percentual.toInt() : percentual}%  ';
+
+    if (item.statusAprovacao != 'PENDENTE') {
+      final aceito = item.statusAprovacao == 'APROVADO';
+      return Text(
+        '$textoPercentual· ${aceito ? "aceito" : "recusado (fora do pedido)"}',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: aceito ? AppColors.green : AppColors.red,
+        ),
+      );
+    }
+
+    final inativo = !widget.podeDecidir || _enviando;
+    return Row(
+      children: [
+        Text(
+          '${textoPercentual}aguardando decisão',
+          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+        ),
+        const Spacer(),
+        IconButton(
+          tooltip: 'Recusar desconto',
+          visualDensity: VisualDensity.compact,
+          onPressed: inativo ? null : () => _decidir(false),
+          icon: const Icon(Icons.close, color: AppColors.red),
+        ),
+        IconButton(
+          tooltip: 'Aceitar desconto',
+          visualDensity: VisualDensity.compact,
+          onPressed: inativo ? null : () => _decidir(true),
+          icon: const Icon(Icons.check, color: AppColors.green),
+        ),
+      ],
     );
   }
 }

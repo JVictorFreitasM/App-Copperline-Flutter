@@ -123,104 +123,10 @@ export class PedidosService {
     return paraPedidoDetalheDto(pedido);
   }
 
-  // Revisao por item (tela de detalhe do pedido, layout de referencia
-  // ref1.jpeg) - ver comentario do enum StatusAprovacaoItemPedido no
-  // schema.prisma. Mesma checagem de escopo de buscarPorId (findFirst com
-  // whereEscopo) antes de decidir qualquer item - sem isso um vendedor
-  // comum poderia aprovar/rejeitar item de pedido de outra carteira (IDOR).
-  async aprovarItem(
-    pedidoId: string,
-    itemId: string,
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    return this.decidirItem(pedidoId, itemId, 'APROVADO', usuarioId, escopo);
-  }
-
-  async rejeitarItem(
-    pedidoId: string,
-    itemId: string,
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    return this.decidirItem(pedidoId, itemId, 'REJEITADO', usuarioId, escopo);
-  }
-
-  async aprovarTodosItens(
-    pedidoId: string,
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    return this.decidirTodosItens(pedidoId, 'APROVADO', usuarioId, escopo);
-  }
-
-  async rejeitarTodosItens(
-    pedidoId: string,
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    return this.decidirTodosItens(pedidoId, 'REJEITADO', usuarioId, escopo);
-  }
-
-  private async decidirItem(
-    pedidoId: string,
-    itemId: string,
-    status: 'APROVADO' | 'REJEITADO',
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    await this.confirmarPedidoNoEscopo(pedidoId, escopo);
-
-    const resultado = await this.prisma.pedidoItem.updateMany({
-      where: { id: itemId, pedidoId },
-      data: { statusAprovacao: status, decididoPorId: usuarioId, decididoEm: new Date() },
-    });
-    if (resultado.count === 0) {
-      throw new NotFoundException(
-        `Item '${itemId}' não encontrado no pedido '${pedidoId}'`,
-      );
-    }
-
-    return this.buscarPorId(pedidoId, escopo);
-  }
-
-  private async decidirTodosItens(
-    pedidoId: string,
-    status: 'APROVADO' | 'REJEITADO',
-    usuarioId: string,
-    escopo: EscopoClientes,
-  ): Promise<PedidoDetalheDto> {
-    await this.confirmarPedidoNoEscopo(pedidoId, escopo);
-
-    await this.prisma.pedidoItem.updateMany({
-      where: { pedidoId },
-      data: { statusAprovacao: status, decididoPorId: usuarioId, decididoEm: new Date() },
-    });
-
-    return this.buscarPorId(pedidoId, escopo);
-  }
-
-  // So confirma que o pedido existe DENTRO do escopo (mesmo 404 de
-  // buscarPorId pra fora do escopo, nunca 403 - nao vaza a existencia de
-  // pedido de outra carteira) - reaproveitado por decidirItem/
-  // decidirTodosItens antes de qualquer escrita.
-  private async confirmarPedidoNoEscopo(
-    pedidoId: string,
-    escopo: EscopoClientes,
-  ): Promise<void> {
-    const whereEscopo = construirWherePedidoPorEscopo(escopo);
-    if (whereEscopo === null) {
-      throw new NotFoundException(`Pedido '${pedidoId}' não encontrado`);
-    }
-
-    const pedido = await this.prisma.pedido.findFirst({
-      where: { id: pedidoId, ...whereEscopo },
-      select: { id: true },
-    });
-    if (!pedido) {
-      throw new NotFoundException(`Pedido '${pedidoId}' não encontrado`);
-    }
-  }
+  // A decisao (aceitar/recusar) do desconto por item mudou pra
+  // DecisaoDescontoPedidoService - com validacao de alcada. Os metodos antigos
+  // daqui (aprovarItem/rejeitarItem/aprovarTodosItens/rejeitarTodosItens) nao
+  // checavam papel nenhum e foram removidos.
 
   // GET /pedidos/:id/historico (OS-BACKEND-33) - ordem cronologica
   // (criterio de aceite).
@@ -326,16 +232,18 @@ function mesclarWhereEscopo(
 // orcamento virar um status real, "idExternoErp null" cobria as duas
 // coisas misturadas; agora orcamento tem bucket proprio.
 function whereStatusAprovacao(
-  valor: 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO' | 'ORCAMENTO',
+  valor: 'NAO_INTEGRADO' | 'AGUARDANDO_APROVACAO' | 'ENVIADO' | 'ORCAMENTO' | 'CANCELADO',
 ): Prisma.PedidoWhereInput {
   switch (valor) {
     case 'NAO_INTEGRADO':
-      return { idExternoErp: null, statusLocal: { not: 'ORCAMENTO' } };
+      return { idExternoErp: null, statusLocal: { notIn: ['ORCAMENTO', 'CANCELADO'] } };
     case 'AGUARDANDO_APROVACAO':
       return { statusLocal: 'AGUARDANDO_APROVACAO' };
     case 'ENVIADO':
       return { OR: [{ statusLocal: 'ENVIADO' }, { idExternoErp: { not: null } }] };
     case 'ORCAMENTO':
       return { statusLocal: 'ORCAMENTO' };
+    case 'CANCELADO':
+      return { statusLocal: 'CANCELADO' };
   }
 }

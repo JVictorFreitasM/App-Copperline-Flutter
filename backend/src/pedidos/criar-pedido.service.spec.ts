@@ -77,8 +77,14 @@ function prismaFake(overrides: {
   // CriarPedidoService.atualizarCabecalhoAposEnvio (best-effort, roda
   // depois que a transacao de criacao ja commitou).
   const pedidoUpdate = jest.fn().mockResolvedValue(undefined);
+  // Marcacao por alcada de cada item (marcarItensPorAlcada) - fora da tx.
+  const pedidoItemFindMany = jest
+    .fn()
+    .mockResolvedValue([{ id: 'item-1', percentualDesconto: { toNumber: () => 10 } }]);
+  const pedidoItemUpdate = jest.fn().mockResolvedValue(undefined);
 
   return {
+    pedidoItem: { findMany: pedidoItemFindMany, update: pedidoItemUpdate },
     vendedor: {
       findFirst: jest
         .fn()
@@ -162,7 +168,10 @@ function solicitacoesDescontoServiceFake(
     necessitaAprovacao: false,
   },
 ) {
-  return { avaliarDesconto: jest.fn().mockResolvedValue(avaliacao) };
+  return {
+    avaliarDesconto: jest.fn().mockResolvedValue(avaliacao),
+    exigeAprovacao: jest.fn().mockResolvedValue(true),
+  };
 }
 
 function pedidoErpClientServiceFake(
@@ -632,7 +641,7 @@ describe('CriarPedidoService.criar', () => {
     });
   });
 
-  it('monta o payload do ERP com os IDs externos resolvidos, valorUnitario BRUTO por item e percentual blendado', async () => {
+  it('monta o payload do ERP com os IDs externos resolvidos, valorUnitario LIQUIDO por item e percentual 0', async () => {
     const prisma = prismaFake();
     const produtoCalculoService = produtoCalculoServiceFake();
     const pedidoErpClientService = pedidoErpClientServiceFake();
@@ -649,13 +658,13 @@ describe('CriarPedidoService.criar', () => {
       clienteIdExterno: 'cliente-externo-1',
       vendedorIdExterno: 'vendedor-externo-1',
       idCondicaoPagamento: 'condicao-externo-1',
-      percentualDesconto: 10, // blendado: (1 - 81/90) * 100 = 10
+      percentualDesconto: 0, // desconto nunca vai pro Radar - so' o valor liquido
       itens: [
         {
           produtoIdExterno: 'produto-externo-1',
           idTabelaPreco: 'tabela-venda-externo-1',
           quantidade: 3,
-          valorUnitario: 30, // BRUTO (sem desconto), nao valorTotal/quantidade
+          valorUnitario: 27, // LIQUIDO: 30 bruto - 10% de desconto do item
         },
       ],
       parcelas: [
@@ -747,8 +756,9 @@ describe('CriarPedidoService.criar', () => {
         // abaixo pra um caso mais realista, 1000 metros -> 1 km).
         // valorUnitario precisa estar na MESMA unidade de quantidade (KM,
         // nao metro) - bug corrigido 2026-09-28, reportado pelo usuario:
-        // 3.079998/metro * 1000 = 3079.998/km, arredondado pra 3080.
-        itens: [expect.objectContaining({ quantidade: 0.003, valorUnitario: 3080 })],
+        // 3.079998/metro * 1000 = 3079.998/km, menos 10% de desconto =
+        // 2771.9982, arredondado pra 2772 (preco LIQUIDO, ver enviarAoErp).
+        itens: [expect.objectContaining({ quantidade: 0.003, valorUnitario: 2772 })],
       }),
     );
   });
@@ -986,6 +996,7 @@ describe('CriarPedidoService.criar', () => {
             'Desconto de 60% excede o teto da alcada gerencial (50%)',
           ),
         ),
+      exigeAprovacao: jest.fn().mockResolvedValue(true),
     };
     const pedidoErpClientService = pedidoErpClientServiceFake();
     const service = criarService(

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
 import { AxiosError } from 'axios';
 import { ConfiguracaoOrcamentoService } from '../configuracoes/configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
+import { registrarEventoNotificacao } from '../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProdutoCalculoService } from '../produtos/produto-calculo.service';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
@@ -279,6 +281,7 @@ export class CriarPedidoService {
       contatoId,
       input.observacoes ?? null,
     );
+    await this.marcarItensPorAlcada(pedido.id, vendedorAlvo.id);
     return {
       status: 'AGUARDANDO_APROVACAO',
       pedidoId: pedido.id,
@@ -540,47 +543,22 @@ export class CriarPedidoService {
         // Em KM pra item METRO (retalho), nao os metros usados
         // internamente - ver comentario de quantidadeVendaExterna.
         quantidade: quantidadeVendaExterna(item),
-        // SEM desconto (preco de tabela puro) - ver comentario abaixo
-        // sobre o percentual blendado. Arredondado a 2 casas (2026-09-21) -
-        // o Radar rejeita ValorUnitario com mais de 2 decimais
-        // ("nao permite mais de 2 casas decimais"); precoVenda por metro
-        // (ver ProdutoCalculoService.resolverPrecoVenda, preco por KM
-        // convertido) pode ter ate 6 casas internamente, mas o payload do
-        // ERP precisa da versao arredondada pra moeda.
-        //
-        // BUG CORRIGIDO (2026-09-28, reportado pelo usuario): valorUnitario
-        // estava indo em preco POR METRO (valorUnitarioBruto, unidade
-        // interna) ao lado de `quantidade` acima em KM - `quantidade *
-        // valorUnitario` no Radar ficava 1000x menor que o valor real pra
-        // todo item METRO. valorUnitario precisa estar na MESMA unidade de
-        // `quantidade` (KM pra METRO) - por isso multiplica de volta por
-        // METROS_POR_KM antes de arredondar. Item PECA nao e afetado
-        // (unidade ja bate: preco e quantidade em pecas nos dois campos).
+        // Preco unitario JA COM o desconto do item aplicado (pedido do
+        // usuario, 2026-10-02: "o valor de desconto nao vai pro Radar,
+        // apenas o valor pos desconto ja calculado") - o Radar nunca recebe
+        // o percentual, so' o valor liquido. Arredondado a 2 casas (o Radar
+        // rejeita ValorUnitario com mais de 2 decimais). valorUnitario
+        // precisa estar na MESMA unidade de `quantidade` (KM pra item METRO,
+        // ver quantidadeVendaExterna - bug de 2026-09-28): por isso o preco
+        // por metro volta pra KM antes do desconto e do arredondamento.
         valorUnitario: arredondarMoeda(
-          item.unidade === 'METRO'
+          (item.unidade === 'METRO'
             ? item.valorUnitarioBruto * METROS_POR_KM
-            : item.valorUnitarioBruto,
+            : item.valorUnitarioBruto) *
+            (1 - item.percentualDesconto / 100),
         ),
       };
     });
-
-    // Desconto agora e' POR ITEM do lado de ca, mas o schema real do WK
-    // Radar pra desconto por item nunca foi confirmado (POST
-    // /comercial/v1/pedido so' tem `total.percentualDescontoProdutos`,
-    // aplicado uma vez sobre o pedido inteiro) - por isso continuamos
-    // mandando um percentual UNICO "blendado", reconstruido a partir da
-    // soma dos itens com desconto, em vez de inventar um campo por item no
-    // payload. Limitacao conhecida: o Radar nao sabe que o desconto variou
-    // por produto, so' o total final bate. Revisitar se confirmar suporte
-    // real do Radar a desconto por item.
-    const subtotalBruto = itens.reduce(
-      (soma, item) => soma + item.valorUnitarioBruto * item.quantidade,
-      0,
-    );
-    const percentualBlendado =
-      subtotalBruto > 0
-        ? arredondarMoeda((1 - valorComDesconto / subtotalBruto) * 100)
-        : 0;
 
     const parcelas = calcularParcelas(
       condicaoPagamento.parcelas,
@@ -593,7 +571,9 @@ export class CriarPedidoService {
         clienteIdExterno: cliente.idExternoErp,
         vendedorIdExterno: vendedor.idExternoErp,
         idCondicaoPagamento: condicaoPagamento.idExternoErp,
-        percentualDesconto: percentualBlendado,
+        // Desconto ja esta no valorUnitario de cada item (ver acima) - o
+        // percentual nunca vai pro Radar.
+        percentualDesconto: 0,
         itens: itensErp,
         parcelas,
       });
@@ -917,12 +897,242 @@ export class CriarPedidoService {
       });
       return novo;
     });
+    await this.marcarItensPorAlcada(atualizado.id, vendedorAlvo.id);
     return {
       status: 'AGUARDANDO_APROVACAO',
       pedidoId: atualizado.id,
       valorTotal: valorComDesconto,
       idExternoErp: null,
       solicitacaoDescontoId: avaliacao.solicitacao.id,
+    };
+  }
+
+  // Decisao por ITEM (pedido do usuario, 2026-10-02): so' os itens com
+  // desconto ACIMA da alcada do vendedor esperam decisao do supervisor
+  // (PENDENTE); os demais ja nascem aceitos (APROVADO, sem decididoPor).
+  // Chamado logo apos o pedido ficar AGUARDANDO_APROVACAO - se falhar no
+  // meio, todos continuam PENDENTE (o default, lado seguro).
+  private async marcarItensPorAlcada(pedidoId: string, vendedorId: string): Promise<void> {
+    const itens = await this.prisma.pedidoItem.findMany({
+      where: { pedidoId },
+      select: { id: true, percentualDesconto: true },
+    });
+    for (const item of itens) {
+      const exige = await this.solicitacoesDescontoService.exigeAprovacao(
+        vendedorId,
+        item.percentualDesconto?.toNumber() ?? 0,
+      );
+      await this.prisma.pedidoItem.update({
+        where: { id: item.id },
+        data: { statusAprovacao: exige ? 'PENDENTE' : 'APROVADO' },
+      });
+    }
+  }
+
+  // Fecha um pedido AGUARDANDO_APROVACAO depois que TODOS os itens com
+  // desconto acima da alcada foram decididos (ver
+  // DecisaoDescontoPedidoService, que valida alcada e decide quando chamar):
+  // - pelo menos 1 item aceito: o pedido segue so' com os aceitos (os
+  //   recusados ficam gravados como REJEITADO mas fora de valor/peso e do
+  //   envio) e vai ao Radar com o preco ja liquido;
+  // - TODOS recusados: pedido CANCELADO, nada vai ao Radar, o vendedor e'
+  //   avisado do motivo.
+  // O envio ao Radar acontece DENTRO da transacao com o pedido trancado
+  // (FOR UPDATE): duas decisoes simultaneas nunca enviam o mesmo pedido duas
+  // vezes, e se o Radar falhar nada e' gravado (a decisao pode ser repetida).
+  async concluirPedidoAposDecisao(input: {
+    pedidoId: string;
+    solicitacaoId: string;
+    decisoes: { itemId: string; status: 'APROVADO' | 'REJEITADO' }[];
+    aprovadorUsuarioId: string;
+    aprovadorVendedorId: string;
+  }): Promise<{
+    resultado: 'ENVIADO' | 'CANCELADO';
+    idExternoErp: string | null;
+    itensAceitos: number;
+    itensRecusados: number;
+  }> {
+    const conclusao = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM pedidos WHERE id = ${input.pedidoId} FOR UPDATE`;
+        const pedido = await tx.pedido.findUnique({
+          where: { id: input.pedidoId },
+          include: {
+            itens: true,
+            cliente: true,
+            vendedor: true,
+            formaPagamento: true,
+            condicaoPagamento: true,
+          },
+        });
+        if (!pedido || pedido.statusLocal !== 'AGUARDANDO_APROVACAO') {
+          throw new ConflictException(
+            'Este pedido já foi concluído ou não está aguardando aprovação',
+          );
+        }
+        if (
+          !pedido.cliente ||
+          !pedido.vendedor ||
+          !pedido.formaPagamento ||
+          !pedido.condicaoPagamento
+        ) {
+          throw new NotFoundException(`Pedido '${input.pedidoId}' está incompleto`);
+        }
+
+        const decisaoPorItem = new Map(input.decisoes.map((d) => [d.itemId, d.status]));
+        const statusFinal = (itemId: string, atual: string) =>
+          decisaoPorItem.get(itemId) ?? atual;
+        const aceitos = pedido.itens.filter(
+          (i) => statusFinal(i.id, i.statusAprovacao) === 'APROVADO',
+        );
+        const recusados = pedido.itens.filter(
+          (i) => statusFinal(i.id, i.statusAprovacao) === 'REJEITADO',
+        );
+        const agora = new Date();
+
+        for (const decisao of input.decisoes) {
+          await tx.pedidoItem.update({
+            where: { id: decisao.itemId },
+            data: {
+              statusAprovacao: decisao.status,
+              decididoPorId: input.aprovadorUsuarioId,
+              decididoEm: agora,
+            },
+          });
+        }
+
+        const decisaoSolicitacao = { aprovadorId: input.aprovadorVendedorId, decididoEm: agora };
+
+        if (aceitos.length === 0) {
+          await tx.pedido.update({
+            where: { id: pedido.id },
+            data: { statusLocal: 'CANCELADO', sincronizadoEm: agora },
+          });
+          await tx.pedidoHistoricoStatus.create({
+            data: {
+              pedidoId: pedido.id,
+              statusAnterior: 'AGUARDANDO_APROVACAO',
+              statusNovo: 'CANCELADO',
+              alteradoPor: input.aprovadorUsuarioId,
+            },
+          });
+          await tx.solicitacaoDesconto.update({
+            where: { id: input.solicitacaoId },
+            data: { status: 'REJEITADO', ...decisaoSolicitacao },
+          });
+          await registrarEventoNotificacao(tx, {
+            tipo: 'SOLICITACAO_DESCONTO_DECIDIDA',
+            referenciaId: input.solicitacaoId,
+            titulo: 'Pedido recusado',
+            corpo:
+              'Todos os itens do seu pedido tiveram o desconto recusado, por isso o pedido inteiro foi recusado.',
+            dados: {
+              solicitacaoId: input.solicitacaoId,
+              status: 'REJEITADO',
+              pedidoId: pedido.id,
+            },
+          });
+          return {
+            resultado: 'CANCELADO' as const,
+            idExterno: null,
+            pedidoId: pedido.id,
+            itensAceitos: 0,
+            itensRecusados: recusados.length,
+          };
+        }
+
+        // quantidadeVenda persistido ja' esta' na unidade EXTERNA (KM pra
+        // METRO) - volta pra METROS aqui (mesma reconstrucao de
+        // transformarEmPedido).
+        const itensCalculados: ItemCalculado[] = aceitos.map((item) => {
+          const quantidadeExterna = item.quantidadeVenda?.toNumber() ?? 0;
+          const unidade = item.unidade ?? '';
+          return {
+            produtoId: item.produtoId!,
+            quantidade:
+              unidade === 'METRO' ? quantidadeExterna * METROS_POR_KM : quantidadeExterna,
+            unidade,
+            valorUnitarioBruto: item.valorUnitarioBruto?.toNumber() ?? 0,
+            valorTotal: item.valorTotal?.toNumber() ?? 0,
+            percentualDesconto: item.percentualDesconto?.toNumber() ?? 0,
+            observacoes: item.observacoes ?? undefined,
+          };
+        });
+        const valorComDesconto = arredondarMoeda(
+          itensCalculados.reduce((soma, item) => soma + item.valorTotal, 0),
+        );
+        const produtosPorId = await this.buscarDadosProdutos(itensCalculados);
+
+        const resultadoErp = await this.enviarAoErp(
+          pedido.cliente,
+          { id: pedido.vendedor.id, idExternoErp: pedido.vendedor.idExternoErp },
+          pedido.codigoTabelaPreco ?? undefined,
+          valorComDesconto,
+          itensCalculados,
+          produtosPorId,
+          pedido.formaPagamento,
+          pedido.condicaoPagamento,
+        );
+
+        const pesoTotal = calcularPesoTotal(itensCalculados, produtosPorId);
+        await tx.pedido.update({
+          where: { id: pedido.id },
+          data: {
+            idExternoErp: resultadoErp.idExterno,
+            codigoIntegrador: resultadoErp.codigoIntegrador,
+            statusLocal: 'ENVIADO',
+            // Valor/peso/desconto agora refletem SO' os itens aceitos.
+            valorTotal: valorComDesconto,
+            pesoLiquidoTotalKg: pesoTotal.pesoLiquidoTotalKg,
+            pesoBrutoTotalKg: pesoTotal.pesoBrutoTotalKg,
+            percentualDescontoSolicitado: Math.max(
+              ...itensCalculados.map((item) => item.percentualDesconto),
+            ),
+            sincronizadoEm: agora,
+          },
+        });
+        await tx.pedidoHistoricoStatus.create({
+          data: {
+            pedidoId: pedido.id,
+            statusAnterior: 'AGUARDANDO_APROVACAO',
+            statusNovo: 'ENVIADO',
+            alteradoPor: input.aprovadorUsuarioId,
+          },
+        });
+        await tx.solicitacaoDesconto.update({
+          where: { id: input.solicitacaoId },
+          data: { status: 'APROVADO', ...decisaoSolicitacao },
+        });
+        await registrarEventoNotificacao(tx, {
+          tipo: 'SOLICITACAO_DESCONTO_DECIDIDA',
+          referenciaId: input.solicitacaoId,
+          titulo: 'Desconto aprovado - pedido enviado',
+          corpo:
+            recusados.length === 0
+              ? `O desconto do seu pedido foi aprovado e o pedido foi enviado (${aceitos.length} item(ns)).`
+              : `${aceitos.length} item(ns) com desconto aprovado - o pedido foi enviado só com eles. ${recusados.length} item(ns) com desconto recusado foram removidos do pedido.`,
+          dados: { solicitacaoId: input.solicitacaoId, status: 'APROVADO', pedidoId: pedido.id },
+        });
+        return {
+          resultado: 'ENVIADO' as const,
+          idExterno: resultadoErp.idExterno,
+          pedidoId: pedido.id,
+          itensAceitos: aceitos.length,
+          itensRecusados: recusados.length,
+        };
+      },
+      // Inclui a chamada ao Radar - o timeout padrao (5s) nao basta.
+      { timeout: 60000, maxWait: 10000 },
+    );
+
+    if (conclusao.resultado === 'ENVIADO' && conclusao.idExterno) {
+      await this.atualizarCabecalhoAposEnvio(conclusao.pedidoId, conclusao.idExterno);
+    }
+    return {
+      resultado: conclusao.resultado,
+      idExternoErp: conclusao.idExterno,
+      itensAceitos: conclusao.itensAceitos,
+      itensRecusados: conclusao.itensRecusados,
     };
   }
 

@@ -133,7 +133,7 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
                         for (final PedidoResumo pedido in resultado.data) ...[
                           Builder(
                             builder: (context) {
-                              final situacaoConfig = configSituacaoPedido(pedido.situacao);
+                              final situacaoConfig = pedido.situacaoExibida;
                               return ListItemTile(
                                 titulo: pedido.tituloCliente,
                                 subtitulo:

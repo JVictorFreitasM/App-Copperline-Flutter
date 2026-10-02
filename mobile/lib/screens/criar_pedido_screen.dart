@@ -229,7 +229,32 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     });
   }
 
-  void _selecionarProduto(_ItemPedido item, ProdutoResumo produto) {
+  // Mesmo produto duas vezes no mesmo pedido não tem leitura de negócio clara
+  // (qual desconto/observação vale?) - o backend rejeita (400) quando a config
+  // não permite; aqui avisa ANTES (e vale offline: o pedido enfileirado seria
+  // recusado só no envio, sem o vendedor saber o porquê).
+  String _mensagemItemRepetido(ProdutoResumo produto) =>
+      'O produto "${produto.titulo}" já está no pedido - some as quantidades num '
+      'único item em vez de repetir o produto.';
+
+  bool _produtoJaNoPedido(ProdutoResumo produto, {_ItemPedido? ignorando}) =>
+      _itens.any((outro) => !identical(outro, ignorando) && outro.produto?.id == produto.id);
+
+  Future<void> _selecionarProduto(_ItemPedido item, ProdutoResumo produto) async {
+    final permitirRepetidos = await ref
+        .read(permitirItensRepetidosProvider.future)
+        .catchError((_) => false);
+    if (!mounted) return;
+    if (!permitirRepetidos && _produtoJaNoPedido(produto, ignorando: item)) {
+      setState(() {
+        item.opcoes = [];
+        item.produtoController.clear();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_mensagemItemRepetido(produto))));
+      return;
+    }
     setState(() {
       item.produto = produto;
       item.produtoController.text = produto.titulo;
@@ -383,6 +408,21 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       setState(() => _erro = 'Adicione pelo menos um item.');
       return;
     }
+    // Última linha de defesa (o aviso principal é ao escolher o produto):
+    // cobre item editado/colado depois e o pedido que vai pra fila offline.
+    final permitirRepetidos = await ref
+        .read(permitirItensRepetidosProvider.future)
+        .catchError((_) => false);
+    if (!permitirRepetidos) {
+      final vistos = <String>{};
+      for (final item in itensValidos) {
+        if (!vistos.add(item.produto!.id)) {
+          setState(() => _erro = _mensagemItemRepetido(item.produto!));
+          return;
+        }
+      }
+    }
+    if (!mounted) return;
     if (itensValidos.any((item) => item.calculo == null && !item.calculoOffline)) {
       setState(() => _erro = 'Aguarde o cálculo de todos os itens (ou corrija os que deram erro).');
       return;

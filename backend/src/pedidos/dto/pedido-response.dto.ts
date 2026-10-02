@@ -69,7 +69,8 @@ export type StatusAprovacaoPedido =
   | 'NAO_INTEGRADO'
   | 'AGUARDANDO_APROVACAO'
   | 'ENVIADO'
-  | 'ORCAMENTO';
+  | 'ORCAMENTO'
+  | 'CANCELADO';
 
 // Mesma semantica de whereStatusAprovacao em pedidos.service.ts, so que
 // classificando um registro ja carregado em vez de filtrar no banco - as
@@ -82,6 +83,9 @@ export function calcularStatusAprovacaoPedido(pedido: {
 }): StatusAprovacaoPedido {
   if (pedido.statusLocal === 'ORCAMENTO') {
     return 'ORCAMENTO';
+  }
+  if (pedido.statusLocal === 'CANCELADO') {
+    return 'CANCELADO';
   }
   if (pedido.statusLocal === 'AGUARDANDO_APROVACAO') {
     return 'AGUARDANDO_APROVACAO';
@@ -116,6 +120,9 @@ export interface PedidoItemDto {
   quantidadeVenda: string | null;
   valorUnitario: string | null;
   valorTotal: string | null;
+  // Desconto do ITEM (%) - o aprovador decide item por item e precisa ver
+  // quanto cada um pediu. null pra item sincronizado do Radar.
+  percentualDesconto: string | null;
   situacao: string | null;
   produto: ProdutoResumoPedidoDto | null;
   statusAprovacao: string;
@@ -326,6 +333,7 @@ function paraPedidoItemDto(
     unidade: item.unidade,
     valorUnitario: item.valorUnitario?.toString() ?? null,
     valorTotal: item.valorTotal?.toString() ?? null,
+    percentualDesconto: item.percentualDesconto?.toString() ?? null,
     situacao: item.situacao,
     produto: item.produto
       ? {

@@ -249,7 +249,7 @@ describe('PedidosService.listar', () => {
   });
 
   it.each([
-    ['NAO_INTEGRADO', { idExternoErp: null, statusLocal: { not: 'ORCAMENTO' } }],
+    ['NAO_INTEGRADO', { idExternoErp: null, statusLocal: { notIn: ['ORCAMENTO', 'CANCELADO'] } }],
     ['AGUARDANDO_APROVACAO', { statusLocal: 'AGUARDANDO_APROVACAO' }],
     ['ENVIADO', { OR: [{ statusLocal: 'ENVIADO' }, { idExternoErp: { not: null } }] }],
     ['ORCAMENTO', { statusLocal: 'ORCAMENTO' }],
@@ -403,6 +403,7 @@ describe('PedidosService.buscarPorId', () => {
         quantidadeVenda: '2',
         valorUnitario: '10',
         valorTotal: '20',
+        percentualDesconto: null,
         situacao: 'PENDENTE',
         produto: {
           id: 'prod-1',
@@ -501,94 +502,6 @@ const PEDIDO_DETALHE_BASE = {
   cliente: null,
   itens: [],
 };
-
-describe('PedidosService.aprovarItem/rejeitarItem (revisao por item)', () => {
-  it('lança NotFoundException quando o pedido nao esta no escopo, sem tocar no item', async () => {
-    const prisma = prismaFake({ findFirst: null });
-    const service = new PedidosService(prisma as never);
-
-    await expect(
-      service.aprovarItem('pedido-1', 'item-1', 'usuario-1', ESCOPO_PROPRIO),
-    ).rejects.toThrow(NotFoundException);
-    expect(prisma.pedidoItem.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('lança NotFoundException quando o item nao pertence ao pedido (updateMany atinge 0 linhas)', async () => {
-    const prisma = prismaFake({ findFirst: { id: '1' }, updateManyCount: 0 });
-    const service = new PedidosService(prisma as never);
-
-    await expect(
-      service.aprovarItem('1', 'item-de-outro-pedido', 'usuario-1', ESCOPO_TODOS),
-    ).rejects.toThrow(NotFoundException);
-  });
-
-  it('aprova um item especifico e devolve o pedido atualizado', async () => {
-    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
-    const service = new PedidosService(prisma as never);
-
-    const resultado = await service.aprovarItem('1', 'item-1', 'usuario-1', ESCOPO_TODOS);
-
-    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
-      where: { id: 'item-1', pedidoId: '1' },
-      data: expect.objectContaining({
-        statusAprovacao: 'APROVADO',
-        decididoPorId: 'usuario-1',
-      }),
-    });
-    expect(resultado.id).toBe('1');
-  });
-
-  it('rejeita um item especifico', async () => {
-    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
-    const service = new PedidosService(prisma as never);
-
-    await service.rejeitarItem('1', 'item-1', 'usuario-1', ESCOPO_TODOS);
-
-    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
-      where: { id: 'item-1', pedidoId: '1' },
-      data: expect.objectContaining({
-        statusAprovacao: 'REJEITADO',
-        decididoPorId: 'usuario-1',
-      }),
-    });
-  });
-});
-
-describe('PedidosService.aprovarTodosItens/rejeitarTodosItens (Aprovar tudo/Reprovar tudo)', () => {
-  it('lança NotFoundException quando o pedido nao esta no escopo', async () => {
-    const prisma = prismaFake({ findFirst: null });
-    const service = new PedidosService(prisma as never);
-
-    await expect(
-      service.aprovarTodosItens('pedido-1', 'usuario-1', ESCOPO_PROPRIO),
-    ).rejects.toThrow(NotFoundException);
-    expect(prisma.pedidoItem.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('aprova todos os itens do pedido de uma vez, sem filtrar por id de item', async () => {
-    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
-    const service = new PedidosService(prisma as never);
-
-    await service.aprovarTodosItens('1', 'usuario-1', ESCOPO_TODOS);
-
-    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
-      where: { pedidoId: '1' },
-      data: expect.objectContaining({ statusAprovacao: 'APROVADO' }),
-    });
-  });
-
-  it('rejeita todos os itens do pedido de uma vez', async () => {
-    const prisma = prismaFake({ findFirst: PEDIDO_DETALHE_BASE });
-    const service = new PedidosService(prisma as never);
-
-    await service.rejeitarTodosItens('1', 'usuario-1', ESCOPO_TODOS);
-
-    expect(prisma.pedidoItem.updateMany).toHaveBeenCalledWith({
-      where: { pedidoId: '1' },
-      data: expect.objectContaining({ statusAprovacao: 'REJEITADO' }),
-    });
-  });
-});
 
 describe('PedidosService.obterHistorico', () => {
   it('lanca NotFoundException quando o pedido nao existe (ou nao esta no escopo)', async () => {

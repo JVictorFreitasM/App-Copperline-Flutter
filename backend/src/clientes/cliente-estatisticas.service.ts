@@ -68,7 +68,7 @@ export class ClienteEstatisticasService {
       clienteId,
       incompleto: false,
       situacao: { not: 'CANCELADO' },
-      statusLocal: { not: 'AGUARDANDO_APROVACAO' },
+      statusLocal: { notIn: ['AGUARDANDO_APROVACAO', 'CANCELADO'] },
     };
 
     const desde = new Date();

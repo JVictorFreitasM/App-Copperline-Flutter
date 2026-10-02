@@ -25,6 +25,8 @@ import type { CriarPedidoResultadoDto } from './criar-pedido.service';
 import { AlterarVendedorOrcamentoDto } from './dto/alterar-vendedor-orcamento.dto';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
 import { SimularDescontoDto } from './dto/simular-desconto.dto';
+import { DecisaoDescontoPedidoService } from './decisao-desconto-pedido.service';
+import type { AcaoDecisaoDesconto } from './decisao-desconto-pedido.service';
 import { PedidoPdfService } from './pedido-pdf.service';
 import { PedidosService } from './pedidos.service';
 import type {
@@ -47,6 +49,7 @@ export class PedidosController {
     private readonly vendedorEscopoService: VendedorEscopoService,
     private readonly relatorioPedidosService: RelatorioPedidosService,
     private readonly solicitacoesDescontoService: SolicitacoesDescontoService,
+    private readonly decisaoDescontoPedidoService: DecisaoDescontoPedidoService,
     private readonly prisma: PrismaService,
     private readonly pedidoPdfService: PedidoPdfService,
   ) {}
@@ -90,14 +93,7 @@ export class PedidosController {
     @Param('id') id: string,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
-    const escopo = await this.resolverEscopo(idpUser);
-    const pedido = await this.pedidosService.buscarPorId(id, escopo);
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    const solicitacaoDesconto = await this.solicitacoesDescontoService.obterDoPedido(
-      pedido.id,
-      usuario.id,
-    );
-    return { ...pedido, solicitacaoDesconto };
+    return this.detalhe(id, idpUser);
   }
 
   // OS-BACKEND-33 - "/:id/historico" e' mais especifico que "/:id" (3
@@ -129,20 +125,17 @@ export class PedidosController {
     });
   }
 
-  // Revisao por item (tela de detalhe do pedido, layout de referencia
-  // ref1.jpeg) - ver comentario do enum StatusAprovacaoItemPedido no
-  // schema.prisma. Verbos explicitos (aprovar/rejeitar/aprovar-tudo/
-  // rejeitar-tudo), mesmo padrao ja usado em SolicitacoesDescontoController
-  // (sem flag booleana escondendo o que a rota faz).
+  // Decisao do desconto POR ITEM (aceitar/recusar) - o backend valida a
+  // alcada do usuario (DecisaoDescontoPedidoService) e, quando o ultimo item
+  // pendente e' decidido, o pedido segue so' com os aceitos (ou e' cancelado
+  // se nenhum foi aceito). Verbos explicitos, sem flag booleana.
   @Post(':id/itens/:itemId/aprovar')
   async aprovarItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    const escopo = await this.resolverEscopo(idpUser);
-    return this.pedidosService.aprovarItem(id, itemId, usuario.id, escopo);
+    return this.decidirItens(id, [itemId], 'aprovar', idpUser);
   }
 
   @Post(':id/itens/:itemId/rejeitar')
@@ -151,19 +144,16 @@ export class PedidosController {
     @Param('itemId') itemId: string,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    const escopo = await this.resolverEscopo(idpUser);
-    return this.pedidosService.rejeitarItem(id, itemId, usuario.id, escopo);
+    return this.decidirItens(id, [itemId], 'rejeitar', idpUser);
   }
 
+  // "Aceitar/recusar todos" = todos os itens que ainda estao pendentes.
   @Post(':id/itens/aprovar-tudo')
   async aprovarTodosItens(
     @Param('id') id: string,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    const escopo = await this.resolverEscopo(idpUser);
-    return this.pedidosService.aprovarTodosItens(id, usuario.id, escopo);
+    return this.decidirItens(id, undefined, 'aprovar', idpUser);
   }
 
   @Post(':id/itens/rejeitar-tudo')
@@ -171,9 +161,38 @@ export class PedidosController {
     @Param('id') id: string,
     @CurrentUser() idpUser: IdpUser,
   ): Promise<PedidoDetalheDto> {
+    return this.decidirItens(id, undefined, 'rejeitar', idpUser);
+  }
+
+  private async decidirItens(
+    pedidoId: string,
+    itemIds: string[] | undefined,
+    acao: AcaoDecisaoDesconto,
+    idpUser: IdpUser,
+  ): Promise<PedidoDetalheDto> {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     const escopo = await this.resolverEscopo(idpUser);
-    return this.pedidosService.rejeitarTodosItens(id, usuario.id, escopo);
+    await this.decisaoDescontoPedidoService.decidir({
+      pedidoId,
+      itemIds,
+      acao,
+      usuarioId: usuario.id,
+      escopo,
+    });
+    return this.detalhe(pedidoId, idpUser);
+  }
+
+  // Detalhe do pedido + a solicitacao de desconto dele (e se o usuario
+  // logado pode decidi-la) - mesmo retorno de GET :id.
+  private async detalhe(pedidoId: string, idpUser: IdpUser): Promise<PedidoDetalheDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    const pedido = await this.pedidosService.buscarPorId(pedidoId, escopo);
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const solicitacaoDesconto = await this.solicitacoesDescontoService.obterDoPedido(
+      pedido.id,
+      usuario.id,
+    );
+    return { ...pedido, solicitacaoDesconto };
   }
 
   // OS-BACKEND-22-A - simulacao pura (nunca cria SolicitacaoDesconto nem

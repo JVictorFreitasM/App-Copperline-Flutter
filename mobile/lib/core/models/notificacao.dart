@@ -12,6 +12,7 @@ class Notificacao {
     required this.corpo,
     required this.lida,
     required this.criadoEm,
+    this.dados = const {},
   });
 
   factory Notificacao.fromJson(Map<String, dynamic> json) {
@@ -22,6 +23,7 @@ class Notificacao {
       corpo: json['corpo'] as String,
       lida: json['lida'] as bool,
       criadoEm: json['criadoEm'] as String,
+      dados: (json['dados'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
   }
 
@@ -32,6 +34,10 @@ class Notificacao {
   final bool lida;
   final String criadoEm;
 
+  /// Payload do evento (`pedidoId`, `solicitacaoId`...) - é o que decide
+  /// pra onde o toque na notificação leva (ver `navegarParaNotificacao`).
+  final Map<String, dynamic> dados;
+
   Notificacao comoLida() => Notificacao(
     id: id,
     tipo: tipo,
@@ -39,5 +45,6 @@ class Notificacao {
     corpo: corpo,
     lida: true,
     criadoEm: criadoEm,
+    dados: dados,
   );
 }

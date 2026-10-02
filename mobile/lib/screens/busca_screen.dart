@@ -245,7 +245,7 @@ class _ItemPedido extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final situacaoConfig = configSituacaoPedido(pedido.situacao);
+    final situacaoConfig = pedido.situacaoExibida;
     return ListItemTile(
       titulo: pedido.tituloCliente,
       subtitulo: 'Pedido ${pedido.numero ?? "—"} · ${formatarData(pedido.dataHoraUltimaAlteracao)}',

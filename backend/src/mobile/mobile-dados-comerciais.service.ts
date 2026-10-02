@@ -4,6 +4,7 @@ import {
   paraClienteDetalheDto,
   type ClienteDetalheDto,
 } from '../clientes/dto/cliente-response.dto';
+import { ConfiguracaoOrcamentoService } from '../configuracoes/configuracao-orcamento.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   construirWhereClientePorEscopo,
@@ -31,6 +32,10 @@ export interface DadosComerciaisMobileDto {
   // ClienteTabelaPrecoService.listarPorCliente: associacao manual do admin;
   // sem nenhuma, a tabela nativa do cadastro do Radar).
   tabelasPorCliente: Record<string, string[]>;
+  // Regra de pedido que o app valida ANTES de enviar (inclusive offline):
+  // false = o mesmo produto nao pode aparecer duas vezes no mesmo pedido
+  // (ConfiguracaoOrcamento.permitirItensRepetidos; o backend rejeita igual).
+  permitirItensRepetidos: boolean;
 }
 
 // Teto de seguranca, mesmo valor de MobileSnapshotService.
@@ -45,6 +50,7 @@ export class MobileDadosComerciaisService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly configuracaoOrcamentoService: ConfiguracaoOrcamentoService,
   ) {}
 
   async obter(idpUser: IdpUser, usuarioId: string): Promise<DadosComerciaisMobileDto> {
@@ -110,8 +116,11 @@ export class MobileDadosComerciaisService {
       itensPorTabela.set(item.tabelaPrecoId, lista);
     }
 
+    const { permitirItensRepetidos } = await this.configuracaoOrcamentoService.obter();
+
     return {
       geradoEm: new Date().toISOString(),
+      permitirItensRepetidos,
       clientes: clientes.map(paraClienteDetalheDto),
       tabelasPreco: tabelas.map((tabela) => ({
         codigo: tabela.codigo,

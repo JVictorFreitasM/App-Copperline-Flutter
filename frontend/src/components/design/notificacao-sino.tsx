@@ -8,7 +8,7 @@ import {
   marcarNotificacaoComoLida,
 } from "@/app/notificacoes/actions";
 import { formatarDataHora } from "@/lib/formatacao";
-import type { NotificacaoDto } from "@/lib/notificacoes";
+import { destinoDaNotificacao, type NotificacaoDto } from "@/lib/notificacoes";
 import { IconeSino } from "./icons";
 import { Modal } from "./modal";
 
@@ -86,8 +86,9 @@ export function NotificacaoSino() {
           <p className="text-sm text-muted">Nenhuma notificação por aqui.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {notificacoes.map((notificacao) => (
-              <div key={notificacao.id} className="flex items-start justify-between gap-3">
+            {notificacoes.map((notificacao) => {
+              const destino = destinoDaNotificacao(notificacao.dados);
+              const conteudo = (
                 <div>
                   <div className="flex items-center gap-2">
                     {!notificacao.lida && (
@@ -97,7 +98,29 @@ export function NotificacaoSino() {
                   </div>
                   <p className="text-sm text-muted">{notificacao.corpo}</p>
                   <p className="text-xs text-muted">{formatarDataHora(notificacao.criadoEm)}</p>
+                  {destino && (
+                    <p className="text-xs font-medium text-primary">{destino.rotulo} →</p>
+                  )}
                 </div>
+              );
+              return (
+              <div key={notificacao.id} className="flex items-start justify-between gap-3">
+                {destino ? (
+                  // Abrir já marca como lida e fecha o modal - a navegação
+                  // leva direto ao pedido (ou às Aprovações, pro supervisor).
+                  <Link
+                    href={destino.href}
+                    onClick={() => {
+                      if (!notificacao.lida) marcarComoLida(notificacao.id);
+                      setAberto(false);
+                    }}
+                    className="block flex-1"
+                  >
+                    {conteudo}
+                  </Link>
+                ) : (
+                  conteudo
+                )}
                 {!notificacao.lida && (
                   <button
                     type="button"
@@ -108,7 +131,8 @@ export function NotificacaoSino() {
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <Link

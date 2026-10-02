@@ -56,6 +56,16 @@ class PedidoResumo {
 
   bool get isOrcamento => statusAprovacaoBucket == 'ORCAMENTO';
 
+  /// Todos os itens com desconto acima da alçada foram recusados - o pedido
+  /// inteiro foi cancelado e nada foi ao Radar.
+  bool get isCancelado => statusAprovacaoBucket == 'CANCELADO';
+
+  /// Rótulo/ênfase da situação pra exibir: pedido cancelado localmente (todos
+  /// os descontos recusados) não tem `situacao` do Radar - mostra "Cancelado".
+  ConfigSituacao get situacaoExibida => isCancelado
+      ? const ConfigSituacao(rotulo: 'Cancelado', enfase: false)
+      : configSituacaoPedido(situacao);
+
   String get tituloCliente => cliente?.razaoSocial ?? 'Cliente não identificado';
 }
 
@@ -85,10 +95,16 @@ class PedidoItem {
     required this.situacao,
     required this.produto,
     required this.observacoes,
+    this.percentualDesconto,
+    this.statusAprovacao = 'PENDENTE',
+    this.decididoEm,
   });
 
   factory PedidoItem.fromJson(Map<String, dynamic> json) {
     return PedidoItem(
+      percentualDesconto: json['percentualDesconto'] as String?,
+      statusAprovacao: json['statusAprovacao'] as String? ?? 'PENDENTE',
+      decididoEm: json['decididoEm'] as String?,
       id: json['id'] as String,
       numero: json['numero'] as int,
       quantidadeVenda: json['quantidadeVenda'] as String?,
@@ -110,6 +126,53 @@ class PedidoItem {
   final String? situacao;
   final ProdutoResumoPedido? produto;
   final String? observacoes;
+
+  /// Desconto do item (%) - o aprovador decide item por item.
+  final String? percentualDesconto;
+
+  /// PENDENTE | APROVADO | REJEITADO (decisão do desconto do item).
+  final String statusAprovacao;
+  final String? decididoEm;
+
+  /// Tem decisão de desconto a tomar (pendente) ou já decidida por alguém -
+  /// item que nasceu aceito por estar dentro da alçada (APROVADO sem
+  /// `decididoEm`) não tem decisão nenhuma.
+  bool get temDecisaoDeDesconto => statusAprovacao == 'PENDENTE' || decididoEm != null;
+}
+
+/// Solicitação de desconto acima da alçada ligada ao pedido (a mais recente);
+/// null quando o pedido nunca precisou de aprovação. `podeDecidir` vem do
+/// backend (alçada, não ser o solicitante) - a decisão de verdade também é
+/// validada lá.
+class SolicitacaoDescontoPedido {
+  const SolicitacaoDescontoPedido({
+    required this.id,
+    required this.status,
+    required this.percentualSolicitado,
+    required this.papelExigido,
+    required this.aprovadorEsperadoNome,
+    required this.podeDecidir,
+  });
+
+  factory SolicitacaoDescontoPedido.fromJson(Map<String, dynamic> json) {
+    return SolicitacaoDescontoPedido(
+      id: json['id'] as String,
+      status: json['status'] as String,
+      percentualSolicitado: (json['percentualSolicitado'] as num).toDouble(),
+      papelExigido: json['papelExigido'] as String,
+      aprovadorEsperadoNome: json['aprovadorEsperadoNome'] as String?,
+      podeDecidir: json['podeDecidir'] as bool,
+    );
+  }
+
+  final String id;
+  final String status;
+  final double percentualSolicitado;
+  final String papelExigido;
+  final String? aprovadorEsperadoNome;
+  final bool podeDecidir;
+
+  bool get pendente => status == 'PENDENTE';
 }
 
 class PedidoDetalhe extends PedidoResumo {
@@ -126,6 +189,7 @@ class PedidoDetalhe extends PedidoResumo {
     required this.pesoBrutoTotalKg,
     required this.notasFiscais,
     required this.observacoes,
+    this.solicitacaoDesconto,
   });
 
   factory PedidoDetalhe.fromJson(Map<String, dynamic> json) {
@@ -138,10 +202,7 @@ class PedidoDetalhe extends PedidoResumo {
       valorTotal: resumo.valorTotal,
       cliente: resumo.cliente,
       statusAprovacaoBucket: resumo.statusAprovacaoBucket,
-      itens: (json['itens'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(PedidoItem.fromJson)
-          .toList(),
+      itens: (json['itens'] as List).cast<Map<String, dynamic>>().map(PedidoItem.fromJson).toList(),
       pesoLiquidoTotalKg: json['pesoLiquidoTotalKg'] as String?,
       pesoBrutoTotalKg: json['pesoBrutoTotalKg'] as String?,
       // Pedido do usuario (2026-09-30) - ausente em snapshot local antigo
@@ -152,9 +213,13 @@ class PedidoDetalhe extends PedidoResumo {
           .map(NotaFiscalResumoPedido.fromJson)
           .toList(),
       observacoes: json['observacoes'] as String?,
+      solicitacaoDesconto: json['solicitacaoDesconto'] == null
+          ? null
+          : SolicitacaoDescontoPedido.fromJson(json['solicitacaoDesconto'] as Map<String, dynamic>),
     );
   }
 
+  final SolicitacaoDescontoPedido? solicitacaoDesconto;
   final List<PedidoItem> itens;
   // OS-novas-implementacoes.md Bloco 3 - null quando algum item do pedido
   // não tem peso cadastrado (mesmo critério "tudo ou nada" do backend,

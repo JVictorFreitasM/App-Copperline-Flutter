@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatacao.dart';
 import '../../core/models/notificacao.dart';
+import '../../core/push/push_navigation.dart';
 import '../../core/providers/notificacoes_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_badge.dart';
@@ -66,10 +67,7 @@ class _NotificacoesScreenState extends ConsumerState<NotificacoesScreen> {
               ),
             )
           else
-            TextButton(
-              onPressed: _marcarTodasComoLidas,
-              child: const Text('Marcar todas'),
-            ),
+            TextButton(onPressed: _marcarTodasComoLidas, child: const Text('Marcar todas')),
         ],
       ),
       body: ListView(
@@ -112,7 +110,10 @@ class _NotificacoesScreenState extends ConsumerState<NotificacoesScreen> {
                 : Column(
                     children: [
                       for (final notificacao in resultado.data) ...[
-                        _LinhaNotificacao(notificacao: notificacao, aoMarcarComoLida: _invalidarTudo),
+                        _LinhaNotificacao(
+                          notificacao: notificacao,
+                          aoMarcarComoLida: _invalidarTudo,
+                        ),
                         const SizedBox(height: 8),
                       ],
                       const SizedBox(height: 8),
@@ -158,63 +159,98 @@ class _LinhaNotificacaoState extends ConsumerState<_LinhaNotificacao> {
     }
   }
 
+  // Notificação de pedido abre o pedido; a de solicitação de desconto (do
+  // supervisor) abre as Aprovações - mesma regra do toque no push (ver
+  // navegarParaNotificacao). Abrir já marca como lida.
+  bool get _temDestino =>
+      widget.notificacao.dados['pedidoId'] != null ||
+      widget.notificacao.dados['produtoId'] != null ||
+      widget.notificacao.dados['solicitacaoId'] != null;
+
+  void _abrir() {
+    if (!widget.notificacao.lida && !_marcando) {
+      _marcarComoLida();
+    }
+    navegarParaNotificacao(widget.notificacao.dados);
+  }
+
   @override
   Widget build(BuildContext context) {
     final notificacao = widget.notificacao;
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!notificacao.lida) ...[
-              const Padding(
-                padding: EdgeInsets.only(top: 5),
-                child: CircleAvatar(radius: 4, backgroundColor: AppColors.primary),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _temDestino ? _abrir : null,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!notificacao.lida) ...[
+                const Padding(
+                  padding: EdgeInsets.only(top: 5),
+                  child: CircleAvatar(radius: 4, backgroundColor: AppColors.primary),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notificacao.titulo,
+                      style: TextStyle(
+                        fontWeight: notificacao.lida ? FontWeight.w500 : FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      notificacao.corpo,
+                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatarDataHora(notificacao.criadoEm),
+                      style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
+                    if (_temDestino)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          notificacao.dados['pedidoId'] != null
+                              ? 'Ver pedido'
+                              : (notificacao.dados['produtoId'] != null
+                                    ? 'Ver produto'
+                                    : 'Ver aprovações'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(width: 8),
+              if (notificacao.lida)
+                const AppBadge(texto: 'Lida')
+              else if (_marcando)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                )
+              else
+                TextButton(onPressed: _marcarComoLida, child: const Text('Marcar como lida')),
             ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    notificacao.titulo,
-                    style: TextStyle(
-                      fontWeight: notificacao.lida ? FontWeight.w500 : FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    notificacao.corpo,
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formatarDataHora(notificacao.criadoEm),
-                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (notificacao.lida)
-              const AppBadge(texto: 'Lida')
-            else if (_marcando)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-              )
-            else
-              TextButton(onPressed: _marcarComoLida, child: const Text('Marcar como lida')),
-          ],
+          ),
         ),
       ),
     );

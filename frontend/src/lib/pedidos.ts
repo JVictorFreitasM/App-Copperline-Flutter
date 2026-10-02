@@ -40,7 +40,12 @@ export interface PedidoResumoDto {
   // Mesmo bucket dos atalhos/filtro da listagem, tambem exibido como
   // "Status da aprovação" na tela de detalhe (ref1.jpeg) - ver rótulos em
   // OPCOES_STATUS_APROVACAO abaixo.
-  statusAprovacaoBucket: "NAO_INTEGRADO" | "AGUARDANDO_APROVACAO" | "ENVIADO" | "ORCAMENTO";
+  statusAprovacaoBucket:
+    | "NAO_INTEGRADO"
+    | "AGUARDANDO_APROVACAO"
+    | "ENVIADO"
+    | "ORCAMENTO"
+    | "CANCELADO";
 }
 
 // Valores possíveis vêm do enum TipoSituacaoPedido do backend
@@ -102,6 +107,7 @@ export const OPCOES_STATUS_APROVACAO = [
   { valor: "AGUARDANDO_APROVACAO", rotulo: "Aguardando aprovação" },
   { valor: "ENVIADO", rotulo: "Enviado" },
   { valor: "ORCAMENTO", rotulo: "Orçamento" },
+  { valor: "CANCELADO", rotulo: "Cancelado" },
 ] as const;
 
 export function rotuloStatusAprovacaoPedido(
@@ -138,6 +144,7 @@ export interface PedidoItemDto {
   unidade: string | null;
   valorUnitario: string | null;
   valorTotal: string | null;
+  percentualDesconto: string | null;
   situacao: string | null;
   produto: ProdutoResumoPedidoDto | null;
   statusAprovacao: "PENDENTE" | "APROVADO" | "REJEITADO";

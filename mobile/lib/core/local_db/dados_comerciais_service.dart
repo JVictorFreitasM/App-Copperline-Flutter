@@ -6,6 +6,7 @@ import '../models/produto.dart';
 import 'local_database.dart';
 
 const _chaveGeradoEm = 'dadosComerciaisGeradoEm';
+const _chavePermitirItensRepetidos = 'permitirItensRepetidos';
 
 /// Produto com o preço dele em cada tabela do cliente (mapa tabela -> preço).
 class ProdutoComPrecosDoCliente {
@@ -74,7 +75,23 @@ class DadosComerciaisService {
         'chave': _chaveGeradoEm,
         'valor': json['geradoEm'] as String,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await tx.insert('snapshot_meta', {
+        'chave': _chavePermitirItensRepetidos,
+        'valor': (json['permitirItensRepetidos'] as bool? ?? false).toString(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     });
+  }
+
+  /// O mesmo produto pode aparecer mais de uma vez no mesmo pedido? Vale a
+  /// última config baixada (funciona offline); sem nenhuma baixada, assume o
+  /// default do backend: NÃO (bloqueado).
+  Future<bool> permitirItensRepetidos() async {
+    final linhas = await _localDatabase.db.query(
+      'snapshot_meta',
+      where: 'chave = ?',
+      whereArgs: [_chavePermitirItensRepetidos],
+    );
+    return linhas.isNotEmpty && linhas.first['valor'] == 'true';
   }
 
   Future<String?> geradoEm() async {

@@ -245,6 +245,77 @@ export class SolicitacoesDescontoService {
     };
   }
 
+  async obterDto(solicitacaoId: string): Promise<SolicitacaoDescontoDto> {
+    const registro = await this.prisma.solicitacaoDesconto.findUnique({
+      where: { id: solicitacaoId },
+    });
+    if (!registro) {
+      throw new NotFoundException(`Solicitacao de desconto ${solicitacaoId} nao encontrada`);
+    }
+    return paraDto(registro);
+  }
+
+  // true quando UM item com este percentual de desconto precisa de
+  // aprovacao (acima da alcada do solicitante) - decisao por ITEM, usada pra
+  // marcar quais itens do pedido ficam PENDENTES e quais ja nascem aceitos.
+  async exigeAprovacao(vendedorSolicitanteId: string, percentual: number): Promise<boolean> {
+    const config = await this.configuracaoDescontoService.obter();
+    const solicitante = await this.prisma.vendedor.findUnique({
+      where: { id: vendedorSolicitanteId },
+      select: { papel: true },
+    });
+    if (!solicitante) {
+      throw new NotFoundException(`Vendedor ${vendedorSolicitanteId} nao encontrado`);
+    }
+    return avaliarComTratamento(percentual, solicitante.papel, config).necessitaAprovacao;
+  }
+
+  // Valida (sem gravar nada) que o usuario logado pode decidir esta
+  // solicitacao AGORA: e' um vendedor cadastrado, a solicitacao existe e
+  // esta pendente, nao e' o proprio solicitante e o papel tem alcada. Mesmas
+  // regras e mesmos erros HTTP de decidir() - usado pela decisao por ITEM
+  // (DecisaoDescontoPedidoService), que decide itens separadamente.
+  async autorizarDecisao(solicitacaoId: string, aprovadorUsuarioId: string) {
+    const aprovadorVendedor = await this.prisma.vendedor.findFirst({
+      where: { usuarioId: aprovadorUsuarioId },
+    });
+    if (!aprovadorVendedor) {
+      throw new ForbiddenException(
+        'Usuario autenticado nao e um vendedor cadastrado - nao pode decidir solicitacoes de desconto',
+      );
+    }
+
+    const registro = await this.prisma.solicitacaoDesconto.findUnique({
+      where: { id: solicitacaoId },
+    });
+    if (!registro) {
+      throw new NotFoundException(`Solicitacao de desconto ${solicitacaoId} nao encontrada`);
+    }
+
+    const entidade = new SolicitacaoDesconto({
+      id: registro.id,
+      vendedorSolicitanteId: registro.vendedorSolicitanteId,
+      papelExigido: registro.papelExigido,
+      status: registro.status,
+    });
+    try {
+      entidade.aprovar({ id: aprovadorVendedor.id, papel: aprovadorVendedor.papel });
+    } catch (error) {
+      if (
+        error instanceof AutoaprovacaoNaoPermitidaError ||
+        error instanceof NivelHierarquiaInsuficienteError
+      ) {
+        throw new ForbiddenException(error.message);
+      }
+      if (error instanceof SolicitacaoJaDecididaError) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
+
+    return { registro, aprovadorVendedor };
+  }
+
   // Solicitacao mais recente do pedido + se o usuario logado pode decidi-la
   // agora (GET /pedidos/:id). null quando o pedido nunca precisou de
   // aprovacao de desconto.

@@ -18,6 +18,8 @@ import { VendedoresModule } from '../vendedores/vendedores.module';
 import { CriarPedidoService } from './criar-pedido.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
 import { PedidoPdfService } from './pedido-pdf.service';
+import { DecisaoDescontoPedidoService } from './decisao-desconto-pedido.service';
+import { DecisaoSolicitacaoDescontoController } from './decisao-solicitacao-desconto.controller';
 import { PedidosController } from './pedidos.controller';
 import { PedidosService } from './pedidos.service';
 import { RelatorioPedidosService } from './relatorio-pedidos.service';
@@ -49,10 +51,11 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
     ConfiguracoesModule,
     BullModule.registerQueue({ name: RELATORIO_DIARIO_QUEUE }),
   ],
-  controllers: [PedidosController],
+  controllers: [PedidosController, DecisaoSolicitacaoDescontoController],
   providers: [
     PedidosService,
     CriarPedidoService,
+    DecisaoDescontoPedidoService,
     PedidoErpClientService,
     RelatorioPedidosService,
     PedidoPdfService,
@@ -70,6 +73,6 @@ export class PedidosModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
-      .forRoutes(PedidosController);
+      .forRoutes(PedidosController, DecisaoSolicitacaoDescontoController);
   }
 }

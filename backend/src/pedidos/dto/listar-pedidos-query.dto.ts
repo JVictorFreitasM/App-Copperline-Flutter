@@ -22,6 +22,7 @@ const STATUS_APROVACAO_VALIDOS = [
   'AGUARDANDO_APROVACAO',
   'ENVIADO',
   'ORCAMENTO',
+  'CANCELADO',
 ] as const;
 
 export class ListarPedidosQueryDto extends PaginationQueryDto {

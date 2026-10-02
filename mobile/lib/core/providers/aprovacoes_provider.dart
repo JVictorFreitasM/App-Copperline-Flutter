@@ -34,9 +34,7 @@ final vendedoresEquipeProvider = FutureProvider<List<VendedorEquipe>>((ref) asyn
 /// (SolicitacoesDescontoService.listarPendentes); 403 quando quem chama
 /// não tem papel de supervisão vira ApiException(statusCode: 403), tratado
 /// na tela (mesmo padrão de VisitasController/RastreioController).
-final solicitacoesPendentesProvider = FutureProvider<List<SolicitacaoDescontoResumo>>((
-  ref,
-) async {
+final solicitacoesPendentesProvider = FutureProvider<List<SolicitacaoDescontoResumo>>((ref) async {
   final apiClient = ref.watch(apiClientProvider);
   final json = await apiClient.getJsonList('/solicitacoes-desconto');
   return json.map(SolicitacaoDescontoResumo.fromJson).toList();
@@ -57,5 +55,20 @@ class SolicitacoesDescontoService {
 
   Future<void> rejeitar(String id) {
     return _apiClient.postJson('/solicitacoes-desconto/${Uri.encodeComponent(id)}/rejeitar', {});
+  }
+
+  /// Aceita/recusa o desconto de UM item do pedido (supervisor/gerente). Ao
+  /// decidir o último item pendente o pedido segue só com os aceitos (ou é
+  /// cancelado se nenhum foi aceito) - ver DecisaoDescontoPedidoService.
+  Future<void> decidirItem({
+    required String pedidoId,
+    required String itemId,
+    required bool aprovar,
+  }) {
+    final acao = aprovar ? 'aprovar' : 'rejeitar';
+    return _apiClient.postJson(
+      '/pedidos/${Uri.encodeComponent(pedidoId)}/itens/${Uri.encodeComponent(itemId)}/$acao',
+      {},
+    );
   }
 }

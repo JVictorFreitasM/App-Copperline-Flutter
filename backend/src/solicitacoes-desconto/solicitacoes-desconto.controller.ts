@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import type { IdpUser } from '@copperline/idp-client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -46,23 +46,8 @@ export class SolicitacoesDescontoController {
     return this.contextoAprovacaoDescontoService.obterContexto(id, idpUser, usuario.id);
   }
 
-  @Post(':id/aprovar')
-  @HttpCode(200)
-  async aprovar(
-    @Param('id') id: string,
-    @CurrentUser() idpUser: IdpUser,
-  ): Promise<SolicitacaoDescontoDto> {
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    return this.solicitacoesDescontoService.aprovar(id, usuario.id);
-  }
-
-  @Post(':id/rejeitar')
-  @HttpCode(200)
-  async rejeitar(
-    @Param('id') id: string,
-    @CurrentUser() idpUser: IdpUser,
-  ): Promise<SolicitacaoDescontoDto> {
-    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
-    return this.solicitacoesDescontoService.rejeitar(id, usuario.id);
-  }
+  // POST :id/aprovar e :id/rejeitar vivem em
+  // pedidos/decisao-solicitacao-desconto.controller.ts (mesmo prefixo) -
+  // decidir agora decide os ITENS do pedido e, ao fechar, envia ao Radar, o
+  // que depende do modulo de pedidos (que ja importa este).
 }

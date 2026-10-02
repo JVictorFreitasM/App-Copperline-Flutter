@@ -63,7 +63,11 @@ function montar(opcoes: { vendedor?: boolean; escopo?: { tipo: string } } = {}) 
   };
   return {
     prisma,
-    service: new MobileDadosComerciaisService(prisma as never, escopoService as never),
+    service: new MobileDadosComerciaisService(
+      prisma as never,
+      escopoService as never,
+      { obter: jest.fn().mockResolvedValue({ permitirItensRepetidos: false }) } as never,
+    ),
   };
 }
 
@@ -101,6 +105,14 @@ describe('MobileDadosComerciaisService', () => {
     expect(resultado.clientes[0]).toEqual(
       expect.objectContaining({ id: 'c1', codigo: '10458', enderecos: [], contatos: [] }),
     );
+  });
+
+  it('entrega a regra de itens repetidos pro app validar antes de enviar', async () => {
+    const { service } = montar();
+
+    const resultado = await service.obter(IDP_USER, 'u1');
+
+    expect(resultado.permitirItensRepetidos).toBe(false);
   });
 
   it('escopo NENHUM: carteira vazia, sem consultar clientes', async () => {
