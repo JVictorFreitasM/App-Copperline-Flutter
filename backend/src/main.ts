@@ -4,10 +4,16 @@ import { json, urlencoded } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import compression from 'compression';
+import { RedisStore } from 'connect-redis';
 import session from 'express-session';
+import type Redis from 'ioredis';
 import type { IdpAuth } from '@copperline/idp-client';
 import { AppModule } from './app.module';
 import { IDP_AUTH } from './idp-auth/idp-auth.constants';
+import { REDIS_CLIENT } from './redis/redis.constants';
+
+// Sessoes vivem 7 dias sem uso no Redis (renovadas a cada requisicao).
+const TTL_SESSAO_SEGUNDOS = 7 * 24 * 60 * 60;
 
 async function bootstrap() {
   // bodyParser desligado pra poder dar um limite MAIOR so' na fila offline
@@ -47,8 +53,19 @@ async function bootstrap() {
   // parametros incidentais, ex: cache-busting de proxy/browser).
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
+  // Sessao no REDIS (prefixo `session:`, ver CLAUDE.md) em vez da memoria do
+  // processo: com MemoryStore todo redeploy/restart do backend derrubava o
+  // login de todo mundo (cookie valido no navegador, sessao inexistente no
+  // servidor -> 401 e botoes que "nao fazem nada").
+  const redisClient = app.get<Redis>(REDIS_CLIENT, { strict: false });
+
   app.use(
     session({
+      store: new RedisStore({
+        client: redisClient,
+        prefix: 'session:',
+        ttl: TTL_SESSAO_SEGUNDOS,
+      }),
       secret: configService.getOrThrow<string>('SESSION_SECRET'),
       resave: false,
       saveUninitialized: false,

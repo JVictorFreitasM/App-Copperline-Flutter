@@ -86,7 +86,20 @@ export class VendedorSyncStrategy implements SyncStrategy<
         })
       : null;
 
-    if (!usuarioCorrespondente) {
+    // Vinculo MANUAL (admin ligou um usuario cujo e-mail e' diferente do e-mail
+    // do vendedor no ERP - ex: conta de teste/alias) sobrevive ao sync: sem
+    // correspondencia por e-mail, mantem o usuarioId que ja estava gravado em
+    // vez de zerar. So' o e-mail correspondente tem precedencia (reflete uma
+    // troca de conta de verdade).
+    const existente = usuarioCorrespondente
+      ? null
+      : await this.prisma.vendedor.findUnique({
+          where: { idExternoErp: mapeado.idExternoErp },
+          select: { usuarioId: true },
+        });
+    const usuarioIdFinal = usuarioCorrespondente?.id ?? existente?.usuarioId ?? null;
+
+    if (!usuarioIdFinal) {
       this.logger.warn(
         `Vendedor ${mapeado.idExternoErp} (${mapeado.email ?? 'sem e-mail'}) sem usuario correspondente no sistema de autenticacao - vinculo fica pendente ate o proximo full refresh.`,
       );
@@ -98,8 +111,8 @@ export class VendedorSyncStrategy implements SyncStrategy<
       nome: mapeado.nome,
       email: mapeado.email,
       inativo: mapeado.inativo,
-      usuarioId: usuarioCorrespondente?.id ?? null,
-      semCorrespondenciaUsuario: !usuarioCorrespondente,
+      usuarioId: usuarioIdFinal,
+      semCorrespondenciaUsuario: !usuarioIdFinal,
       // incompleto:false tambem no update - "completa" um eventual stub
       // criado por ClienteSyncStrategy (OS-BACKEND-23, detalhes.idVendedores
       // referenciando um vendedor ainda nao sincronizado) quando o vendedor

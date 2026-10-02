@@ -1,16 +1,24 @@
 import { VendedorSyncStrategy } from './vendedor.sync';
 import type { WkRadarVendedor } from './vendedor.types';
 
-function prismaFake(overrides: { usuarioEncontrado?: { id: string } | null } = {}) {
+function prismaFake(
+  overrides: {
+    usuarioEncontrado?: { id: string } | null;
+    vendedorExistente?: { usuarioId: string | null } | null;
+  } = {},
+) {
   const usuarioFindFirst = jest
     .fn()
     .mockResolvedValue(
       'usuarioEncontrado' in overrides ? overrides.usuarioEncontrado : null,
     );
   const vendedorUpsert = jest.fn().mockResolvedValue(undefined);
+  const vendedorFindUnique = jest
+    .fn()
+    .mockResolvedValue('vendedorExistente' in overrides ? overrides.vendedorExistente : null);
   return {
     usuario: { findFirst: usuarioFindFirst },
-    vendedor: { upsert: vendedorUpsert },
+    vendedor: { upsert: vendedorUpsert, findUnique: vendedorFindUnique },
   };
 }
 
@@ -132,6 +140,50 @@ describe('VendedorSyncStrategy.upsert', () => {
           semCorrespondenciaUsuario: true,
         }),
       }),
+    );
+  });
+
+  it('PRESERVA o vinculo manual (usuarioId ja gravado) quando o e-mail do ERP nao bate com nenhum usuario', async () => {
+    const prisma = prismaFake({
+      usuarioEncontrado: null,
+      vendedorExistente: { usuarioId: 'u-manual' },
+    });
+    const strategy = new VendedorSyncStrategy(undefined as never, prisma as never);
+
+    await strategy.upsert({
+      idExternoErp: '791',
+      codigoIntegrador: null,
+      codigo: 'VEND-3',
+      nome: 'Jose Gabriel',
+      email: 'jose.gabriel@copperline.com.br',
+      inativo: false,
+    });
+
+    expect(prisma.vendedor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ usuarioId: 'u-manual', semCorrespondenciaUsuario: false }),
+      }),
+    );
+  });
+
+  it('e-mail correspondente tem precedencia sobre o vinculo manual antigo', async () => {
+    const prisma = prismaFake({
+      usuarioEncontrado: { id: 'u-novo' },
+      vendedorExistente: { usuarioId: 'u-manual' },
+    });
+    const strategy = new VendedorSyncStrategy(undefined as never, prisma as never);
+
+    await strategy.upsert({
+      idExternoErp: '791',
+      codigoIntegrador: null,
+      codigo: 'VEND-3',
+      nome: 'Jose Gabriel',
+      email: 'jose.gabriel@copperline.com.br',
+      inativo: false,
+    });
+
+    expect(prisma.vendedor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ usuarioId: 'u-novo' }) }),
     );
   });
 
