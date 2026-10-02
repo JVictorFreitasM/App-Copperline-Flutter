@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api_exception.dart';
@@ -97,9 +98,17 @@ class _AprovacoesScreenState extends ConsumerState<AprovacoesScreen> {
                   ),
           ),
           data: (dados) => dados.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: EstadoVazio(mensagem: 'Nenhuma solicitação de desconto pendente.'),
+              ? ListaAtualizavel(
+                  aoAtualizar: () async {
+                    ref.invalidate(solicitacoesPendentesProvider);
+                    try {
+                      await ref.read(solicitacoesPendentesProvider.future);
+                    } catch (_) {}
+                  },
+                  padding: const EdgeInsets.all(16),
+                  children: const [
+                    EstadoVazio(mensagem: 'Nenhuma solicitação de desconto pendente.'),
+                  ],
                 )
               : RefreshIndicator(
                   onRefresh: () async {

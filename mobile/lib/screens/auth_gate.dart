@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/auth/auth_notifier.dart';
-import '../core/models/pagamento.dart';
 import '../core/providers/offline_provider.dart';
-import '../core/providers/pagamento_provider.dart';
+import '../core/providers/sincronizacao_provider.dart';
 import '../core/push/push_service.dart';
 import '../core/rastreio/rastreio_config.dart';
 import '../core/rastreio/rastreio_service.dart';
@@ -32,27 +31,11 @@ class AuthGate extends ConsumerWidget {
       if (ficouAutenticado && !jaEstavaAutenticado) {
         ref.read(pushServiceProvider).inicializar();
 
-        // Snapshot inicial + escuta de conectividade (OS-MOBILE-22) -
-        // mesma condicao de "acabou de logar" do push acima. baixar() so'
-        // falha se a PRIMEIRA sincronizacao acontecer sem rede nenhuma -
-        // aceitavel (proxima reconexao tenta de novo via
-        // OfflineSyncNotifier, que so cobre a FILA de acoes pendentes, nao
-        // o snapshot em si - reforcar o snapshot fica a cargo de um pull-
-        // to-refresh nas telas, fora de escopo re-tentar sozinho aqui).
-        ref
-            .read(snapshotServiceProvider.future)
-            .then((servico) => servico.baixar())
-            .catchError((_) {});
-        // Carteira com detalhe + tabelas de preço (uso offline) - mesma
-        // tolerância a falha do snapshot.
-        ref
-            .read(dadosComerciaisServiceProvider.future)
-            .then((servico) => servico.baixar())
-            .catchError((_) {});
-        // Aquece o cache local dos catálogos de pagamento (formulário de
-        // pedido offline) - falha sem rede é esperada, fica o que já havia.
-        ref.read(formasPagamentoProvider.future).catchError((_) => <FormaPagamento>[]);
-        ref.read(condicoesPagamentoProvider.future).catchError((_) => <CondicaoPagamento>[]);
+        // Baixa TUDO que precisa pra trabalhar offline (snapshot, carteira com
+        // detalhe, tabelas de preço, catálogos) e envia o que ficou pendente -
+        // ao entrar; depois o próprio notifier repete ao reconectar, ao voltar
+        // pro app e a cada 30 min (ver sincronizacao_provider.dart).
+        ref.read(sincronizacaoProvider.notifier).sincronizar();
         ref.read(offlineSyncNotifierProvider);
 
         // Sincronização em segundo plano mesmo com o app fechado

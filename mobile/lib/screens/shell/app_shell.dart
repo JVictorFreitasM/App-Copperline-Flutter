@@ -1,3 +1,5 @@
+import '../../core/providers/sincronizacao_provider.dart';
+import '../sincronizacao_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -170,6 +172,7 @@ class _CabecalhoAppState extends ConsumerState<_CabecalhoApp> {
     // notificacoes_provider.dart). Sem badge quando zero/carregando/erro -
     // nunca inventa um número.
     final quantidade = ref.watch(contagemNaoLidasProvider).value ?? 0;
+    final sinc = ref.watch(sincronizacaoProvider);
 
     return AppBar(
       titleSpacing: 4,
@@ -190,6 +193,40 @@ class _CabecalhoAppState extends ConsumerState<_CabecalhoApp> {
         ],
       ),
       actions: [
+        // Estado da sincronização offline: gira enquanto sincroniza, ponto
+        // âmbar quando a última falhou/há envios pendentes. Toque abre a tela
+        // com o detalhe e o "Sincronizar agora".
+        IconButton(
+          tooltip: 'Sincronização',
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              sinc.sincronizando
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Padding(
+                        padding: EdgeInsets.all(2),
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      ),
+                    )
+                  : const Icon(Icons.sync),
+              if (!sinc.sincronizando && (sinc.erro != null || sinc.pendentes > 0))
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(color: AppColors.amber, shape: BoxShape.circle),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SincronizacaoScreen())),
+        ),
         IconButton(
           tooltip: 'Notificações',
           icon: Stack(

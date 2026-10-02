@@ -1,3 +1,4 @@
+import '../../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatacao.dart';
@@ -70,7 +71,15 @@ class _NotificacoesScreenState extends ConsumerState<NotificacoesScreen> {
             TextButton(onPressed: _marcarTodasComoLidas, child: const Text('Marcar todas')),
         ],
       ),
-      body: ListView(
+      body: ListaAtualizavel(
+        aoAtualizar: () async {
+          _invalidarTudo();
+          try {
+            await ref.read(
+              notificacoesProvider((pagina: _pagina, apenasNaoLidas: _apenasNaoLidas)).future,
+            );
+          } catch (_) {}
+        },
         padding: const EdgeInsets.all(18),
         children: [
           Row(

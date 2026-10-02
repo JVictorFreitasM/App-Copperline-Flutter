@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/formatacao.dart';
@@ -75,7 +76,13 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
+        child: ListaAtualizavel(
+          aoAtualizar: () async {
+            ref.invalidate(pedidosProvider);
+            try {
+              await ref.read(pedidosProvider(params).future);
+            } catch (_) {}
+          },
           padding: const EdgeInsets.all(16),
           children: [
             AppCard(

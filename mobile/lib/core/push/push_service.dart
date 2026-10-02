@@ -1,3 +1,4 @@
+import '../providers/sincronizacao_provider.dart';
 import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -23,9 +24,14 @@ Future<void> tratarMensagemEmBackground(RemoteMessage mensagem) async {}
 /// registrado antes (token pode ter mudado, e o backend faz upsert por
 /// token, ver `DispositivosService`).
 class PushService {
-  PushService(this._apiClient);
+  PushService(this._apiClient, {this.aoReceberEmPrimeiroPlano});
 
   final ApiClient _apiClient;
+
+  /// Chamado quando chega uma notificação com o app ABERTO - serve pra as telas
+  /// (pedido aprovado/recusado no web, nova aprovação...) recarregarem sozinhas
+  /// em vez de ficarem mostrando o valor antigo.
+  final void Function()? aoReceberEmPrimeiroPlano;
 
   Future<void> inicializar() async {
     final permissao = await FirebaseMessaging.instance.requestPermission();
@@ -71,6 +77,10 @@ class PushService {
   }
 
   Future<void> _mostrarBannerForeground(RemoteMessage mensagem) async {
+    // Recarrega as telas mesmo se o banner estiver desligado nas preferências
+    // (preferência é só do aviso visual, não do dado).
+    aoReceberEmPrimeiroPlano?.call();
+
     final categoria = categoriaDoPayload(mensagem.data);
     if (categoria != null && !await _categoriaHabilitada(categoria)) {
       return;
@@ -107,5 +117,8 @@ class PushService {
 }
 
 final pushServiceProvider = Provider<PushService>((ref) {
-  return PushService(ref.watch(apiClientProvider));
+  return PushService(
+    ref.watch(apiClientProvider),
+    aoReceberEmPrimeiroPlano: () => ref.read(sincronizacaoProvider.notifier).recarregarTelas(),
+  );
 });

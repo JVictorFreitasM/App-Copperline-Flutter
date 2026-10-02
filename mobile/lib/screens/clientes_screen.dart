@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/providers/clientes_provider.dart';
@@ -61,7 +62,13 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
     final params = (pagina: _pagina, nome: _nome, cpfCnpj: _cpfCnpj, filtro: _filtro);
     final resultadoAsync = ref.watch(clientesProvider(params));
 
-    return ListView(
+    return ListaAtualizavel(
+      aoAtualizar: () async {
+        ref.invalidate(clientesProvider);
+        try {
+          await ref.read(clientesProvider(params).future);
+        } catch (_) {}
+      },
       padding: const EdgeInsets.all(18),
       children: [
         Row(
@@ -113,11 +120,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.person_search_outlined,
-                    size: 18,
-                    color: AppColors.muted,
-                  ),
+                  child: const Icon(Icons.person_search_outlined, size: 18, color: AppColors.muted),
                 ),
               ),
             ),
@@ -132,10 +135,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
           }),
         ),
         const SizedBox(height: 14),
-        const Text(
-          'Minha carteira',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
+        const Text('Minha carteira', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         resultadoAsync.when(
           loading: () => const Padding(
@@ -153,11 +153,9 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                       TextButton.icon(
                         icon: const Icon(Icons.person_search_outlined, size: 18),
                         label: const Text('Verificar conflito antes de prospectar'),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const VerificarConflitoScreen(),
-                          ),
-                        ),
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const VerificarConflitoScreen())),
                       ),
                     ],
                   ],

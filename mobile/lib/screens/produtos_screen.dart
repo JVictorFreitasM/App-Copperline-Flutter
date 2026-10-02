@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/formatacao.dart';
@@ -48,7 +49,13 @@ class _ProdutosScreenState extends ConsumerState<ProdutosScreen> {
     final params = (pagina: _pagina, nome: _nome, codigo: _codigo, gtin: null);
     final resultadoAsync = ref.watch(produtosProvider(params));
 
-    return ListView(
+    return ListaAtualizavel(
+      aoAtualizar: () async {
+        ref.invalidate(produtosProvider);
+        try {
+          await ref.read(produtosProvider(params).future);
+        } catch (_) {}
+      },
       padding: const EdgeInsets.all(18),
       children: [
         Container(
@@ -82,10 +89,7 @@ class _ProdutosScreenState extends ConsumerState<ProdutosScreen> {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.navy,
-            borderRadius: BorderRadius.circular(14),
-          ),
+          decoration: BoxDecoration(color: AppColors.navy, borderRadius: BorderRadius.circular(14)),
           child: Row(
             children: [
               Expanded(
@@ -123,10 +127,7 @@ class _ProdutosScreenState extends ConsumerState<ProdutosScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        const Text(
-          'Resultados',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
+        const Text('Resultados', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         resultadoAsync.when(
           loading: () => const Padding(

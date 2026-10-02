@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -52,7 +53,16 @@ class ClienteDetalheScreen extends ConsumerWidget {
                 ? EstadoVazio(mensagem: "Cliente '$id' não encontrado.")
                 : ErroConexao(mensagem: '$erro'),
           ),
-          data: (cliente) => ListView(
+          data: (cliente) => ListaAtualizavel(
+            aoAtualizar: () async {
+              ref.invalidate(clienteDetalheProvider(id));
+              ref.invalidate(clienteEstatisticasProvider(id));
+              ref.invalidate(clienteTimelineProvider(id));
+              ref.invalidate(agendamentosPorClienteProvider(id));
+              try {
+                await ref.read(clienteDetalheProvider(id).future);
+              } catch (_) {}
+            },
             padding: const EdgeInsets.all(18),
             children: [
               CartaoCliente(cliente: cliente),
@@ -60,10 +70,8 @@ class ClienteDetalheScreen extends ConsumerWidget {
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ClienteProdutosPrecosScreen(
-                      clienteId: cliente.id,
-                      titulo: cliente.titulo,
-                    ),
+                    builder: (_) =>
+                        ClienteProdutosPrecosScreen(clienteId: cliente.id, titulo: cliente.titulo),
                   ),
                 ),
                 icon: const Icon(Icons.sell_outlined, size: 18),

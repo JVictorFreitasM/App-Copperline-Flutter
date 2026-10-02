@@ -77,6 +77,13 @@ final acoesPendentesPorTipoProvider = FutureProvider.family<List<AcaoPendente>, 
   return todas.where((a) => a.tipo == tipo).toList();
 });
 
+/// TODAS as ações offline aguardando envio (PENDENTE/ERRO), pra tela de
+/// sincronização mostrar o que ainda não subiu e por quê.
+final listaAcoesPendentesProvider = FutureProvider.autoDispose<List<AcaoPendente>>((ref) async {
+  final fila = await ref.watch(filaPendenteServiceProvider.future);
+  return fila.listarPendentes();
+});
+
 /// Dispara sincronização da fila sempre que a conectividade muda de "sem
 /// rede nenhuma" pra "tem alguma rede" (wifi OU dados móveis - critério de
 /// aceite explícito: "não restringir a wifi"). `connectivity_plus` só diz
@@ -106,7 +113,6 @@ class OfflineSyncNotifier {
     final semRede = resultados.every((r) => r == ConnectivityResult.none);
     if (_semRedeAnteriormente && !semRede) {
       sincronizarAgora();
-      _atualizarDadosOffline();
     }
     _semRedeAnteriormente = semRede;
   }
@@ -116,18 +122,6 @@ class OfflineSyncNotifier {
     if (await fila.contarPendentes() > 0) {
       await sincronizarAgora();
     }
-  }
-
-  // Voltou a rede: reenvia a fila (acima) e renova o espelho local
-  // (snapshot + carteira/tabelas) - best-effort, falha silenciosa mantém o
-  // que já estava salvo.
-  Future<void> _atualizarDadosOffline() async {
-    try {
-      final snapshot = await _ref.read(snapshotServiceProvider.future);
-      await snapshot.baixar();
-      final dados = await _ref.read(dadosComerciaisServiceProvider.future);
-      await dados.baixar();
-    } catch (_) {}
   }
 
   Future<void> sincronizarAgora() async {

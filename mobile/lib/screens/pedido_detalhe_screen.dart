@@ -1,3 +1,4 @@
+import '../widgets/lista_atualizavel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
@@ -45,7 +46,13 @@ class PedidoDetalheScreen extends ConsumerWidget {
           ),
           data: (pedido) {
             final situacaoConfig = pedido.situacaoExibida;
-            return ListView(
+            return ListaAtualizavel(
+              aoAtualizar: () async {
+                ref.invalidate(pedidoDetalheProvider(id));
+                try {
+                  await ref.read(pedidoDetalheProvider(id).future);
+                } catch (_) {}
+              },
               padding: const EdgeInsets.all(16),
               children: [
                 Row(
@@ -140,45 +147,57 @@ class PedidoDetalheScreen extends ConsumerWidget {
                 else
                   for (final PedidoItem item in pedido.itens) ...[
                     AppCard(
-                      child: Row(
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.produto?.nome ?? item.produto?.codigo ?? '—',
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.produto?.nome ?? item.produto?.codigo ?? '—',
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Qtde ${item.quantidadeVenda ?? "—"} × '
+                                      '${formatarMoeda(item.valorUnitario)}',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                                    ),
+                                    if (item.observacoes != null &&
+                                        item.observacoes!.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Obs: ${item.observacoes}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.muted,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Qtde ${item.quantidadeVenda ?? "—"} × '
-                                  '${formatarMoeda(item.valorUnitario)}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                                ),
-                                if (pedido.solicitacaoDesconto != null &&
-                                    item.temDecisaoDeDesconto) ...[
-                                  const SizedBox(height: 6),
-                                  _DecisaoDescontoItem(
-                                    pedidoId: pedido.id,
-                                    item: item,
-                                    podeDecidir: pedido.solicitacaoDesconto!.podeDecidir,
-                                  ),
-                                ],
-                                if (item.observacoes != null && item.observacoes!.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Obs: ${item.observacoes}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                                  ),
-                                ],
-                              ],
+                              ),
+                              Text(
+                                formatarMoeda(item.valorTotal),
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                          // Decisão do desconto em LINHA PRÓPRIA (largura inteira do
+                          // card) - dentro da coluna do item ela era espremida pelo
+                          // valor à direita: texto quebrando em várias linhas e os
+                          // botões estourando a largura em tela estreita.
+                          if (pedido.solicitacaoDesconto != null && item.temDecisaoDeDesconto) ...[
+                            const Divider(height: 18, color: AppColors.line),
+                            _DecisaoDescontoItem(
+                              pedidoId: pedido.id,
+                              item: item,
+                              podeDecidir: pedido.solicitacaoDesconto!.podeDecidir,
                             ),
-                          ),
-                          Text(
-                            formatarMoeda(item.valorTotal),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -434,13 +453,16 @@ class _DecisaoDescontoItemState extends ConsumerState<_DecisaoDescontoItem> {
     }
 
     final inativo = !widget.podeDecidir || _enviando;
+    // Texto em Expanded: sem isso a Row estourava a largura do card (o texto
+    // não encolhia ao lado dos 2 botões) - "RIGHT OVERFLOWED" em tela estreita.
     return Row(
       children: [
-        Text(
-          '${textoPercentual}aguardando decisão',
-          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+        Expanded(
+          child: Text(
+            '${textoPercentual}aguardando decisão',
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
         ),
-        const Spacer(),
         IconButton(
           tooltip: 'Recusar desconto',
           visualDensity: VisualDensity.compact,
