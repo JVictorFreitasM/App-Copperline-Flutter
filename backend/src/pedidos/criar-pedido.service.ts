@@ -704,6 +704,13 @@ export class CriarPedidoService {
         where: { id: solicitacaoDescontoId },
         data: { pedidoId: pedido.id },
       });
+      // A notificacao "desconto pendente" (pro aprovador) nasceu antes do
+      // pedido existir, so' com o solicitacaoId - agora que o pedido existe,
+      // completa o payload: tocar nela leva ao pedido, nao as Aprovacoes.
+      await tx.eventoNotificacao.updateMany({
+        where: { tipo: 'SOLICITACAO_DESCONTO_CRIADA', referenciaId: solicitacaoDescontoId },
+        data: { dados: { solicitacaoId: solicitacaoDescontoId, pedidoId: pedido.id } },
+      });
       await tx.pedidoHistoricoStatus.create({
         data: {
           pedidoId: pedido.id,

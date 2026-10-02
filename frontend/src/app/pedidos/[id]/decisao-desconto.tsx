@@ -16,13 +16,6 @@ type Acao = "aprovar" | "rejeitar";
 // Cores vermelho/verde são exceção deliberada à paleta neutra (ver skill
 // design-system): aqui é aprovar/reprovar de verdade.
 
-// Tem decisão a tomar neste item? Pendente, ou já decidido por alguém (aí
-// mostra o resultado, botões inativos). Item que nasceu aceito por estar
-// dentro da alçada (APROVADO sem decididoEm) não tem decisão nenhuma.
-export function itemTemDecisao(item: Pick<PedidoItemDto, "statusAprovacao" | "decididoEm">) {
-  return item.statusAprovacao === "PENDENTE" || item.decididoEm !== null;
-}
-
 export function ItemDecisaoBotoes({
   pedidoId,
   item,

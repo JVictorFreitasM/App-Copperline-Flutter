@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import {
+  classeDestaqueDesconto,
   configStatusExibicaoPedido,
   OPCOES_SITUACAO_PEDIDO,
   OPCOES_STATUS_APROVACAO,
@@ -253,7 +254,10 @@ export default async function PedidosPage({
                   {resultado.data.map((pedido) => {
                     const situacaoConfig = configStatusExibicaoPedido(pedido);
                     return (
-                      <tr key={pedido.id} className="border-b border-line last:border-0 hover:bg-background">
+                      <tr
+                        key={pedido.id}
+                        className={`border-b border-line last:border-0 hover:bg-background ${classeDestaqueDesconto(pedido.statusSolicitacaoDesconto)}`}
+                      >
                         <td className="px-4 py-3">
                           <Link
                             href={`/pedidos/${pedido.id}`}

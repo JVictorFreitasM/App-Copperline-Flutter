@@ -481,6 +481,14 @@ model Pedido {
   // numa coluna @unique, entao isso nao quebra a unicidade pros pedidos
   // que ja tem id real.
   idExternoErp            String?             @unique @map("id_externo_erp")
+  // Data EFETIVA do pedido pra ordenar a listagem - coluna GERADA pelo banco
+  // (coalesce(data_hora_ultima_alteracao, data_emissao, sincronizado_em), ver
+  // migration 20261002120000) - NUNCA escrita pelo app. Existe porque
+  // ordenar por dataHoraUltimaAlteracao + sincronizadoEm jogava pedido local
+  // recem-criado pro meio da lista: o sync regrava sincronizado_em de TODOS
+  // os pedidos a cada rodada, e pedido do Radar sem data de alteracao passava
+  // na frente.
+  dataOrdenacao           DateTime?           @map("data_ordenacao")
   codigoIntegrador        String?             @map("codigo_integrador")
   numero                  String?
   situacao                TipoSituacaoPedido?

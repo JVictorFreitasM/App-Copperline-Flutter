@@ -15,6 +15,7 @@ class ListItemTile extends StatelessWidget {
     this.tag,
     this.onTap,
     this.trailingAction,
+    this.fundo,
   });
 
   final String titulo;
@@ -28,12 +29,17 @@ class ListItemTile extends StatelessWidget {
   // `onTap` (navegação) ao tocar nele.
   final Widget? trailingAction;
 
+  /// Cor de fundo do card (padrão: branco do tema) - ex: destaque de pedido
+  /// pendente/aprovado.
+  final Color? fundo;
+
   @override
   Widget build(BuildContext context) {
     final inicial = titulo.isNotEmpty ? titulo.characters.first.toUpperCase() : '?';
 
     return Card(
       margin: EdgeInsets.zero,
+      color: fundo,
       child: Row(
         children: [
           Expanded(

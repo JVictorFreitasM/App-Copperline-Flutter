@@ -70,7 +70,7 @@ describe('PedidosService.listar', () => {
       sincronizadoEm: new Date('2026-01-01'),
       cliente: { id: 'cli-1', razaoSocial: 'Cliente A' },
       vendedorRadar: null,
-      solicitacoesDesconto: [{ id: 'sol-1' }],
+      solicitacoesDesconto: [{ status: 'PENDENTE' }],
     };
     const prisma = prismaFake({ findMany: [pedidoBruto], count: 1 });
     const service = new PedidosService(prisma as never);
@@ -78,11 +78,54 @@ describe('PedidosService.listar', () => {
     const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
 
     expect(resultado.data[0].temSolicitacaoDescontoPendente).toBe(true);
+    expect(resultado.data[0].statusSolicitacaoDesconto).toBe('PENDENTE');
+    // busca a solicitacao MAIS RECENTE (qualquer status) pra pintar a lista
     expect(prisma.pedido.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         include: expect.objectContaining({
-          solicitacoesDesconto: { where: { status: 'PENDENTE' }, take: 1 },
+          solicitacoesDesconto: {
+            orderBy: { criadoEm: 'desc' },
+            take: 1,
+            select: { status: true },
+          },
         }),
+      }),
+    );
+  });
+
+  it('expoe o status da solicitacao mais recente: APROVADO nao e "pendente" (lista pinta de verde)', async () => {
+    const pedidoBruto = {
+      id: '1',
+      idExternoErp: 'ext-1',
+      numero: 'PED-1',
+      situacao: null,
+      dataHoraUltimaAlteracao: null,
+      valorTotal: { toString: () => '150.00' },
+      incompleto: false,
+      sincronizadoEm: new Date('2026-01-01'),
+      cliente: { id: 'cli-1', razaoSocial: 'Cliente A' },
+      vendedorRadar: null,
+      solicitacoesDesconto: [{ status: 'APROVADO' }],
+    };
+    const service = new PedidosService(
+      prismaFake({ findMany: [pedidoBruto], count: 1 }) as never,
+    );
+
+    const resultado = await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    expect(resultado.data[0].temSolicitacaoDescontoPendente).toBe(false);
+    expect(resultado.data[0].statusSolicitacaoDesconto).toBe('APROVADO');
+  });
+
+  it('ordena por data efetiva (dataOrdenacao) - pedido local recem-criado nao afunda na lista', async () => {
+    const prisma = prismaFake({ findMany: [], count: 0 });
+    const service = new PedidosService(prisma as never);
+
+    await service.listar({ page: 1, limit: 20 }, ESCOPO_TODOS);
+
+    expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ dataOrdenacao: 'desc' }, { sincronizadoEm: 'desc' }, { id: 'asc' }],
       }),
     );
   });

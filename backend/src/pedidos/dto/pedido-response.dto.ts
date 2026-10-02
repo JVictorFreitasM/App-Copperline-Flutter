@@ -57,6 +57,10 @@ export interface PedidoResumoDto {
   // icone de exclamacao no layout de referencia (confirmado com o
   // usuario: "aguardando aprovacao de desconto").
   temSolicitacaoDescontoPendente: boolean;
+  // Status da solicitacao de desconto MAIS RECENTE do pedido (null = nunca
+  // precisou de aprovacao) - a lista destaca em vermelho o pendente e em
+  // verde o aprovado.
+  statusSolicitacaoDesconto: 'PENDENTE' | 'APROVADO' | 'REJEITADO' | null;
   // Mesmo bucket usado nos atalhos/filtro da listagem (ver
   // ListarPedidosQueryDto.statusAprovacao) e agora tambem exibido na tela
   // de detalhe ("Status da aprovacao", layout de referencia ref1.jpeg) -
@@ -266,6 +270,7 @@ export function paraPedidoResumoDto(
     vendedor?: Vendedor | null;
   },
   temSolicitacaoDescontoPendente = false,
+  statusSolicitacaoDesconto: 'PENDENTE' | 'APROVADO' | 'REJEITADO' | null = null,
 ): PedidoResumoDto {
   return {
     id: pedido.id,
@@ -295,6 +300,7 @@ export function paraPedidoResumoDto(
           }
         : null,
     temSolicitacaoDescontoPendente,
+    statusSolicitacaoDesconto,
     statusAprovacaoBucket: calcularStatusAprovacaoPedido(pedido),
   };
 }
@@ -366,9 +372,14 @@ export function paraPedidoDetalheDto(
     notasFiscais?: (NotaFiscalPedido & { notaFiscal: NotaFiscal })[];
   },
   temSolicitacaoDescontoPendente = false,
+  statusSolicitacaoDesconto: 'PENDENTE' | 'APROVADO' | 'REJEITADO' | null = null,
 ): PedidoDetalheDto {
   return {
-    ...paraPedidoResumoDto(pedido, temSolicitacaoDescontoPendente),
+    ...paraPedidoResumoDto(
+      pedido,
+      temSolicitacaoDescontoPendente,
+      statusSolicitacaoDesconto,
+    ),
     cliente: paraClienteDetalhePedidoDto(pedido.cliente),
     solicitacaoDesconto: null,
     pesoLiquidoTotalKg: pedido.pesoLiquidoTotalKg?.toString() ?? null,

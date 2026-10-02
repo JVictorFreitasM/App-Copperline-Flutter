@@ -213,12 +213,16 @@ export class SolicitacoesDescontoService {
         referenciaId: registro.id,
         titulo: 'Desconto pendente de aprovação',
         corpo: `${solicitante.nome ?? 'Um vendedor'} solicitou ${input.percentualSolicitado}% de desconto - aguardando sua decisão.`,
-        // Sem pedidoId aqui de proposito - o supervisor deve cair na tela
-        // de Aprovacoes (lista), nao no detalhe de UM pedido especifico
-        // (ver push_navigation.dart no mobile: discriminador por qual
-        // chave esta presente, precisa ficar sem sobreposicao com
-        // PEDIDO_SITUACAO_ALTERADA).
-        dados: { solicitacaoId: registro.id },
+        // Pedido do usuario (2026-10-02): tocar na notificacao leva ao
+        // PEDIDO (nao a lista de Aprovacoes). Quando o pedido ja existe
+        // (orcamento transformado em pedido) o pedidoId entra aqui; no fluxo
+        // normal o pedido so' e' criado logo depois, e
+        // CriarPedidoService.persistirPedidoAguardandoAprovacao completa o
+        // payload deste evento com o pedidoId.
+        dados: {
+          solicitacaoId: registro.id,
+          ...(input.pedidoId && { pedidoId: input.pedidoId }),
+        },
       });
 
       return registro;

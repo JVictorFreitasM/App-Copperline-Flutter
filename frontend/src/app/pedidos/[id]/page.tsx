@@ -4,6 +4,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
 import {
   configSituacaoPedido,
+  itemTemDecisao,
   rotuloStatusAprovacaoPedido,
   type EnderecoClientePedidoDto,
   type NotaFiscalResumoPedidoDto,
@@ -16,7 +17,7 @@ import { formatarData, formatarDataHora, formatarMoeda, formatarPeso, formatarTe
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { AbasPedido } from "./abas-pedido";
-import { DecisaoDescontoTodos, ItemDecisaoBotoes, itemTemDecisao } from "./decisao-desconto";
+import { DecisaoDescontoTodos, ItemDecisaoBotoes } from "./decisao-desconto";
 import { LinkPdfNotaFiscal } from "./link-pdf-nota-fiscal";
 
 // Tela de detalhe do pedido (layout de referencia ref1.jpeg, fornecida

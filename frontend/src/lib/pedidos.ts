@@ -37,6 +37,9 @@ export interface PedidoResumoDto {
   // Ícone de exclamação no layout de referência - solicitação de desconto
   // aguardando aprovação (confirmado com o usuário).
   temSolicitacaoDescontoPendente: boolean;
+  // Status da solicitação de desconto MAIS RECENTE (null = nunca precisou de
+  // aprovação) - a lista destaca em vermelho o pendente e em verde o aprovado.
+  statusSolicitacaoDesconto: "PENDENTE" | "APROVADO" | "REJEITADO" | null;
   // Mesmo bucket dos atalhos/filtro da listagem, tambem exibido como
   // "Status da aprovação" na tela de detalhe (ref1.jpeg) - ver rótulos em
   // OPCOES_STATUS_APROVACAO abaixo.
@@ -207,6 +210,27 @@ export interface NotaFiscalResumoPedidoDto {
   dataEmissao: string | null;
   statusNfe: string | null;
   valorTotalNotaFiscal: string | null;
+}
+
+// Destaque da linha na listagem: vermelho levinho enquanto o desconto espera
+// aprovação, verde levinho quando foi aprovado - sobre o fundo branco do card.
+// Rejeitado/sem solicitação fica neutro.
+export function classeDestaqueDesconto(
+  status: PedidoResumoDto["statusSolicitacaoDesconto"],
+): string {
+  if (status === "PENDENTE") return "bg-accent-red-light";
+  if (status === "APROVADO") return "bg-accent-green-light";
+  return "";
+}
+
+// Tem decisão de desconto a tomar neste item? Pendente, ou já decidido por
+// alguém (aí a tela mostra o resultado, botões inativos). Item que nasceu
+// aceito por estar dentro da alçada (APROVADO sem decididoEm) não tem decisão
+// nenhuma. Fica AQUI (módulo comum, sem "use client") porque a página de
+// servidor chama esta função - num arquivo "use client" ela derrubava a
+// página inteira (erro de servidor ao abrir pedido com desconto).
+export function itemTemDecisao(item: Pick<PedidoItemDto, "statusAprovacao" | "decididoEm">) {
+  return item.statusAprovacao === "PENDENTE" || item.decididoEm !== null;
 }
 
 // Solicitação de desconto acima da alçada vinculada ao pedido (a mais

@@ -68,6 +68,7 @@ function prismaFake(overrides: {
     pedido: { create: pedidoCreate },
     pedidoItem: { createMany: pedidoItemCreateMany },
     solicitacaoDesconto: { update: solicitacaoDescontoUpdate },
+    eventoNotificacao: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     pedidoHistoricoStatus: { create: pedidoHistoricoStatusCreate },
     saldoEstoque: { update: saldoEstoqueUpdate, upsert: saldoEstoqueUpsert },
     estoqueLote: { update: estoqueLoteUpdate, upsert: estoqueLoteUpsert },

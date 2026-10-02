@@ -26,6 +26,7 @@ class PedidoResumo {
     required this.valorTotal,
     required this.cliente,
     required this.statusAprovacaoBucket,
+    this.statusSolicitacaoDesconto,
   });
 
   factory PedidoResumo.fromJson(Map<String, dynamic> json) {
@@ -43,11 +44,17 @@ class PedidoResumo {
       // Ausente (snapshot de app antigo, offline) = null, tratado como
       // pedido normal (nenhuma ação de orçamento aparece).
       statusAprovacaoBucket: json['statusAprovacaoBucket'] as String?,
+      statusSolicitacaoDesconto: json['statusSolicitacaoDesconto'] as String?,
     );
   }
 
   final String id;
   final String? numero;
+
+  /// Status da solicitação de desconto mais recente (PENDENTE/APROVADO/
+  /// REJEITADO) ou null - a lista destaca em vermelho o pendente e em verde o
+  /// aprovado.
+  final String? statusSolicitacaoDesconto;
   final String? situacao;
   final String? dataHoraUltimaAlteracao;
   final String? valorTotal;

@@ -51,7 +51,13 @@ export class PedidosService {
           // nome do vendedor de todo pedido recem-criado - paraPedidoResumoDto
           // agora tenta os dois.
           vendedor: true,
-          solicitacoesDesconto: { where: { status: 'PENDENTE' }, take: 1 },
+          // A MAIS RECENTE (qualquer status) - a lista pinta de vermelho o que
+          // espera aprovacao e de verde o que ja foi aprovado.
+          solicitacoesDesconto: {
+            orderBy: { criadoEm: 'desc' },
+            take: 1,
+            select: { status: true },
+          },
         },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -63,14 +69,21 @@ export class PedidosService {
         // pedido acabado de criar cai numa posicao arbitraria da
         // paginacao em vez de aparecer no topo. sincronizadoEm NUNCA e'
         // null (preenchido na criacao E em todo upsert de sync).
-        orderBy: [{ dataHoraUltimaAlteracao: 'desc' }, { sincronizadoEm: 'desc' }],
+        // dataOrdenacao = coalesce(alteracao, emissao, sincronizadoEm) - ver
+        // comentario no schema. O desempate antigo por sincronizadoEm falhava:
+        // o sync regrava sincronizadoEm de todos os pedidos a cada rodada.
+        orderBy: [{ dataOrdenacao: 'desc' }, { sincronizadoEm: 'desc' }, { id: 'asc' }],
       }),
       this.prisma.pedido.count({ where }),
     ]);
 
     return paginar(
       pedidos.map((pedido) =>
-        paraPedidoResumoDto(pedido, pedido.solicitacoesDesconto.length > 0),
+        paraPedidoResumoDto(
+          pedido,
+          pedido.solicitacoesDesconto[0]?.status === 'PENDENTE',
+          pedido.solicitacoesDesconto[0]?.status ?? null,
+        ),
       ),
       total,
       query.page,

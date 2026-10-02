@@ -135,6 +135,20 @@ class _PedidosScreenState extends ConsumerState<PedidosScreen> {
                             builder: (context) {
                               final situacaoConfig = pedido.situacaoExibida;
                               return ListItemTile(
+                                // Pendente de aprovação = fundo levemente
+                                // vermelho; aprovado = levemente verde (sobre o
+                                // branco do card).
+                                fundo: switch (pedido.statusSolicitacaoDesconto) {
+                                  'PENDENTE' => Color.alphaBlend(
+                                    AppColors.red.withValues(alpha: 0.10),
+                                    AppColors.surface,
+                                  ),
+                                  'APROVADO' => Color.alphaBlend(
+                                    AppColors.green.withValues(alpha: 0.10),
+                                    AppColors.surface,
+                                  ),
+                                  _ => null,
+                                },
                                 titulo: pedido.tituloCliente,
                                 subtitulo:
                                     'Pedido ${pedido.numero ?? "—"} · '
