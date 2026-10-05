@@ -130,6 +130,18 @@ export class NotificacaoDispatchService {
       return this.dispositivosDoUsuario(vendedor?.usuarioId ?? null);
     }
 
+    if (evento.tipo === 'MENSAGEM_DIRETA') {
+      // Mensagem manual do admin: os destinatarios (Todos/vendedor/grupo)
+      // ja foram resolvidos no envio e gravados como NotificacaoUsuario do
+      // evento - so' le dali (nunca broadcast, mesmo evento sem destinatario
+      // nao vira "todo mundo").
+      const destinatarios = await this.prisma.notificacaoUsuario.findMany({
+        where: { eventoId: evento.id },
+        include: { usuario: { include: { dispositivos: true } } },
+      });
+      return destinatarios.flatMap((d) => d.usuario.dispositivos.map((dispositivo) => dispositivo.token));
+    }
+
     // PEDIDO_SITUACAO_ALTERADA / NOTA_FISCAL_REJEITADA: broadcast pra
     // todo mundo registrado (decisao confirmada com o usuario - sem
     // vinculo Cliente<->Usuario no sistema hoje).

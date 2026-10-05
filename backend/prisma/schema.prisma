@@ -57,36 +57,36 @@ model SyncLog {
 // skill wk-radar-client. codigoIntegrador existe desde ja para quando
 // houver escrita de volta no ERP (fora de escopo nesta OS).
 model Cliente {
-  id               String   @id @default(uuid())
-  idExternoErp     String   @unique @map("id_externo_erp")
-  codigoIntegrador String?  @map("codigo_integrador")
-  cpfCnpj          String?  @map("cpf_cnpj")
-  razaoSocial      String?  @map("razao_social")
-  nomeFantasia     String?  @map("nome_fantasia")
+  id                String   @id @default(uuid())
+  idExternoErp      String   @unique @map("id_externo_erp")
+  codigoIntegrador  String?  @map("codigo_integrador")
+  cpfCnpj           String?  @map("cpf_cnpj")
+  razaoSocial       String?  @map("razao_social")
+  nomeFantasia      String?  @map("nome_fantasia")
   // inscricoesLegais.inscricaoEstadual no WK Radar (confirmado contra a API
   // real, 2026-09-28) - pedido pro PDF de impressao do pedido (IE do
   // cliente no bloco de identificacao).
-  inscricaoEstadual String? @map("inscricao_estadual")
+  inscricaoEstadual String?  @map("inscricao_estadual")
   // Dados de contato/identificacao do cadastro do cliente no WK Radar
   // (card de apresentacao do detalhe do cliente): `codigo` e' o codigo
   // exibido ao usuario no ERP (ex: "10458"), diferente de `idExternoErp`
   // (chave interna do Radar); email/contato/homepage sao do cadastro em si,
   // separados dos contatos (ContatoCliente) e do email/telefones de cada
   // endereco (que ficam dentro de `enderecos`).
-  codigo           String?
-  email            String?
-  contato          String?
-  homepage         String?
-  inativo          Boolean  @default(false)
+  codigo            String?
+  email             String?
+  contato           String?
+  homepage          String?
+  inativo           Boolean  @default(false)
   // Enderecos nao tem id/codigoIntegrador proprio no WK Radar (ao contrario
   // de contatos) - sem identidade propria pra preservar, JSONB e suficiente.
-  enderecos        Json     @default("[]")
+  enderecos         Json     @default("[]")
   // true quando esta linha foi criada como stub por PedidoSyncStrategy (OS
   // 07, pedido referenciando um cliente ainda nao sincronizado) - clienteSync
   // sempre grava false ao completar os dados de verdade, seja criando ou
   // atualizando.
-  incompleto       Boolean  @default(false)
-  sincronizadoEm   DateTime @map("sincronizado_em")
+  incompleto        Boolean  @default(false)
+  sincronizadoEm    DateTime @map("sincronizado_em")
 
   // Dados financeiros embutidos no proprio cadastro do cliente no WK Radar
   // (informacoesFinanceiras) - vem junto do sync normal, sem chamada extra
@@ -130,7 +130,7 @@ model Cliente {
   visitas                Visita[]
   tabelasPreco           ClienteTabelaPreco[]
   agendamentosVisita     AgendamentoVisita[]
-  localizacaoDefinidaPor Vendedor?         @relation("ClienteLocalizacaoDefinidaPor", fields: [localizacaoDefinidaPorId], references: [id])
+  localizacaoDefinidaPor Vendedor?            @relation("ClienteLocalizacaoDefinidaPor", fields: [localizacaoDefinidaPorId], references: [id])
 
   @@map("clientes")
 }
@@ -287,14 +287,14 @@ model Produto {
   // precoFabricacao: pedido do usuario ("mostrar preco de fabricacao") -
   // o Radar nao expoe custo/fabricacao no cadastro de produto (so
   // precoVenda), por isso e' um campo nosso, editavel manualmente.
-  precoFabricacao Decimal? @map("preco_fabricacao") @db.Decimal(18, 6)
+  precoFabricacao        Decimal?              @map("preco_fabricacao") @db.Decimal(18, 6)
   // Caminho no disco do servidor (mesmo padrao de armazenamento local ja
   // usado por DocumentoStorageService/VisitaFotoStorageService) - so web
   // tem UI de upload (pedido do usuario), mas o campo/endpoint fica no
   // backend compartilhado, sem trava tecnica que impeça o mobile de usar
   // no futuro.
-  imagemCaminho String? @map("imagem_caminho")
-  imagemTipoMime String? @map("imagem_tipo_mime")
+  imagemCaminho          String?               @map("imagem_caminho")
+  imagemTipoMime         String?               @map("imagem_tipo_mime")
   // Catalogo proprio (nao vem do Radar), editavel pelo admin - ver
   // TipoAcondicionamento abaixo.
   tipoAcondicionamentoId String?               @map("tipo_acondicionamento_id")
@@ -325,9 +325,9 @@ model Produto {
 // em runtime sem precisar de deploy (diferente de um enum fixo tipo
 // TipoVendaProduto).
 model TipoAcondicionamento {
-  id    String  @id @default(uuid())
-  nome  String
-  ativo Boolean @default(true)
+  id            String   @id @default(uuid())
+  nome          String
+  ativo         Boolean  @default(true)
   // OS-novas-implementacoes.md Bloco 4 (revisao) - null = retalho (corte
   // fracionario livre); preenchido = tamanho fixo, pedido tem que ser
   // multiplo exato deste valor (calcularQuantidadePedido bloqueia caso
@@ -357,7 +357,7 @@ model TipoAcondicionamento {
 // de SaldoEstoque - tabela de preco pode referenciar item nao
 // sincronizado como Produto ainda).
 model TabelaPreco {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   // ID do SOAP Empresarial.svc (BuscarTabelasPreco) - so' serve pra casar
   // upsert dos ITENS/precos (ItemTabelaPreco), sincronizados por esse
   // mesmo servico. NUNCA usar este campo como idTabelaPreco no payload de
@@ -366,8 +366,8 @@ model TabelaPreco {
   // IDs incompativeis entre si - confirmado testando contra o ambiente
   // real, "Id: 58" do SOAP nao existe no espaco REST). Ver
   // idVendaProdutoExterno abaixo pra esse caso.
-  idExternoErp String @unique @map("id_externo_erp")
-  codigo       String @unique
+  idExternoErp String  @unique @map("id_externo_erp")
+  codigo       String  @unique
   ativa        Boolean @default(true)
 
   // ID do REST /empresarial/v1/tabela-preco-venda-produto (mesmo namespace
@@ -500,13 +500,13 @@ model Pedido {
   // tabela. Mapeado do Radar (dataEmissao, formato DD/MM/YYYY) - so pedido
   // sincronizado tem; pedido criado local usa a data de criacao real (ver
   // CriarPedidoService).
-  dataEmissao         DateTime? @map("data_emissao")
+  dataEmissao     DateTime? @map("data_emissao")
   // UF do endereco de entrega (filtro "Localizacao") - derivado do
   // idMunicipio do Radar (codigo IBGE de 7 digitos, os 2 primeiros
   // identificam a UF - tabela estatica, sem sync de um catalogo de
   // municipios). So ~7% dos pedidos tem localEntrega preenchido no Radar -
   // fica null pra maioria, esperado (nao e falha de sync).
-  ufEntrega           String?   @map("uf_entrega") @db.VarChar(2)
+  ufEntrega       String?   @map("uf_entrega") @db.VarChar(2)
   // Vendedor do PRÓPRIO pedido sincronizado (Radar `pedido.vendedores[0].id`,
   // resolvido contra Vendedor.idExternoErp) - conceito DIFERENTE de
   // `vendedorId` acima (que so existe pra pedido criado localmente por
@@ -514,7 +514,7 @@ model Pedido {
   // informa vendedor OU o vendedor referenciado ainda nao foi sincronizado
   // (nunca cria stub aqui - Vendedor tem campos de autenticacao vinculados,
   // diferente do stub simples de Cliente/Produto).
-  vendedorRadarId     String?   @map("vendedor_radar_id")
+  vendedorRadarId String?   @map("vendedor_radar_id")
   // true quando esta linha foi criada como stub por NotaFiscalSyncStrategy
   // (OS 09, nota fiscal referenciando um pedido ainda nao sincronizado) -
   // pedidoSync sempre grava false ao completar os dados de verdade. Mesmo
@@ -522,8 +522,8 @@ model Pedido {
   // um pedido criado localmente (ver vendedorId/statusLocal abaixo) - um
   // pedido local tem dado completo do nosso lado, so ainda nao tem
   // situacao/numero do Radar.
-  incompleto              Boolean             @default(false)
-  sincronizadoEm          DateTime            @map("sincronizado_em")
+  incompleto      Boolean   @default(false)
+  sincronizadoEm  DateTime  @map("sincronizado_em")
 
   // Origem local (OS-BACKEND-25, POST /pedidos) - null pra pedidos que so
   // existem por sincronizacao (nunca criados pelo nosso sistema).
@@ -549,7 +549,7 @@ model Pedido {
   // Contato do cliente escolhido na criacao - opcional (nem todo pedido
   // precisa de um contato especifico). Nullable tambem pra pedido
   // sincronizado.
-  contatoId String? @map("contato_id")
+  contatoId         String? @map("contato_id")
 
   // Peso total do pedido (OS-novas-implementacoes.md Bloco 3) - soma de
   // Produto.pesoLiquidoKg/pesoBrutoKg * PedidoItem.quantidadeVenda de cada
@@ -715,8 +715,8 @@ model PedidoItem {
   decididoPorId   String?                   @map("decidido_por_id")
   decididoEm      DateTime?                 @map("decidido_em")
 
-  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto    Produto? @relation(fields: [produtoId], references: [id])
+  pedido      Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto     Produto? @relation(fields: [produtoId], references: [id])
   decididoPor Usuario? @relation(fields: [decididoPorId], references: [id])
 
   @@unique([pedidoId, numero])
@@ -818,21 +818,21 @@ model SaldoEstoque {
 // reservado - as duas NUNCA devem ser somadas nem confundidas, confirmado
 // via teste real que nao batem por design).
 model EstoqueLote {
-  id            String @id @default(uuid())
-  codigoProduto String @map("codigo_produto")
+  id             String    @id @default(uuid())
+  codigoProduto  String    @map("codigo_produto")
   // "" (nunca null) quando o produto nao tem controle de lote (ex: tinta/
   // embalagem, ~1,5% das linhas do catalogo real) - deliberado: NULL nao
   // colide num unique composto no Postgres (cada linha NULL e' unica),
   // o que quebraria o upsert do full refresh (cada sync criaria uma linha
   // nova em vez de atualizar a existente).
-  lote        String @default("")
-  localCodigo String @map("local_codigo")
-  localNome   String @map("local_nome")
-  quantidade  Decimal @db.Decimal(18, 6)
-  fabricadoEm DateTime? @map("fabricado_em")
+  lote           String    @default("")
+  localCodigo    String    @map("local_codigo")
+  localNome      String    @map("local_nome")
+  quantidade     Decimal   @db.Decimal(18, 6)
+  fabricadoEm    DateTime? @map("fabricado_em")
   // Momento da sincronizacao que gravou/atualizou esta linha - por linha,
   // nao por execucao (upsert individual, ver EstoqueLoteSyncStrategy).
-  sincronizadoEm DateTime @default(now()) @updatedAt @map("sincronizado_em")
+  sincronizadoEm DateTime  @default(now()) @updatedAt @map("sincronizado_em")
 
   @@unique([codigoProduto, lote, localCodigo])
   @@map("estoque_lotes")
@@ -892,16 +892,17 @@ model Usuario {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  dispositivos           DispositivoUsuario[]
-  favoritos              ProdutoFavorito[]
-  vendedores             Vendedor[]
-  localizacoes           LocalizacaoUsuario[]
-  acoesFilaProcessadas   AcaoFilaProcessada[]
-  historicoStatusPedidos PedidoHistoricoStatus[]
-  documentosEnviados     Documento[]
+  dispositivos              DispositivoUsuario[]
+  favoritos                 ProdutoFavorito[]
+  vendedores                Vendedor[]
+  localizacoes              LocalizacaoUsuario[]
+  acoesFilaProcessadas      AcaoFilaProcessada[]
+  historicoStatusPedidos    PedidoHistoricoStatus[]
+  documentosEnviados        Documento[]
   agendamentosVisitaCriados AgendamentoVisita[]
-  itensPedidoDecididos   PedidoItem[]
-  notificacoes           NotificacaoUsuario[]
+  itensPedidoDecididos      PedidoItem[]
+  notificacoes              NotificacaoUsuario[]
+  mensagensEnviadas         MensagemNotificacao[]
 
   @@map("usuarios")
 }
@@ -970,6 +971,12 @@ enum TipoEventoNotificacao {
   // JSON de cada evento.
   RELATORIO_MANHA_PEDIDOS
   RELATORIO_FIM_DIA_PEDIDOS
+  // Mensagem manual enviada pelo admin pelo painel web (tela de
+  // Notificacoes) - referenciaId = MensagemNotificacao.id. Destinatarios
+  // ja resolvidos NO ENVIO (um NotificacaoUsuario por usuario), entao nem
+  // o inbox nem o push precisam re-resolver "Todos"/grupo depois - quem
+  // entrar num grupo apos o envio nao recebe retroativamente.
+  MENSAGEM_DIRETA
 
   @@map("tipo_evento_notificacao")
 }
@@ -1048,19 +1055,19 @@ model NotificacaoUsuario {
 // entre todas as chaves. Endpoint protegido por requireRole('admin') (ver
 // configuracoes.module.ts), mesmo criterio das outras 3 abas.
 model ConfiguracaoLlm {
-  id           String   @id @default(uuid())
+  id            String   @id @default(uuid())
   // "openrouter" por enquanto (gateway OpenAI-compatible cobrindo
   // Claude/GPT/etc via o campo `modelo`) - string livre, nao enum, pra
   // nao exigir migration se um provedor novo entrar depois.
-  provedor     String   @default("openrouter")
-  modelo       String   @default("anthropic/claude-opus-5")
+  provedor      String   @default("openrouter")
+  modelo        String   @default("anthropic/claude-opus-5")
   // Pedido explicito do usuario (2026-09-25) - liga/desliga o fallback em
   // cadeia entre chaves (ver ChaveLlm). Default LIGADO (mesmo
   // comportamento de sempre desde 2026-09-24). Desligado,
   // LlmClientService.gerarJson tenta SO a primeira chave ativa (menor
   // `ordem`) e propaga o erro direto se ela falhar, sem cair pra proxima.
-  fallbackAtivo Boolean @default(true) @map("fallback_ativo")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  fallbackAtivo Boolean  @default(true) @map("fallback_ativo")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_llm")
 }
@@ -1173,6 +1180,8 @@ model Vendedor {
   coberturasComoOriginal      CoberturaTemporaria[] @relation("CoberturaVendedorOriginal")
   coberturasComoSubstituto    CoberturaTemporaria[] @relation("CoberturaVendedorSubstituto")
   agendamentosVisita          AgendamentoVisita[]
+  gruposMensagem              GrupoMensagemMembro[]
+  mensagensRecebidas          MensagemNotificacao[]
 
   @@map("vendedores")
 }
@@ -1192,7 +1201,7 @@ model AgendamentoVisita {
   criadoPorId      String   @map("criado_por_id")
   criadoEm         DateTime @default(now()) @map("criado_em")
 
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   vendedor  Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
   criadoPor Usuario  @relation(fields: [criadoPorId], references: [id])
 
@@ -1229,14 +1238,14 @@ enum PapelVendedor {
 // 3. Margem ainda nao tem calculo de progresso implementado (so o nome
 //    existe como opcao selecionavel) - ver MetaVendedorService.obterProgresso.
 model MetaVendedor {
-  id            String                 @id @default(uuid())
-  vendedorId    String                 @map("vendedor_id")
-  periodicidade TipoPeriodicidadeMeta  @default(MENSAL)
+  id            String                @id @default(uuid())
+  vendedorId    String                @map("vendedor_id")
+  periodicidade TipoPeriodicidadeMeta @default(MENSAL)
   periodo       String
-  tipoMeta      TipoMeta               @default(DINHEIRO) @map("tipo_meta")
-  valorMeta     Decimal                @map("valor_meta") @db.Decimal(18, 6)
-  criadoEm      DateTime               @default(now()) @map("criado_em")
-  atualizadoEm  DateTime               @updatedAt @map("atualizado_em")
+  tipoMeta      TipoMeta              @default(DINHEIRO) @map("tipo_meta")
+  valorMeta     Decimal               @map("valor_meta") @db.Decimal(18, 6)
+  criadoEm      DateTime              @default(now()) @map("criado_em")
+  atualizadoEm  DateTime              @updatedAt @map("atualizado_em")
 
   vendedor Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
 
@@ -1332,17 +1341,17 @@ model ConfiguracaoDesconto {
 // que a tela pede pra existir, sem ainda ligar a nenhum fluxo real de
 // orcamento (fora do escopo desta OS).
 model ConfiguracaoOrcamento {
-  id                                        String   @id @default(uuid())
-  habilitarCriacaoOrcamento                 Boolean  @default(true) @map("habilitar_criacao_orcamento")
-  permitirVendedorTransformarEmPedido       Boolean  @default(true) @map("permitir_vendedor_transformar_em_pedido")
-  criarPedidoSugeridoComoOrcamento          Boolean  @default(true) @map("criar_pedido_sugerido_como_orcamento")
-  permitirAlteracaoVendedorOrcamentoCriado  Boolean  @default(true) @map("permitir_alteracao_vendedor_orcamento_criado")
+  id                                       String   @id @default(uuid())
+  habilitarCriacaoOrcamento                Boolean  @default(true) @map("habilitar_criacao_orcamento")
+  permitirVendedorTransformarEmPedido      Boolean  @default(true) @map("permitir_vendedor_transformar_em_pedido")
+  criarPedidoSugeridoComoOrcamento         Boolean  @default(true) @map("criar_pedido_sugerido_como_orcamento")
+  permitirAlteracaoVendedorOrcamentoCriado Boolean  @default(true) @map("permitir_alteracao_vendedor_orcamento_criado")
   // Pedido explicito do usuario (2026-09-24) - por padrao BLOQUEADO (mesmo
   // comportamento de sempre, sem mudanca nenhuma pra quem nao mexer na
   // config). Ligado, CriarPedidoService.validarItensSemDuplicata deixa de
   // rejeitar o mesmo produtoId duas vezes no mesmo pedido.
-  permitirItensRepetidos                    Boolean  @default(false) @map("permitir_itens_repetidos")
-  atualizadoEm                              DateTime @updatedAt @map("atualizado_em")
+  permitirItensRepetidos                   Boolean  @default(false) @map("permitir_itens_repetidos")
+  atualizadoEm                             DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_orcamento")
 }
@@ -1391,18 +1400,18 @@ model ComunicadoPedidoPdf {
 // "HH:mm" (string, nao Int) pra bater 1:1 com o input de horario da
 // imagem, sem inventar granularidade em minutos que a tela nao mostra.
 model ConfiguracaoRastreio {
-  id                                          String   @id @default(uuid())
-  desabilitarEdicaoHorarioTrabalhoAndroid     Boolean  @default(true) @map("desabilitar_edicao_horario_trabalho_android")
-  habilitarRastreamentoSabados                Boolean  @default(false) @map("habilitar_rastreamento_sabados")
-  habilitarRastreamentoDomingos               Boolean  @default(false) @map("habilitar_rastreamento_domingos")
-  horarioInicioRastreamento                   String   @default("07:30") @map("horario_inicio_rastreamento") @db.VarChar(5)
-  horarioTerminoRastreamento                  String   @default("18:00") @map("horario_termino_rastreamento") @db.VarChar(5)
-  precisaoMinimaMetrosGps                     Int      @default(50) @map("precisao_minima_metros_gps")
-  tempoMinimoAcordarGpsMs                     Int      @default(30000) @map("tempo_minimo_acordar_gps_ms")
-  permitirRegistroComGpsDesabilitado          Boolean  @default(false) @map("permitir_registro_com_gps_desabilitado")
-  distanciaMaximaClienteRegistroPedidoMetros  Int?     @map("distancia_maxima_cliente_registro_pedido_metros")
-  distanciaMaximaClienteRegistroVisitaMetros  Int      @default(50) @map("distancia_maxima_cliente_registro_visita_metros")
-  atualizadoEm                                DateTime @updatedAt @map("atualizado_em")
+  id                                         String   @id @default(uuid())
+  desabilitarEdicaoHorarioTrabalhoAndroid    Boolean  @default(true) @map("desabilitar_edicao_horario_trabalho_android")
+  habilitarRastreamentoSabados               Boolean  @default(false) @map("habilitar_rastreamento_sabados")
+  habilitarRastreamentoDomingos              Boolean  @default(false) @map("habilitar_rastreamento_domingos")
+  horarioInicioRastreamento                  String   @default("07:30") @map("horario_inicio_rastreamento") @db.VarChar(5)
+  horarioTerminoRastreamento                 String   @default("18:00") @map("horario_termino_rastreamento") @db.VarChar(5)
+  precisaoMinimaMetrosGps                    Int      @default(50) @map("precisao_minima_metros_gps")
+  tempoMinimoAcordarGpsMs                    Int      @default(30000) @map("tempo_minimo_acordar_gps_ms")
+  permitirRegistroComGpsDesabilitado         Boolean  @default(false) @map("permitir_registro_com_gps_desabilitado")
+  distanciaMaximaClienteRegistroPedidoMetros Int?     @map("distancia_maxima_cliente_registro_pedido_metros")
+  distanciaMaximaClienteRegistroVisitaMetros Int      @default(50) @map("distancia_maxima_cliente_registro_visita_metros")
+  atualizadoEm                               DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_rastreio")
 }
@@ -1586,14 +1595,14 @@ enum StatusAcaoFila {
 // VisitaFotoStorageService) - nao introduz dependencia de object storage
 // agora, arquivo institucional nao e' critico em volume.
 model Documento {
-  id            String   @id @default(uuid())
-  nome          String
-  categoria     String
-  caminhoArquivo String  @map("caminho_arquivo")
-  tipoMime      String   @map("tipo_mime")
-  tamanhoBytes  Int      @map("tamanho_bytes")
-  enviadoPorId  String   @map("enviado_por_id")
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  id             String   @id @default(uuid())
+  nome           String
+  categoria      String
+  caminhoArquivo String   @map("caminho_arquivo")
+  tipoMime       String   @map("tipo_mime")
+  tamanhoBytes   Int      @map("tamanho_bytes")
+  enviadoPorId   String   @map("enviado_por_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
 
   enviadoPor Usuario @relation(fields: [enviadoPorId], references: [id])
 
@@ -1613,19 +1622,19 @@ model Documento {
 // ERP (POST /comercial/v1/pedido, faturamento.parcelas[].idFormaPagamento)
 // - ver OS-pendentes-claude-code.md.
 model FormaPagamento {
-  id             String   @id @default(uuid())
-  idExternoErp   String   @unique @map("id_externo_erp")
-  codigo         String?
-  descricao      String?
-  inativa        Boolean  @default(false)
+  id                    String   @id @default(uuid())
+  idExternoErp          String   @unique @map("id_externo_erp")
+  codigo                String?
+  descricao             String?
+  inativa               Boolean  @default(false)
   // Override do admin (painel web, ativar/desativar), independente de
   // `inativa` (vem do Radar, sobrescrita a cada sync diario) - o upsert
   // de FormaPagamentoSyncStrategy nunca inclui este campo no `update`,
   // entao o sync nunca apaga essa escolha manual. Efetivamente
   // selecionavel na criacao de pedido so quando os dois forem false (ver
   // PagamentoService.listarFormasPagamento).
-  desativadaManualmente Boolean @default(false) @map("desativada_manualmente")
-  sincronizadoEm DateTime @map("sincronizado_em")
+  desativadaManualmente Boolean  @default(false) @map("desativada_manualmente")
+  sincronizadoEm        DateTime @map("sincronizado_em")
 
   pedidos Pedido[]
 
@@ -1644,28 +1653,85 @@ model FormaPagamento {
 // atual - mesmo criterio de nao filtrar dado bruto demais cedo, decisao
 // fica no service de leitura.
 model CondicaoPagamento {
-  id             String   @id @default(uuid())
-  idExternoErp   String   @unique @map("id_externo_erp")
-  codigo         String?
-  nome           String?
-  aVista         Boolean  @default(false) @map("a_vista")
-  comEntrada     Boolean  @default(false) @map("com_entrada")
-  antecipada     Boolean  @default(false)
+  id                    String    @id @default(uuid())
+  idExternoErp          String    @unique @map("id_externo_erp")
+  codigo                String?
+  nome                  String?
+  aVista                Boolean   @default(false) @map("a_vista")
+  comEntrada            Boolean   @default(false) @map("com_entrada")
+  antecipada            Boolean   @default(false)
   // Ate quando esta condicao pode ser usada - null = sem expiracao.
-  validade       DateTime?
+  validade              DateTime?
   // Parcelas nao tem identidade propria no WK Radar (so
   // percentual/prazo/idTipoVencimento) - mesmo criterio ja usado em
   // Cliente.enderecos: sem identidade propria pra preservar, JSONB e
   // suficiente.
-  parcelas       Json     @default("[]")
+  parcelas              Json      @default("[]")
   // Override do admin (painel web, ativar/desativar) - mesmo criterio de
   // FormaPagamento.desativadaManualmente: independente de `validade`,
   // nunca sobrescrito pelo sync (CondicaoPagamentoSyncStrategy.upsert nao
   // inclui este campo no `update`).
-  desativadaManualmente Boolean @default(false) @map("desativada_manualmente")
-  sincronizadoEm DateTime @map("sincronizado_em")
+  desativadaManualmente Boolean   @default(false) @map("desativada_manualmente")
+  sincronizadoEm        DateTime  @map("sincronizado_em")
 
   pedidos Pedido[]
 
   @@map("condicoes_pagamento")
+}
+
+// ---------------------------------------------------------------------------
+// Mensagens manuais do admin pro app do vendedor (tela de Notificacoes do
+// painel web). Grupos sao listas nomeadas de vendedores, mantidas na mesma
+// tela - sem relacao com a hierarquia supervisor->vendedor (um grupo pode
+// misturar equipes).
+// ---------------------------------------------------------------------------
+model GrupoMensagem {
+  id           String   @id @default(uuid())
+  nome         String   @unique
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  membros   GrupoMensagemMembro[]
+  mensagens MensagemNotificacao[]
+
+  @@map("grupos_mensagem")
+}
+
+model GrupoMensagemMembro {
+  grupoId    String @map("grupo_id")
+  vendedorId String @map("vendedor_id")
+
+  grupo    GrupoMensagem @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  vendedor Vendedor      @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
+
+  @@id([grupoId, vendedorId])
+  @@index([vendedorId])
+  @@map("grupos_mensagem_membros")
+}
+
+enum DestinoMensagem {
+  TODOS
+  VENDEDOR
+  GRUPO
+
+  @@map("destino_mensagem")
+}
+
+model MensagemNotificacao {
+  id                 String          @id @default(uuid())
+  autorId            String          @map("autor_id")
+  destino            DestinoMensagem
+  vendedorId         String?         @map("vendedor_id")
+  grupoId            String?         @map("grupo_id")
+  assunto            String
+  corpo              String
+  totalDestinatarios Int             @map("total_destinatarios")
+  criadoEm           DateTime        @default(now()) @map("criado_em")
+
+  autor    Usuario        @relation(fields: [autorId], references: [id])
+  vendedor Vendedor?      @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  grupo    GrupoMensagem? @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+
+  @@index([criadoEm])
+  @@map("mensagens_notificacao")
 }

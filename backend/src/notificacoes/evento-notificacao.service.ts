@@ -63,6 +63,10 @@ export async function registrarEventoNotificacao(
 // mesma transacao do sync), e unificar arriscaria os testes ja existentes
 // do dispatch por uma dependencia cruzada desnecessaria. Se um tipo novo de
 // evento entrar, ATUALIZAR OS DOIS (aqui e resolverTokensAlvo).
+// Excecao: MENSAGEM_DIRETA nunca passa por aqui - MensagensNotificacaoService
+// grava os NotificacaoUsuario direto no envio (destinatarios ja resolvidos).
+// Excecao: MENSAGEM_DIRETA nunca passa por aqui - MensagensNotificacaoService
+// grava os NotificacaoUsuario direto no envio (destinatarios ja resolvidos).
 async function resolverUsuariosAlvo(
   tx: PrismaTx,
   evento: { tipo: TipoEventoNotificacao; referenciaId: string },

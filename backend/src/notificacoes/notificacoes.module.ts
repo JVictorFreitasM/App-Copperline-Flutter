@@ -1,14 +1,17 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import type { IdpAuth } from '@copperline/idp-client';
+import { requireRole, type IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PushNotificationClientModule } from '../push-notification-client/push-notification-client.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
+import { AdminGruposMensagemController, AdminMensagensController } from './admin-mensagens.controller';
 import { DispositivosController } from './dispositivos.controller';
 import { DispositivosService } from './dispositivos.service';
 import { FavoritosService } from './favoritos.service';
+import { GruposMensagemService } from './grupos-mensagem.service';
+import { MensagensNotificacaoService } from './mensagens-notificacao.service';
 import { NOTIFICACAO_QUEUE } from './notificacao.constants';
 import { NotificacaoDispatchService } from './notificacao-dispatch.service';
 import { NotificacaoUsuarioService } from './notificacao-usuario.service';
@@ -23,7 +26,12 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     PushNotificationClientModule,
     BullModule.registerQueue({ name: NOTIFICACAO_QUEUE }),
   ],
-  controllers: [DispositivosController, NotificacoesController],
+  controllers: [
+    DispositivosController,
+    NotificacoesController,
+    AdminMensagensController,
+    AdminGruposMensagemController,
+  ],
   providers: [
     DispositivosService,
     // FavoritosService exportado pra ProdutosController (as rotas de
@@ -32,6 +40,8 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     FavoritosService,
     NotificacaoDispatchService,
     NotificacaoUsuarioService,
+    MensagensNotificacaoService,
+    GruposMensagemService,
     NotificacaoProcessor,
     NotificacaoScheduler,
   ],
@@ -44,5 +54,11 @@ export class NotificacoesModule implements NestModule {
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
       .forRoutes(DispositivosController, NotificacoesController);
+
+    // Mensagens manuais pro app do vendedor + grupos de destinatarios: so'
+    // admin (mesmo criterio da tela de Configuracoes).
+    consumer
+      .apply(RequireSessionMiddleware, this.idpAuth.requireAuth, requireRole('admin'))
+      .forRoutes(AdminMensagensController, AdminGruposMensagemController);
   }
 }

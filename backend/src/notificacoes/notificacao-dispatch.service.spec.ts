@@ -26,6 +26,7 @@ function prismaFake(overrides: {
     vendedorSolicitante?: { usuarioId: string | null };
   } | null;
   vendedor?: { usuarioId: string | null } | null;
+  destinatariosEvento?: { usuario: { dispositivos: { token: string }[] } }[];
 } = {}) {
   return {
     eventoNotificacao: {
@@ -45,6 +46,9 @@ function prismaFake(overrides: {
     },
     produtoFavorito: {
       findMany: jest.fn().mockResolvedValue(overrides.favoritos ?? []),
+    },
+    notificacaoUsuario: {
+      findMany: jest.fn().mockResolvedValue(overrides.destinatariosEvento ?? []),
     },
     visita: {
       findUnique: jest
@@ -235,6 +239,30 @@ describe('NotificacaoDispatchService.processarPendentes', () => {
       expect(pushClient.enviar).toHaveBeenCalledWith(['token-vendedor'], expect.anything());
     },
   );
+
+  it('MENSAGEM_DIRETA: so vai pros dispositivos dos NotificacaoUsuario do evento, nunca broadcast', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake({ tipo: 'MENSAGEM_DIRETA', id: 'evento-msg' })],
+      destinatariosEvento: [
+        { usuario: { dispositivos: [{ token: 'token-a' }, { token: 'token-a2' }] } },
+        { usuario: { dispositivos: [{ token: 'token-b' }] } },
+      ],
+      dispositivos: [{ token: 'token-de-quem-nao-recebe' }],
+    });
+    const pushClient = pushClientFake({ sucesso: [], falha: [] });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(prisma.notificacaoUsuario.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { eventoId: 'evento-msg' } }),
+    );
+    expect(pushClient.enviar).toHaveBeenCalledWith(
+      ['token-a', 'token-a2', 'token-b'],
+      expect.anything(),
+    );
+    expect(prisma.dispositivoUsuario.findMany).not.toHaveBeenCalled();
+  });
 
   it('marca ERRO e continua processando os outros eventos do lote quando um falha', async () => {
     const prisma = prismaFake({
