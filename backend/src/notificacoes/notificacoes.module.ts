@@ -6,13 +6,20 @@ import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PushNotificationClientModule } from '../push-notification-client/push-notification-client.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
-import { AdminGruposMensagemController, AdminMensagensController } from './admin-mensagens.controller';
+import {
+  AdminGruposMensagemController,
+  AdminMensagensController,
+  AdminMensagensPeriodicasController,
+} from './admin-mensagens.controller';
 import { DispositivosController } from './dispositivos.controller';
 import { DispositivosService } from './dispositivos.service';
 import { FavoritosService } from './favoritos.service';
 import { GruposMensagemService } from './grupos-mensagem.service';
 import { MensagensNotificacaoService } from './mensagens-notificacao.service';
-import { NOTIFICACAO_QUEUE } from './notificacao.constants';
+import { MensagemPeriodicaProcessor } from './mensagem-periodica.processor';
+import { MensagemPeriodicaScheduler } from './mensagem-periodica.scheduler';
+import { MensagensPeriodicasService } from './mensagens-periodicas.service';
+import { MENSAGEM_PERIODICA_QUEUE, NOTIFICACAO_QUEUE } from './notificacao.constants';
 import { NotificacaoDispatchService } from './notificacao-dispatch.service';
 import { NotificacaoUsuarioService } from './notificacao-usuario.service';
 import { NotificacoesController } from './notificacoes.controller';
@@ -24,13 +31,14 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     PrismaModule,
     UsuariosModule,
     PushNotificationClientModule,
-    BullModule.registerQueue({ name: NOTIFICACAO_QUEUE }),
+    BullModule.registerQueue({ name: NOTIFICACAO_QUEUE }, { name: MENSAGEM_PERIODICA_QUEUE }),
   ],
   controllers: [
     DispositivosController,
     NotificacoesController,
     AdminMensagensController,
     AdminGruposMensagemController,
+    AdminMensagensPeriodicasController,
   ],
   providers: [
     DispositivosService,
@@ -42,6 +50,9 @@ import { NotificacaoScheduler } from './notificacao.scheduler';
     NotificacaoUsuarioService,
     MensagensNotificacaoService,
     GruposMensagemService,
+    MensagensPeriodicasService,
+    MensagemPeriodicaScheduler,
+    MensagemPeriodicaProcessor,
     NotificacaoProcessor,
     NotificacaoScheduler,
   ],
@@ -59,6 +70,10 @@ export class NotificacoesModule implements NestModule {
     // admin (mesmo criterio da tela de Configuracoes).
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth, requireRole('admin'))
-      .forRoutes(AdminMensagensController, AdminGruposMensagemController);
+      .forRoutes(
+        AdminMensagensController,
+        AdminGruposMensagemController,
+        AdminMensagensPeriodicasController,
+      );
   }
 }

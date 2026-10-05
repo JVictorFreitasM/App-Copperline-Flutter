@@ -5,7 +5,9 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { redirecionarParaLogin } from "@/lib/auth";
 import type {
   DestinoMensagem,
+  FrequenciaMensagem,
   GrupoMensagemDto,
+  MensagemPeriodicaDto,
   ResultadoEnvioMensagemDto,
 } from "@/lib/mensagens";
 
@@ -119,6 +121,92 @@ export async function removerGrupo(id: string): Promise<ResultadoAcao> {
         cache: "no-store",
       }),
     "Erro desconhecido ao remover o grupo.",
+  );
+  if (resultado.ok) revalidatePath(ROTA);
+  return resultado;
+}
+
+export async function reenviarMensagem(id: string): Promise<ResultadoAcao<ResultadoEnvioMensagemDto>> {
+  const resultado = await executar(
+    () =>
+      apiFetch<ResultadoEnvioMensagemDto>(`/admin/mensagens/${encodeURIComponent(id)}/reenviar`, {
+        method: "POST",
+        cache: "no-store",
+      }),
+    "Erro desconhecido ao reenviar a mensagem.",
+  );
+  if (resultado.ok) revalidatePath(ROTA);
+  return resultado;
+}
+
+export interface SalvarPeriodicaInput extends EnviarMensagemInput {
+  frequencia: FrequenciaMensagem;
+  horario: string;
+  diaSemana?: number;
+  diaMes?: number;
+}
+
+export async function criarPeriodica(
+  input: SalvarPeriodicaInput,
+): Promise<ResultadoAcao<MensagemPeriodicaDto>> {
+  const resultado = await executar(
+    () =>
+      apiFetch<MensagemPeriodicaDto>("/admin/mensagens-periodicas", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    "Erro desconhecido ao agendar a mensagem.",
+  );
+  if (resultado.ok) revalidatePath(ROTA);
+  return resultado;
+}
+
+export async function atualizarPeriodica(
+  id: string,
+  input: SalvarPeriodicaInput,
+): Promise<ResultadoAcao<MensagemPeriodicaDto>> {
+  const resultado = await executar(
+    () =>
+      apiFetch<MensagemPeriodicaDto>(`/admin/mensagens-periodicas/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    "Erro desconhecido ao salvar a mensagem periódica.",
+  );
+  if (resultado.ok) revalidatePath(ROTA);
+  return resultado;
+}
+
+export async function alternarPeriodica(
+  id: string,
+  ativa: boolean,
+): Promise<ResultadoAcao<MensagemPeriodicaDto>> {
+  const resultado = await executar(
+    () =>
+      apiFetch<MensagemPeriodicaDto>(`/admin/mensagens-periodicas/${encodeURIComponent(id)}/ativa`, {
+        method: "PATCH",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativa }),
+      }),
+    "Erro desconhecido ao alterar a mensagem periódica.",
+  );
+  if (resultado.ok) revalidatePath(ROTA);
+  return resultado;
+}
+
+export async function removerPeriodica(id: string): Promise<ResultadoAcao> {
+  const resultado = await executar(
+    () =>
+      apiFetch<void>(`/admin/mensagens-periodicas/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        cache: "no-store",
+      }),
+    "Erro desconhecido ao remover a mensagem periódica.",
   );
   if (resultado.ok) revalidatePath(ROTA);
   return resultado;

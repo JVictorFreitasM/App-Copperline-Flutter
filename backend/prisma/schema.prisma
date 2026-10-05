@@ -903,6 +903,7 @@ model Usuario {
   itensPedidoDecididos      PedidoItem[]
   notificacoes              NotificacaoUsuario[]
   mensagensEnviadas         MensagemNotificacao[]
+  mensagemPeriodicas        MensagemPeriodica[]
 
   @@map("usuarios")
 }
@@ -1182,6 +1183,7 @@ model Vendedor {
   agendamentosVisita          AgendamentoVisita[]
   gruposMensagem              GrupoMensagemMembro[]
   mensagensRecebidas          MensagemNotificacao[]
+  mensagensPeriodicas         MensagemPeriodica[]
 
   @@map("vendedores")
 }
@@ -1691,8 +1693,9 @@ model GrupoMensagem {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  membros   GrupoMensagemMembro[]
-  mensagens MensagemNotificacao[]
+  membros    GrupoMensagemMembro[]
+  mensagens  MensagemNotificacao[]
+  periodicas MensagemPeriodica[]
 
   @@map("grupos_mensagem")
 }
@@ -1726,12 +1729,63 @@ model MensagemNotificacao {
   assunto            String
   corpo              String
   totalDestinatarios Int             @map("total_destinatarios")
+  // Preenchido quando o envio veio do agendamento (MensagemPeriodica) -
+  // reenvio manual e envio avulso ficam null.
+  periodicaId        String?         @map("periodica_id")
   criadoEm           DateTime        @default(now()) @map("criado_em")
 
-  autor    Usuario        @relation(fields: [autorId], references: [id])
-  vendedor Vendedor?      @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
-  grupo    GrupoMensagem? @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  autor     Usuario            @relation(fields: [autorId], references: [id])
+  vendedor  Vendedor?          @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  grupo     GrupoMensagem?     @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  periodica MensagemPeriodica? @relation(fields: [periodicaId], references: [id], onDelete: SetNull)
 
   @@index([criadoEm])
   @@map("mensagens_notificacao")
+}
+
+enum FrequenciaMensagem {
+  DIARIA
+  DIAS_UTEIS
+  SEMANAL
+  MENSAL
+
+  @@map("frequencia_mensagem")
+}
+
+// Mensagem manual que o admin agenda pra repetir (ex: "toda segunda as 8h").
+// Cada disparo cria uma MensagemNotificacao normal (historico, inbox e push
+// iguais a um envio avulso), com periodicaId apontando pra ca. Horario em
+// America/Sao_Paulo. proximoEnvioEm e' a unica fonte de "quando dispara" -
+// o job de 1 em 1 minuto so procura ativas com proximoEnvioEm <= agora.
+model MensagemPeriodica {
+  id             String             @id @default(uuid())
+  autorId        String             @map("autor_id")
+  destino        DestinoMensagem
+  vendedorId     String?            @map("vendedor_id")
+  grupoId        String?            @map("grupo_id")
+  assunto        String
+  corpo          String
+  frequencia     FrequenciaMensagem
+  // "HH:mm" no fuso de Sao Paulo.
+  horario        String
+  // 0 (domingo) a 6 (sabado) - so SEMANAL.
+  diaSemana      Int?               @map("dia_semana")
+  // 1 a 31 - so MENSAL (mes mais curto cai no ultimo dia).
+  diaMes         Int?               @map("dia_mes")
+  ativa          Boolean            @default(true)
+  proximoEnvioEm DateTime           @map("proximo_envio_em")
+  ultimoEnvioEm  DateTime?          @map("ultimo_envio_em")
+  // Motivo do ultimo disparo que nao enviou (ex: ninguem com app vinculado,
+  // grupo removido) - null quando o ultimo disparo deu certo.
+  ultimoErro     String?            @map("ultimo_erro")
+  criadoEm       DateTime           @default(now()) @map("criado_em")
+  atualizadoEm   DateTime           @updatedAt @map("atualizado_em")
+
+  autor     Usuario               @relation(fields: [autorId], references: [id])
+  vendedor  Vendedor?             @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  grupo     GrupoMensagem?        @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  mensagens MensagemNotificacao[]
+
+  @@index([ativa, proximoEnvioEm])
+  @@map("mensagens_periodicas")
 }

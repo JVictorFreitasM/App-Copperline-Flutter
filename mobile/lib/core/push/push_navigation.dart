@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../screens/aprovacoes_screen.dart';
+import '../../screens/notificacao_mensagem_detalhe_screen.dart';
 import '../../screens/pedido_detalhe_screen.dart';
 import '../../screens/produto_detalhe_screen.dart';
 import 'push_config.dart';
@@ -35,6 +36,16 @@ final navigatorKey = GlobalKey<NavigatorState>();
 void navegarParaNotificacao(Map<String, dynamic> dados) {
   final navigator = navigatorKey.currentState;
   if (navigator == null) {
+    return;
+  }
+
+  // Mensagem manual do admin: o payload só tem `mensagemId` (o mesmo push vai
+  // pra vários usuários, então não carrega o id da notificação de cada um).
+  final mensagemId = dados['mensagemId'] as String?;
+  if (mensagemId != null) {
+    navigator.push(
+      MaterialPageRoute(builder: (_) => NotificacaoMensagemDetalheScreen(mensagemId: mensagemId)),
+    );
     return;
   }
 

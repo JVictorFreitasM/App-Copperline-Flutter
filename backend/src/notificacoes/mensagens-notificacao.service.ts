@@ -20,6 +20,8 @@ export interface MensagemEnviadaDto {
   destinoRotulo: string;
   totalDestinatarios: number;
   autorNome: string;
+  // true quando o envio veio de uma mensagem periodica agendada.
+  periodica: boolean;
   criadoEm: string;
 }
 
@@ -47,7 +49,11 @@ interface VendedorAlvo {
 export class MensagensNotificacaoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async enviar(autorId: string, dto: EnviarMensagemDto): Promise<ResultadoEnvioMensagemDto> {
+  async enviar(
+    autorId: string,
+    dto: EnviarMensagemDto,
+    periodicaId?: string,
+  ): Promise<ResultadoEnvioMensagemDto> {
     const alvos = await this.resolverVendedoresAlvo(dto);
     const usuarioIds = [
       ...new Set(alvos.flatMap((vendedor) => (vendedor.usuarioId ? [vendedor.usuarioId] : []))),
@@ -69,6 +75,7 @@ export class MensagensNotificacaoService {
           assunto: dto.assunto,
           corpo: dto.mensagem,
           totalDestinatarios: usuarioIds.length,
+          periodicaId: periodicaId ?? null,
         },
       });
       const evento = await tx.eventoNotificacao.create({
@@ -92,6 +99,34 @@ export class MensagensNotificacaoService {
       totalDestinatarios: usuarioIds.length,
       semAppVinculado: alvos.length - usuarioIds.length,
     };
+  }
+
+  // Reenvio manual: mesma mensagem pro MESMO destino, so que os destinatarios
+  // sao resolvidos DE NOVO agora (quem entrou no grupo depois recebe, quem
+  // saiu nao). Vira uma mensagem nova no historico - nunca mexe na original.
+  // Vendedor/grupo de destino que foram removidos desde o envio original
+  // impedem o reenvio (422), em vez de cair em "Todos" por engano.
+  async reenviar(autorId: string, mensagemId: string): Promise<ResultadoEnvioMensagemDto> {
+    const original = await this.prisma.mensagemNotificacao.findUnique({
+      where: { id: mensagemId },
+    });
+    if (!original) {
+      throw new NotFoundException(`Mensagem '${mensagemId}' não encontrada`);
+    }
+    if (original.destino === 'VENDEDOR' && !original.vendedorId) {
+      throw new UnprocessableEntityException('O vendedor de destino desta mensagem foi removido.');
+    }
+    if (original.destino === 'GRUPO' && !original.grupoId) {
+      throw new UnprocessableEntityException('O grupo de destino desta mensagem foi removido.');
+    }
+
+    return this.enviar(autorId, {
+      destino: original.destino,
+      vendedorId: original.vendedorId ?? undefined,
+      grupoId: original.grupoId ?? undefined,
+      assunto: original.assunto,
+      mensagem: original.corpo,
+    });
   }
 
   async listarDestinatarios(): Promise<DestinatarioMensagemDto[]> {
@@ -136,6 +171,7 @@ export class MensagensNotificacaoService {
         ),
         totalDestinatarios: mensagem.totalDestinatarios,
         autorNome: mensagem.autor.nome,
+        periodica: mensagem.periodicaId !== null,
         criadoEm: mensagem.criadoEm.toISOString(),
       })),
       total,
@@ -152,6 +188,11 @@ export class MensagensNotificacaoService {
     }
 
     if (dto.destino === 'VENDEDOR') {
+      // Chamadas internas (mensagem periodica cujo vendedor foi removido) nao
+      // passam pela validacao do DTO - sem id o Prisma lancaria um erro cru.
+      if (!dto.vendedorId) {
+        throw new UnprocessableEntityException('O vendedor de destino foi removido.');
+      }
       const vendedor = await this.prisma.vendedor.findUnique({
         where: { id: dto.vendedorId },
         select,
@@ -162,6 +203,9 @@ export class MensagensNotificacaoService {
       return [vendedor];
     }
 
+    if (!dto.grupoId) {
+      throw new UnprocessableEntityException('O grupo de destino foi removido.');
+    }
     const grupo = await this.prisma.grupoMensagem.findUnique({
       where: { id: dto.grupoId },
       select: {
@@ -175,7 +219,7 @@ export class MensagensNotificacaoService {
   }
 }
 
-function rotuloDoDestino(
+export function rotuloDoDestino(
   destino: 'TODOS' | 'VENDEDOR' | 'GRUPO',
   vendedorNome: string | null,
   grupoNome: string | null,

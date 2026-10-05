@@ -29,6 +29,18 @@ final contagemNaoLidasProvider = FutureProvider<int>((ref) async {
   return json['quantidade'] as int;
 });
 
+/// GET /notificacoes/mensagens/:mensagemId - detalhe de uma mensagem manual
+/// do admin. autoDispose de propósito: cada abertura da tela rebusca (e o
+/// estado de "lida" volta atualizado), em vez de reaproveitar um cache velho.
+final mensagemDetalheProvider = FutureProvider.autoDispose.family<NotificacaoDetalhe, String>((
+  ref,
+  mensagemId,
+) async {
+  final apiClient = ref.watch(apiClientProvider);
+  final json = await apiClient.getJson('/notificacoes/mensagens/${Uri.encodeComponent(mensagemId)}');
+  return NotificacaoDetalhe.fromJson(json);
+});
+
 final notificacoesServiceProvider = Provider<NotificacoesService>((ref) {
   return NotificacoesService(ref.watch(apiClientProvider));
 });

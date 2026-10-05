@@ -30,6 +30,10 @@ void main() {
       );
     });
 
+    test('mensagemId (mensagem manual do admin) nao tem categoria - o banner nunca e silenciado', () {
+      expect(categoriaDoPayload({'mensagemId': 'm1'}), isNull);
+    });
+
     test('payload sem nenhuma chave conhecida retorna null', () {
       expect(categoriaDoPayload({'algumaCoisa': 'x'}), isNull);
     });

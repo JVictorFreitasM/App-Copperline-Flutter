@@ -121,3 +121,81 @@ describe('NotificacaoUsuarioService.marcarTodasComoLidas', () => {
     expect(resultado.quantidade).toBe(3);
   });
 });
+
+describe('NotificacaoUsuarioService.obterDetalheDaMensagem', () => {
+  function prismaComMensagem(mensagem: Record<string, unknown> | null, notificacao: Record<string, unknown> | null) {
+    return {
+      notificacaoUsuario: { findFirst: jest.fn().mockResolvedValue(notificacao) },
+      mensagemNotificacao: { findUnique: jest.fn().mockResolvedValue(mensagem) },
+    };
+  }
+
+  const notificacaoDeMensagem = notificacaoBruta({
+    evento: {
+      tipo: 'MENSAGEM_DIRETA',
+      titulo: 'Aviso',
+      corpo: 'Texto completo da mensagem',
+      dados: { mensagemId: 'm1' },
+      referenciaId: 'm1',
+    },
+  });
+
+  it('MENSAGEM_DIRETA: devolve autor, destino do ponto de vista de quem recebeu e se e periodica', async () => {
+    const prisma = prismaComMensagem(
+      { destino: 'GRUPO', periodicaId: 'p1', autor: { nome: 'Chefe' }, grupo: { nome: 'Sul' } },
+      notificacaoDeMensagem,
+    );
+    const service = new NotificacaoUsuarioService(prisma as never);
+
+    const detalhe = await service.obterDetalheDaMensagem('usuario-1', 'm1');
+
+    expect(detalhe.corpo).toBe('Texto completo da mensagem');
+    expect(detalhe.mensagem).toEqual({
+      autorNome: 'Chefe',
+      destinoRotulo: 'Grupo: Sul',
+      periodica: true,
+    });
+  });
+
+  it.each([
+    ['TODOS', 'Todos os vendedores'],
+    ['VENDEDOR', 'Somente você'],
+  ])('destino %s vira o rotulo %p (nunca lista quem mais recebeu)', async (destino, rotulo) => {
+    const prisma = prismaComMensagem(
+      { destino, periodicaId: null, autor: { nome: 'Chefe' }, grupo: null },
+      notificacaoDeMensagem,
+    );
+    const service = new NotificacaoUsuarioService(prisma as never);
+
+    const detalhe = await service.obterDetalheDaMensagem('usuario-1', 'm1');
+
+    expect(detalhe.mensagem).toMatchObject({ destinoRotulo: rotulo, periodica: false });
+  });
+
+  it('mensagem original ausente: devolve a notificacao com mensagem null', async () => {
+    const prisma = prismaComMensagem(null, notificacaoDeMensagem);
+    const service = new NotificacaoUsuarioService(prisma as never);
+
+    const detalhe = await service.obterDetalheDaMensagem('usuario-1', 'm1');
+
+    expect(detalhe.corpo).toBe('Texto completo da mensagem');
+    expect(detalhe.mensagem).toBeNull();
+  });
+
+  it('dono e tipo conferidos na propria query; quem nao recebeu -> 404 (anti-IDOR)', async () => {
+    const prisma = prismaComMensagem(null, null);
+    const service = new NotificacaoUsuarioService(prisma as never);
+
+    await expect(service.obterDetalheDaMensagem('usuario-1', 'msg-de-outro')).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.notificacaoUsuario.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          usuarioId: 'usuario-1',
+          evento: { tipo: 'MENSAGEM_DIRETA', referenciaId: 'msg-de-outro' },
+        },
+      }),
+    );
+  });
+});

@@ -6,9 +6,15 @@ import type { PaginatedResult } from '../common/pagination';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { EnviarMensagemDto } from './dto/enviar-mensagem.dto';
 import { SalvarGrupoMensagemDto } from './dto/salvar-grupo-mensagem.dto';
+import {
+  AlternarMensagemPeriodicaDto,
+  SalvarMensagemPeriodicaDto,
+} from './dto/salvar-mensagem-periodica.dto';
 import { GruposMensagemService } from './grupos-mensagem.service';
 import type { GrupoMensagemDto } from './grupos-mensagem.service';
 import { MensagensNotificacaoService } from './mensagens-notificacao.service';
+import { MensagensPeriodicasService } from './mensagens-periodicas.service';
+import type { MensagemPeriodicaDto } from './mensagens-periodicas.service';
 import type {
   DestinatarioMensagemDto,
   MensagemEnviadaDto,
@@ -32,6 +38,17 @@ export class AdminMensagensController {
   ): Promise<ResultadoEnvioMensagemDto> {
     const autor = await this.usuariosService.obterOuCriarPorSub(idpUser);
     return this.mensagensService.enviar(autor.id, dto);
+  }
+
+  // Reenvio manual de uma mensagem ja enviada: mesmo conteudo e destino,
+  // destinatarios resolvidos de novo agora. Mensagem nova no historico.
+  @Post(':id/reenviar')
+  async reenviar(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ResultadoEnvioMensagemDto> {
+    const autor = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.mensagensService.reenviar(autor.id, id);
   }
 
   @Get()
@@ -71,5 +88,49 @@ export class AdminGruposMensagemController {
   @HttpCode(204)
   remover(@Param('id') id: string): Promise<void> {
     return this.gruposService.remover(id);
+  }
+}
+
+@Controller('admin/mensagens-periodicas')
+export class AdminMensagensPeriodicasController {
+  constructor(
+    private readonly periodicasService: MensagensPeriodicasService,
+    private readonly usuariosService: UsuariosService,
+  ) {}
+
+  @Get()
+  listar(): Promise<MensagemPeriodicaDto[]> {
+    return this.periodicasService.listar();
+  }
+
+  @Post()
+  async criar(
+    @Body() dto: SalvarMensagemPeriodicaDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<MensagemPeriodicaDto> {
+    const autor = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.periodicasService.criar(autor.id, dto);
+  }
+
+  @Patch(':id')
+  atualizar(
+    @Param('id') id: string,
+    @Body() dto: SalvarMensagemPeriodicaDto,
+  ): Promise<MensagemPeriodicaDto> {
+    return this.periodicasService.atualizar(id, dto);
+  }
+
+  @Patch(':id/ativa')
+  alternar(
+    @Param('id') id: string,
+    @Body() dto: AlternarMensagemPeriodicaDto,
+  ): Promise<MensagemPeriodicaDto> {
+    return this.periodicasService.alternar(id, dto.ativa);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  remover(@Param('id') id: string): Promise<void> {
+    return this.periodicasService.remover(id);
   }
 }

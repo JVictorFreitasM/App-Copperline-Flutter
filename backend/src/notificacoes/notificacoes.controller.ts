@@ -5,7 +5,7 @@ import type { PaginatedResult } from '../common/pagination';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { ListarNotificacoesQueryDto } from './dto/listar-notificacoes-query.dto';
 import { NotificacaoUsuarioService } from './notificacao-usuario.service';
-import type { NotificacaoDto } from './notificacao-usuario.service';
+import type { NotificacaoDetalheDto, NotificacaoDto } from './notificacao-usuario.service';
 
 // Epico 5 - protegido por requireAuth via MiddlewareConsumer (ver
 // notificacoes.module.ts, mesmo padrao de DispositivosController). Sempre
@@ -34,6 +34,17 @@ export class NotificacoesController {
     const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
     const quantidade = await this.notificacaoUsuarioService.contarNaoLidas(usuario.id);
     return { quantidade };
+  }
+
+  // Dois segmentos fixos ('mensagens/:id') - nao colide com ':id/lida' nem
+  // com 'contagem-nao-lidas'.
+  @Get('mensagens/:mensagemId')
+  async obterDetalheDaMensagem(
+    @Param('mensagemId') mensagemId: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<NotificacaoDetalheDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    return this.notificacaoUsuarioService.obterDetalheDaMensagem(usuario.id, mensagemId);
   }
 
   @Patch(':id/lida')

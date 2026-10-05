@@ -9,6 +9,7 @@ function dto(overrides: Partial<EnviarMensagemDto> = {}): EnviarMensagemDto {
 }
 
 function prismaFake(overrides: {
+  original?: Record<string, unknown> | null;
   vendedores?: VendedorFake[];
   vendedor?: VendedorFake | null;
   grupo?: { membros: { vendedor: VendedorFake }[] } | null;
@@ -20,6 +21,9 @@ function prismaFake(overrides: {
   };
   return {
     tx,
+    mensagemNotificacao: {
+      findUnique: jest.fn().mockResolvedValue('original' in overrides ? overrides.original : null),
+    },
     vendedor: {
       findMany: jest.fn().mockResolvedValue(overrides.vendedores ?? []),
       findUnique: jest.fn().mockResolvedValue('vendedor' in overrides ? overrides.vendedor : null),
@@ -153,5 +157,74 @@ describe('MensagensNotificacaoService.enviar', () => {
     const service = new MensagensNotificacaoService(prisma as never);
 
     await expect(service.enviar('autor-1', dto())).rejects.toThrow(UnprocessableEntityException);
+  });
+});
+
+describe('MensagensNotificacaoService.reenviar', () => {
+  const originalDeGrupo = {
+    id: 'msg-original',
+    destino: 'GRUPO',
+    vendedorId: null,
+    grupoId: 'g1',
+    assunto: 'Aviso',
+    corpo: 'Reunião às 9h',
+  };
+
+  it('reenvia o mesmo conteudo pro mesmo destino, resolvendo os destinatarios DE NOVO', async () => {
+    const prisma = prismaFake({
+      original: originalDeGrupo,
+      grupo: { membros: [{ vendedor: { id: 'v9', nome: 'Novato', usuarioId: 'u9' } }] },
+    });
+    const service = new MensagensNotificacaoService(prisma as never);
+
+    const resultado = await service.reenviar('autor-2', 'msg-original');
+
+    expect(prisma.tx.mensagemNotificacao.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        autorId: 'autor-2',
+        destino: 'GRUPO',
+        grupoId: 'g1',
+        assunto: 'Aviso',
+        corpo: 'Reunião às 9h',
+        periodicaId: null,
+      }),
+    });
+    expect(prisma.tx.notificacaoUsuario.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: [{ usuarioId: 'u9', eventoId: 'evento-1' }] }),
+    );
+    expect(resultado.totalDestinatarios).toBe(1);
+  });
+
+  it('mensagem inexistente -> 404', async () => {
+    const prisma = prismaFake({ original: null });
+    const service = new MensagensNotificacaoService(prisma as never);
+
+    await expect(service.reenviar('autor-2', 'nao-existe')).rejects.toThrow(NotFoundException);
+  });
+
+  it.each([
+    ['GRUPO', { destino: 'GRUPO', vendedorId: null, grupoId: null }],
+    ['VENDEDOR', { destino: 'VENDEDOR', vendedorId: null, grupoId: null }],
+  ])('destino %s removido: 422 em vez de cair em Todos', async (_nome, destino) => {
+    const prisma = prismaFake({ original: { ...originalDeGrupo, ...destino } });
+    const service = new MensagensNotificacaoService(prisma as never);
+
+    await expect(service.reenviar('autor-2', 'msg-original')).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('MensagensNotificacaoService.enviar - origem periodica', () => {
+  it('grava periodicaId quando informado', async () => {
+    const prisma = prismaFake({ vendedores: [{ id: 'v1', nome: 'Ana', usuarioId: 'u1' }] });
+    const service = new MensagensNotificacaoService(prisma as never);
+
+    await service.enviar('autor-1', dto(), 'periodica-9');
+
+    expect(prisma.tx.mensagemNotificacao.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ periodicaId: 'periodica-9' }),
+    });
   });
 });

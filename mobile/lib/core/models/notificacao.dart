@@ -48,3 +48,47 @@ class Notificacao {
     dados: dados,
   );
 }
+
+/// Quem enviou e pra quem foi uma mensagem manual do admin, do ponto de
+/// vista de quem recebeu (`destinoRotulo`: "Todos os vendedores", "Somente
+/// você" ou "Grupo: X" - nunca a lista dos outros destinatários).
+class MensagemInfo {
+  const MensagemInfo({
+    required this.autorNome,
+    required this.destinoRotulo,
+    required this.periodica,
+  });
+
+  factory MensagemInfo.fromJson(Map<String, dynamic> json) {
+    return MensagemInfo(
+      autorNome: json['autorNome'] as String,
+      destinoRotulo: json['destinoRotulo'] as String,
+      periodica: json['periodica'] as bool,
+    );
+  }
+
+  final String autorNome;
+  final String destinoRotulo;
+  final bool periodica;
+}
+
+/// GET /notificacoes/mensagens/:mensagemId - a notificação inteira (corpo
+/// completo, sem truncar) + quem enviou. Mesmo shape de
+/// `NotificacaoDetalheDto` no backend.
+class NotificacaoDetalhe {
+  const NotificacaoDetalhe({required this.notificacao, this.mensagem});
+
+  factory NotificacaoDetalhe.fromJson(Map<String, dynamic> json) {
+    final mensagem = json['mensagem'] as Map<String, dynamic>?;
+    return NotificacaoDetalhe(
+      notificacao: Notificacao.fromJson(json),
+      mensagem: mensagem == null ? null : MensagemInfo.fromJson(mensagem),
+    );
+  }
+
+  final Notificacao notificacao;
+
+  /// Nulo só se a mensagem original sumiu (não há exclusão hoje) - a tela
+  /// ainda mostra título e texto da notificação.
+  final MensagemInfo? mensagem;
+}

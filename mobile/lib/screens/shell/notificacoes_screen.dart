@@ -171,7 +171,10 @@ class _LinhaNotificacaoState extends ConsumerState<_LinhaNotificacao> {
   // Notificação de pedido abre o pedido; a de solicitação de desconto (do
   // supervisor) abre as Aprovações - mesma regra do toque no push (ver
   // navegarParaNotificacao). Abrir já marca como lida.
+  bool get _ehMensagem => widget.notificacao.dados['mensagemId'] != null;
+
   bool get _temDestino =>
+      _ehMensagem ||
       widget.notificacao.dados['pedidoId'] != null ||
       widget.notificacao.dados['produtoId'] != null ||
       widget.notificacao.dados['solicitacaoId'] != null;
@@ -221,6 +224,10 @@ class _LinhaNotificacaoState extends ConsumerState<_LinhaNotificacao> {
                     const SizedBox(height: 2),
                     Text(
                       notificacao.corpo,
+                      // Mensagem do admin pode ser longa: a lista mostra só um
+                      // trecho, o texto inteiro está na tela de detalhe.
+                      maxLines: _ehMensagem ? 2 : null,
+                      overflow: _ehMensagem ? TextOverflow.ellipsis : null,
                       style: const TextStyle(fontSize: 12, color: AppColors.muted),
                     ),
                     const SizedBox(height: 4),
@@ -232,7 +239,9 @@ class _LinhaNotificacaoState extends ConsumerState<_LinhaNotificacao> {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          notificacao.dados['pedidoId'] != null
+                          _ehMensagem
+                              ? 'Ler mensagem'
+                              : notificacao.dados['pedidoId'] != null
                               ? 'Ver pedido'
                               : (notificacao.dados['produtoId'] != null
                                     ? 'Ver produto'

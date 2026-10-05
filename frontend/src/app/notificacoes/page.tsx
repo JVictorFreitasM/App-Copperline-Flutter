@@ -12,6 +12,7 @@ import type {
   DestinatarioMensagemDto,
   GrupoMensagemDto,
   MensagemEnviadaDto,
+  MensagemPeriodicaDto,
 } from "@/lib/mensagens";
 
 const LIMITE_POR_PAGINA = 20;
@@ -57,19 +58,22 @@ export default async function NotificacoesPage({
   let vendedores: DestinatarioMensagemDto[] = [];
   let grupos: GrupoMensagemDto[] = [];
   let enviadas: MensagemEnviadaDto[] = [];
+  let periodicas: MensagemPeriodicaDto[] = [];
   let mensagensIndisponiveis = false;
   if (ehAdmin) {
     try {
-      const [destinatarios, gruposApi, historico] = await Promise.all([
+      const [destinatarios, gruposApi, historico, periodicasApi] = await Promise.all([
         apiFetch<DestinatarioMensagemDto[]>("/admin/mensagens/destinatarios", { cache: "no-store" }),
         apiFetch<GrupoMensagemDto[]>("/admin/grupos-mensagem", { cache: "no-store" }),
         apiFetch<PaginatedResult<MensagemEnviadaDto>>("/admin/mensagens?limit=10", {
           cache: "no-store",
         }),
+        apiFetch<MensagemPeriodicaDto[]>("/admin/mensagens-periodicas", { cache: "no-store" }),
       ]);
       vendedores = destinatarios;
       grupos = gruposApi;
       enviadas = historico.data;
+      periodicas = periodicasApi;
     } catch {
       mensagensIndisponiveis = true;
     }
@@ -81,7 +85,7 @@ export default async function NotificacoesPage({
         <h1 className="text-2xl font-bold text-ink">Notificações</h1>
         <div className="flex flex-wrap items-center gap-3">
           {ehAdmin && !mensagensIndisponiveis && (
-            <MensagensAdmin vendedores={vendedores} grupos={grupos} />
+            <MensagensAdmin vendedores={vendedores} grupos={grupos} periodicas={periodicas} />
           )}
           <MarcarTodasButton />
         </div>

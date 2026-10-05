@@ -12,3 +12,9 @@ export const NOTIFICACAO_JOB_NAME = 'notificacao.processar-pendentes';
 // resolverUsuariosAlvo/resolverTokensAlvo pra saber pra quem mandar.
 export const RELATORIO_DIARIO_QUEUE = 'relatorio-diario-notificacao';
 export const RELATORIO_DIARIO_JOB_NAME = 'relatorio-diario.gerar';
+
+// Mensagens periodicas do admin (MensagemPeriodica) - fila propria, mesmo
+// motivo da fila do relatorio diario: um problema aqui nunca atrasa o push
+// dos eventos de sync (NOTIFICACAO_QUEUE). Registrada em NotificacoesModule.
+export const MENSAGEM_PERIODICA_QUEUE = 'mensagem-periodica';
+export const MENSAGEM_PERIODICA_JOB_NAME = 'mensagem-periodica.executar-devidas';
