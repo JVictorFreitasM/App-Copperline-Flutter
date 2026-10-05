@@ -90,6 +90,7 @@ services:
       # SegredoCryptoService). Trocar invalida qualquer segredo ja gravado.
       SEGREDO_CRYPTO_KEY: ${SEGREDO_CRYPTO_KEY}
       WK_RADAR_API_URL: ${WK_RADAR_API_URL}
+      RECEITAWS_TOKEN: ${RECEITAWS_TOKEN:-}
       WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}
       WK_RADAR_USUARIO: ${WK_RADAR_USUARIO}
       WK_RADAR_SENHA: ${WK_RADAR_SENHA}

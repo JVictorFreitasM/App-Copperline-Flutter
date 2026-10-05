@@ -33,6 +33,7 @@ import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
 import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acondicionamento.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
+import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
     TiposAcondicionamentoModule,
     PagamentoModule,
     ConfiguracoesModule,
+    ConsultaCnpjModule,
   ],
 })
 export class AppModule {}
