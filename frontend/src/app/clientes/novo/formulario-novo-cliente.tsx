@@ -9,7 +9,6 @@ import { Switch } from "@/components/design/switch";
 import {
   aplicarMascaraDocumento,
   contatoParaPayload,
-  descreverEndereco,
   enderecoParaPayload,
   extrairTelefones,
   formatarDocumento,
@@ -24,11 +23,12 @@ import {
   type TipoPessoa,
 } from "@/lib/cadastro-cliente";
 import type { ClienteJaCadastradoDto, ConsultaCnpjResultadoDto } from "@/lib/consulta-cnpj";
+import { Campo, MensagemErro } from "../_formulario/campos";
+import { CampoTelefones } from "../_formulario/campo-telefones";
+import { ContatoPopup } from "../_formulario/contato-popup";
+import { EnderecoPopup } from "../_formulario/endereco-popup";
+import { NOVO_ENDERECO, SeletorEndereco } from "../_formulario/seletor-endereco";
 import { consultarDocumentoAction, criarClienteAction } from "./actions";
-import { Campo, MensagemErro } from "./campos";
-import { CampoTelefones } from "./campo-telefones";
-import { ContatoPopup } from "./contato-popup";
-import { EnderecoPopup } from "./endereco-popup";
 
 type EstadoDocumento =
   | { status: "idle" }
@@ -46,8 +46,6 @@ interface EstadoEnderecos {
   cobranca: number | null;
   entrega: number | null;
 }
-
-const NOVO_ENDERECO = "__novo__";
 
 // Cadastro de cliente (web). Ao completar o CPF/CNPJ: valida por cálculo, o
 // backend confere a base da empresa, depois o cache e só então a Receita - e o
@@ -331,7 +329,7 @@ export function FormularioNovoCliente() {
             onChange={setCodigo}
             placeholder="Em branco: o Radar gera"
             className="w-56"
-            maxLength={20}
+            maxLength={10}
           />
         </div>
 
@@ -339,15 +337,27 @@ export function FormularioNovoCliente() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {fisica ? (
             <>
-              <Campo label="Nome" value={razaoSocial} onChange={setRazaoSocial} placeholder="Nome do cliente" />
-              <Campo label="RG" value={rg} onChange={setRg} placeholder="Digite o RG" maxLength={20} />
+              <Campo label="Nome" value={razaoSocial} onChange={setRazaoSocial} placeholder="Nome do cliente" maxLength={80} />
+              <Campo label="RG" value={rg} onChange={setRg} placeholder="Digite o RG" maxLength={15} />
               <Campo label="Data de nascimento" value={dataNascimento} onChange={setDataNascimento} type="date" />
-              <Campo label="Filiação" value={nomeMae} onChange={setNomeMae} placeholder="Nome da mãe" />
+              <Campo label="Filiação" value={nomeMae} onChange={setNomeMae} placeholder="Nome da mãe" maxLength={50} />
             </>
           ) : (
             <>
-              <Campo label="Nome Fantasia" value={nomeFantasia} onChange={setNomeFantasia} placeholder="Nome fantasia da empresa" />
-              <Campo label="Razão Social" value={razaoSocial} onChange={setRazaoSocial} placeholder="Razão social da empresa" />
+              <Campo
+                label="Nome Fantasia"
+                value={nomeFantasia}
+                onChange={setNomeFantasia}
+                placeholder="Nome fantasia da empresa"
+                maxLength={50}
+              />
+              <Campo
+                label="Razão Social"
+                value={razaoSocial}
+                onChange={setRazaoSocial}
+                placeholder="Razão social da empresa"
+                maxLength={80}
+              />
             </>
           )}
           <Campo
@@ -355,7 +365,7 @@ export function FormularioNovoCliente() {
             value={inscricaoEstadual}
             onChange={setInscricaoEstadual}
             placeholder="Digite a Inscrição Estadual"
-            maxLength={30}
+            maxLength={17}
           />
         </div>
 
@@ -496,46 +506,4 @@ function FeedbackDocumento({
         </span>
       );
   }
-}
-
-function SeletorEndereco({
-  rotulo,
-  enderecos,
-  selecionado,
-  onEscolher,
-}: {
-  rotulo: string;
-  enderecos: EnderecoFormulario[];
-  selecionado: number | null;
-  onEscolher: (valor: string) => void;
-}) {
-  const escolhido = selecionado !== null ? enderecos[selecionado] : undefined;
-  const [linha1, linha2] = escolhido ? descreverEndereco(escolhido) : ["", ""];
-
-  return (
-    <div className="flex flex-col gap-1 text-xs text-muted">
-      {rotulo}
-      <select
-        aria-label={rotulo}
-        value={selecionado === null ? "" : String(selecionado)}
-        onChange={(evento) => onEscolher(evento.target.value)}
-        className="rounded-full bg-background px-4 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-primary-light"
-      >
-        <option value="">A definir</option>
-        {enderecos.map((endereco, indice) => (
-          <option key={`${endereco.cep}-${indice}`} value={String(indice)}>
-            {descreverEndereco(endereco)[0]}
-          </option>
-        ))}
-        <option value={NOVO_ENDERECO}>+ Cadastrar novo endereço...</option>
-      </select>
-      {escolhido && (
-        <span className="text-sm text-ink">
-          {linha1}
-          <br />
-          <span className="text-xs text-muted">{linha2}</span>
-        </span>
-      )}
-    </div>
-  );
 }

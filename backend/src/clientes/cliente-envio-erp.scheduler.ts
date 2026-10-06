@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteCadastroService } from './cliente-cadastro.service';
+import { ClienteEdicaoService } from './cliente-edicao.service';
 
 // So re-enfileira - nenhuma logica de negocio aqui. Cobre o cliente que ficou
 // PENDENTE sem job vivo na fila (Redis perdido, backend reiniciado antes de
@@ -14,6 +15,7 @@ export class ClienteEnvioErpScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clienteCadastroService: ClienteCadastroService,
+    private readonly clienteEdicaoService: ClienteEdicaoService,
   ) {}
 
   @Cron('*/10 * * * *')
@@ -34,6 +36,20 @@ export class ClienteEnvioErpScheduler {
     }
     if (pendentes.length > 0) {
       this.logger.log(`${pendentes.length} cliente(s) PENDENTE re-enfileirado(s) para envio ao ERP`);
+    }
+
+    // Edicoes de cliente ja no Radar - em ordem de criacao.
+    const alteracoes = await this.prisma.alteracaoClienteErp.findMany({
+      where: { status: 'PENDENTE', criadoEm: { lt: limite } },
+      orderBy: { criadoEm: 'asc' },
+      select: { id: true },
+      take: 50,
+    });
+    for (const { id } of alteracoes) {
+      await this.clienteEdicaoService.enfileirarAlteracao(id);
+    }
+    if (alteracoes.length > 0) {
+      this.logger.log(`${alteracoes.length} alteracao(oes) de cliente PENDENTE re-enfileirada(s)`);
     }
   }
 }

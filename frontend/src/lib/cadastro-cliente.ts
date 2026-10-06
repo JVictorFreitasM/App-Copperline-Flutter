@@ -91,6 +91,9 @@ export interface EnderecoFormulario {
   cidade: string;
   uf: string;
   codigoIbge: string | null;
+  // Id do município no WK Radar - só existe pra endereço que já veio do
+  // cadastro (edição); endereço novo vai pelo IBGE.
+  idMunicipio?: string | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -205,6 +208,7 @@ export interface EnderecoPayload {
   complemento?: string;
   bairro: string;
   codigoIbge?: string;
+  idMunicipio?: string;
   cidade?: string;
   uf?: string;
   latitude?: number;
@@ -247,6 +251,7 @@ export function enderecoParaPayload(endereco: EnderecoFormulario): EnderecoPaylo
     complemento: ouUndefined(endereco.complemento),
     bairro: endereco.bairro.trim(),
     ...(endereco.codigoIbge ? { codigoIbge: endereco.codigoIbge } : {}),
+    ...(endereco.idMunicipio ? { idMunicipio: endereco.idMunicipio } : {}),
     cidade: ouUndefined(endereco.cidade),
     ...(/^[A-Za-z]{2}$/.test(endereco.uf) ? { uf: endereco.uf } : {}),
     ...(endereco.latitude !== null && endereco.longitude !== null
@@ -273,4 +278,84 @@ export function parseValorMonetario(texto: string): number | undefined {
   const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo;
   const numero = Number(normalizado);
   return Number.isFinite(numero) && numero >= 0 ? Math.round(numero * 100) / 100 : undefined;
+}
+
+// ------------------------------------------------------------------- edição
+// Mesmo contrato de backend/src/clientes/dto/atualizar-cliente.dto.ts.
+export interface EnderecoEdicaoDto {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  semNumero: boolean;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  codigoIbge: string | null;
+  idMunicipio: string;
+}
+
+export interface ClienteEdicaoDto {
+  id: string;
+  cpfCnpj: string | null;
+  tipoPessoa: TipoPessoa | null;
+  codigo: string | null;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  inscricaoEstadual: string | null;
+  email: string | null;
+  limiteCredito: number | null;
+  rg: string | null;
+  dataNascimento: string | null;
+  nomeMae: string | null;
+  // false = cliente veio do sync: RG/nascimento/mãe não são conhecidos aqui.
+  camposPessoaFisicaConhecidos: boolean;
+  enderecoCobranca: EnderecoEdicaoDto | null;
+  enderecoEntrega: EnderecoEdicaoDto | null;
+  entregaIgualCobranca: boolean;
+  telefones: TelefoneInput[];
+  statusEnvioErp: "PENDENTE" | "ENVIADO" | "ERRO";
+}
+
+// PATCH /clientes/:id - campo ausente não muda; "" limpa.
+export interface AtualizarClientePayload {
+  razaoSocial?: string;
+  nomeFantasia?: string;
+  inscricaoEstadual?: string;
+  rg?: string;
+  dataNascimento?: string;
+  nomeMae?: string;
+  email?: string;
+  limiteCredito?: number;
+  telefones?: TelefoneInput[];
+  enderecoCobranca?: EnderecoPayload;
+  enderecoEntrega?: EnderecoPayload;
+  entregaIgualCobranca?: boolean;
+}
+
+export interface ResultadoEdicaoDto {
+  id: string;
+  situacao: "SEM_ALTERACAO" | "CADASTRO_PENDENTE" | "ALTERACAO_PENDENTE";
+}
+
+export function enderecoEdicaoParaFormulario(endereco: EnderecoEdicaoDto): EnderecoFormulario {
+  return {
+    cep: endereco.cep,
+    logradouro: endereco.logradouro,
+    numero: endereco.numero,
+    semNumero: endereco.semNumero,
+    complemento: endereco.complemento,
+    bairro: endereco.bairro,
+    cidade: endereco.cidade,
+    uf: endereco.uf,
+    codigoIbge: endereco.codigoIbge,
+    idMunicipio: endereco.idMunicipio,
+    latitude: null,
+    longitude: null,
+  };
+}
+
+// Valor monetário pra exibir num campo editável ("1234,56").
+export function formatarValorParaCampo(valor: number | null): string {
+  return valor === null ? "" : String(valor).replace(".", ",");
 }

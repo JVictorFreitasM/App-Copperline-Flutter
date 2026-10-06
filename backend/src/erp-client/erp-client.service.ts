@@ -81,6 +81,11 @@ export class ErpClientService {
     return this.request<T>('POST', path, { data });
   }
 
+  // Alteracao parcial (ex: PATCH /empresarial/v1/cliente/{id}, responde 204).
+  async patch<T>(path: string, data?: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, { data });
+  }
+
   private async request<T>(
     method: Method,
     path: string,

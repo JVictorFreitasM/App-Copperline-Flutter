@@ -18,6 +18,7 @@ import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteCadastroService } from './cliente-cadastro.service';
+import { ClienteEdicaoService } from './cliente-edicao.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteTimelineService } from './cliente-timeline.service';
 import type { TimelineEvento } from './cliente-timeline.service';
@@ -40,6 +41,8 @@ import type {
 } from './dto/cliente-response.dto';
 import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dto';
 import { CriarContatoClienteDto } from './dto/criar-contato-cliente.dto';
+import { AtualizarClienteDto } from './dto/atualizar-cliente.dto';
+import type { ClienteEdicaoDto, ResultadoEdicaoDto } from './dto/atualizar-cliente.dto';
 import { CriarClienteDto } from './dto/criar-cliente.dto';
 import type { ClienteCriadoDto } from './dto/criar-cliente.dto';
 import { DefinirLocalizacaoClienteDto } from './dto/definir-localizacao-cliente.dto';
@@ -69,6 +72,7 @@ export class ClientesController {
     private readonly clienteLocalizacaoService: ClienteLocalizacaoService,
     private readonly clienteTabelaPrecoService: ClienteTabelaPrecoService,
     private readonly clienteCadastroService: ClienteCadastroService,
+    private readonly clienteEdicaoService: ClienteEdicaoService,
   ) {}
 
   @Get()
@@ -96,6 +100,35 @@ export class ClientesController {
       usuario.id,
     );
     return this.clienteCadastroService.criar(dto, usuario.id, escopo);
+  }
+
+  // Dados pro formulario de edicao (web e mobile) - mesmo escopo por vendedor
+  // de GET /:id.
+  @Get(':id/edicao')
+  async obterParaEdicao(
+    @Param('id') id: string,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteEdicaoDto> {
+    const escopo = await this.resolverEscopo(idpUser);
+    return this.clienteEdicaoService.obterParaEdicao(id, escopo);
+  }
+
+  // Edicao de cliente: atualiza o Postgres e leva a alteracao ao WK Radar pela
+  // fila (ver ClienteEdicaoService). So cliente da carteira de quem chama.
+  @Patch(':id')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ prefixo: 'clientes-editar', limite: 30, janelaSegundos: 60 })
+  async editar(
+    @Param('id') id: string,
+    @Body() dto: AtualizarClienteDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ResultadoEdicaoDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.vendedorEscopoService.resolverEscopoClientes(
+      idpUser,
+      usuario.id,
+    );
+    return this.clienteEdicaoService.editar(id, dto, usuario.id, escopo);
   }
 
   // Literal, ANTES de `:id` - mesmo motivo de 'favoritos' em

@@ -134,3 +134,149 @@ describe('extrairIdCriado', () => {
     expect(extrairIdCriado({ id: 5 })).toBeNull();
   });
 });
+
+describe('ClienteEnvioErpService.enviarAlteracao (PATCH de cliente ja no Radar)', () => {
+  const CRIADO_EM = new Date('2026-10-06T12:00:00Z');
+  const RADAR_ATUAL = {
+    inscricoesLegais: { tipoICMS: 'Contribuinte', inscricaoEstadual: '123', cnaePrincipal: '2733300' },
+    enderecos: [],
+  };
+
+  function montarAlteracao(
+    opcoes: {
+      habilitado?: boolean;
+      alteracao?: unknown;
+      anterior?: unknown;
+    } = {},
+  ) {
+    const prisma = {
+      alteracaoClienteErp: {
+        findUnique: jest.fn().mockResolvedValue(
+          opcoes.alteracao === undefined
+            ? {
+                clienteId: 'cli-1',
+                status: 'PENDENTE',
+                payload: { inscricaoEstadual: '999', email: 'novo@x.com' },
+                criadoEm: CRIADO_EM,
+                cliente: { idExternoErp: '777' },
+              }
+            : opcoes.alteracao,
+        ),
+        findFirst: jest.fn().mockResolvedValue(opcoes.anterior ?? null),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const erpClient = {
+      get: jest.fn().mockResolvedValue(RADAR_ATUAL),
+      patch: jest.fn().mockResolvedValue(undefined),
+    };
+    const configService = {
+      get: (chave: string) =>
+        chave === 'CLIENTE_ENVIO_ERP_HABILITADO' && opcoes.habilitado !== false ? 'true' : undefined,
+    };
+    const service = new ClienteEnvioErpService(prisma as never, erpClient as never, configService as never);
+    return { service, prisma, erpClient };
+  }
+
+  it('desligado: nao le nem escreve no ERP', async () => {
+    const m = montarAlteracao({ habilitado: false });
+
+    expect(await m.service.enviarAlteracao('alt-1', false)).toBe('DESABILITADO');
+    expect(m.erpClient.get).not.toHaveBeenCalled();
+    expect(m.erpClient.patch).not.toHaveBeenCalled();
+  });
+
+  it('le o cliente atual no Radar e manda o PATCH com o bloco completo; marca ENVIADO', async () => {
+    const m = montarAlteracao();
+
+    expect(await m.service.enviarAlteracao('alt-1', false)).toBe('ENVIADO');
+
+    expect(m.erpClient.get).toHaveBeenCalledWith('/empresarial/v1/cliente/777');
+    expect(m.erpClient.patch).toHaveBeenCalledWith('/empresarial/v1/cliente/777', {
+      email: 'novo@x.com',
+      inscricoesLegais: { tipoICMS: 'Contribuinte', inscricaoEstadual: '999', cnaePrincipal: '2733300' },
+    });
+    expect(m.prisma.alteracaoClienteErp.update).toHaveBeenCalledWith({
+      where: { id: 'alt-1' },
+      data: { status: 'ENVIADO', erro: null, enviadoEm: expect.any(Date) },
+    });
+  });
+
+  it('GET que devolve lista: usa o primeiro', async () => {
+    const m = montarAlteracao();
+    m.erpClient.get.mockResolvedValue([RADAR_ATUAL]);
+
+    expect(await m.service.enviarAlteracao('alt-1', false)).toBe('ENVIADO');
+  });
+
+  it('alteracao anterior do mesmo cliente ainda pendente: espera (erro pra repetir), sem tocar no ERP', async () => {
+    const m = montarAlteracao({ anterior: { id: 'alt-0' } });
+
+    await expect(m.service.enviarAlteracao('alt-1', false)).rejects.toThrow('Aguardando');
+    expect(m.prisma.alteracaoClienteErp.findFirst).toHaveBeenCalledWith({
+      where: { clienteId: 'cli-1', status: 'PENDENTE', criadoEm: { lt: CRIADO_EM } },
+      select: { id: true },
+    });
+    expect(m.erpClient.get).not.toHaveBeenCalled();
+  });
+
+  it('esperando a anterior na ULTIMA tentativa: adia (fica PENDENTE, nao vira ERRO)', async () => {
+    const m = montarAlteracao({ anterior: { id: 'alt-0' } });
+
+    expect(await m.service.enviarAlteracao('alt-1', true)).toBe('ADIADO');
+    expect(m.prisma.alteracaoClienteErp.update).not.toHaveBeenCalled();
+  });
+
+  it('recusa do ERP (4xx no PATCH): ERRO com a mensagem e sem repetir', async () => {
+    const m = montarAlteracao();
+    m.erpClient.patch.mockRejectedValue(erroHttp(400, { message: 'IE invalida' }));
+
+    await expect(m.service.enviarAlteracao('alt-1', false)).rejects.toBeInstanceOf(UnrecoverableError);
+    expect(m.prisma.alteracaoClienteErp.update).toHaveBeenCalledWith({
+      where: { id: 'alt-1' },
+      data: { status: 'ERRO', erro: JSON.stringify({ message: 'IE invalida' }) },
+    });
+  });
+
+  it('erro transitorio: repete; na ultima tentativa marca ERRO', async () => {
+    const m = montarAlteracao();
+    m.erpClient.get.mockRejectedValue(erroHttp(503, 'fora'));
+
+    await expect(m.service.enviarAlteracao('alt-1', false)).rejects.toBeDefined();
+    expect(m.prisma.alteracaoClienteErp.update).not.toHaveBeenCalled();
+
+    await expect(m.service.enviarAlteracao('alt-1', true)).rejects.toBeDefined();
+    expect(m.prisma.alteracaoClienteErp.update).toHaveBeenCalledWith({
+      where: { id: 'alt-1' },
+      data: { status: 'ERRO', erro: 'fora' },
+    });
+  });
+
+  it('alteracao ja enviada (ou inexistente) e ignorada', async () => {
+    const enviada = montarAlteracao({ alteracao: { status: 'ENVIADO' } });
+    const inexistente = montarAlteracao({ alteracao: null });
+
+    expect(await enviada.service.enviarAlteracao('alt-1', false)).toBe('IGNORADO');
+    expect(await inexistente.service.enviarAlteracao('alt-1', false)).toBe('IGNORADO');
+    expect(enviada.erpClient.patch).not.toHaveBeenCalled();
+  });
+
+  it('cliente que ainda nao existe no Radar: ERRO explicito, sem chamar o ERP', async () => {
+    const m = montarAlteracao({
+      alteracao: {
+        clienteId: 'cli-1',
+        status: 'PENDENTE',
+        payload: {},
+        criadoEm: CRIADO_EM,
+        cliente: { idExternoErp: 'PENDENTE-cli-1' },
+      },
+    });
+
+    expect(await m.service.enviarAlteracao('alt-1', false)).toBe('IGNORADO');
+    expect(m.prisma.alteracaoClienteErp.update).toHaveBeenCalledWith({
+      where: { id: 'alt-1' },
+      data: { status: 'ERRO', erro: 'Cliente ainda não existe no ERP' },
+    });
+    expect(m.erpClient.get).not.toHaveBeenCalled();
+  });
+});

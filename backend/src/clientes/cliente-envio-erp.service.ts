@@ -4,14 +4,21 @@ import { AxiosError } from 'axios';
 import { UnrecoverableError } from 'bullmq';
 import { ErpClientService } from '../erp-client/erp-client.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  montarPatchWk,
+  type ClienteRadarAtual,
+  type IntencaoAlteracao,
+} from './domain/alteracao-cliente';
 
 const CAMINHO_CLIENTE = '/empresarial/v1/cliente';
 
-export type ResultadoEnvioErp = 'ENVIADO' | 'IGNORADO' | 'DESABILITADO';
+export type ResultadoEnvioErp = 'ENVIADO' | 'IGNORADO' | 'DESABILITADO' | 'ADIADO';
 
-// Envia ao WK Radar o cliente cadastrado localmente (POST /empresarial/v1/
-// cliente, recebe um ARRAY). Escrita no ERP e' fluxo separado da leitura/sync,
-// com fila e tratamento de erro proprios (CLAUDE.md).
+// Escreve no WK Radar o que o app fez no cliente: o cadastro novo (POST
+// /empresarial/v1/cliente, recebe um ARRAY e responde [{id, codigoIntegrador}])
+// e as edicoes (PATCH /empresarial/v1/cliente/{id}, responde 204). Escrita no
+// ERP e' fluxo separado da leitura/sync, com fila e tratamento de erro proprios
+// (CLAUDE.md).
 //
 // Desligado por padrao (CLIENTE_ENVIO_ERP_HABILITADO): escrever num ERP e'
 // acao irreversivel e o formato exato da resposta/validacao do POST ainda nao
@@ -32,7 +39,7 @@ export class ClienteEnvioErpService {
     clienteId: string,
     ultimaTentativa: boolean,
   ): Promise<ResultadoEnvioErp> {
-    if (this.configService.get<string>('CLIENTE_ENVIO_ERP_HABILITADO') !== 'true') {
+    if (!this.envioHabilitado()) {
       this.logger.warn(
         `Envio de cliente ao ERP desabilitado (CLIENTE_ENVIO_ERP_HABILITADO) - ${clienteId} segue PENDENTE`,
       );
@@ -69,6 +76,100 @@ export class ClienteEnvioErpService {
     const idExterno = extrairIdCriado(resposta);
     await this.marcarEnviado(clienteId, idExterno);
     return 'ENVIADO';
+  }
+
+  // Edicao de um cliente que ja esta no Radar. Le o cliente ATUAL no Radar e
+  // manda cada bloco tocado completo (montarPatchWk) - o PATCH com bloco
+  // parcial poderia apagar o que nao editamos.
+  async enviarAlteracao(
+    alteracaoId: string,
+    ultimaTentativa: boolean,
+  ): Promise<ResultadoEnvioErp> {
+    if (!this.envioHabilitado()) {
+      this.logger.warn(
+        `Envio de cliente ao ERP desabilitado (CLIENTE_ENVIO_ERP_HABILITADO) - alteracao ${alteracaoId} segue PENDENTE`,
+      );
+      return 'DESABILITADO';
+    }
+
+    const alteracao = await this.prisma.alteracaoClienteErp.findUnique({
+      where: { id: alteracaoId },
+      select: {
+        clienteId: true,
+        status: true,
+        payload: true,
+        criadoEm: true,
+        cliente: { select: { idExternoErp: true } },
+      },
+    });
+    if (!alteracao || alteracao.status !== 'PENDENTE') {
+      return 'IGNORADO';
+    }
+    const idExterno = alteracao.cliente.idExternoErp;
+    if (idExterno.startsWith('PENDENTE-')) {
+      await this.marcarErroAlteracao(alteracaoId, 'Cliente ainda não existe no ERP');
+      return 'IGNORADO';
+    }
+
+    // Ordem: com retentativas, uma alteracao mais nova poderia passar na frente
+    // de uma antiga e ser sobrescrita por ela. Enquanto houver anterior
+    // pendente do mesmo cliente, esta espera (sem virar ERRO por isso).
+    const anterior = await this.prisma.alteracaoClienteErp.findFirst({
+      where: {
+        clienteId: alteracao.clienteId,
+        status: 'PENDENTE',
+        criadoEm: { lt: alteracao.criadoEm },
+      },
+      select: { id: true },
+    });
+    if (anterior) {
+      if (ultimaTentativa) {
+        return 'ADIADO';
+      }
+      throw new Error('Aguardando a alteração anterior do mesmo cliente');
+    }
+
+    const caminho = `${CAMINHO_CLIENTE}/${encodeURIComponent(idExterno)}`;
+    try {
+      const lido = await this.erpClient.get<ClienteRadarAtual | ClienteRadarAtual[]>(caminho);
+      const atual = Array.isArray(lido) ? lido[0] : lido;
+      if (!atual) {
+        await this.marcarErroAlteracao(alteracaoId, 'Cliente não encontrado no ERP');
+        throw new UnrecoverableError('Cliente não encontrado no ERP');
+      }
+      const patch = montarPatchWk(atual, alteracao.payload as IntencaoAlteracao);
+      await this.erpClient.patch<unknown>(caminho, patch);
+    } catch (error) {
+      if (error instanceof UnrecoverableError) {
+        throw error;
+      }
+      const mensagem = mensagemDoErro(error);
+      if (ehErroDeNegocio(error)) {
+        await this.marcarErroAlteracao(alteracaoId, mensagem);
+        throw new UnrecoverableError(mensagem);
+      }
+      if (ultimaTentativa) {
+        await this.marcarErroAlteracao(alteracaoId, mensagem);
+      }
+      throw error;
+    }
+
+    await this.prisma.alteracaoClienteErp.update({
+      where: { id: alteracaoId },
+      data: { status: 'ENVIADO', erro: null, enviadoEm: new Date() },
+    });
+    return 'ENVIADO';
+  }
+
+  private envioHabilitado(): boolean {
+    return this.configService.get<string>('CLIENTE_ENVIO_ERP_HABILITADO') === 'true';
+  }
+
+  private async marcarErroAlteracao(alteracaoId: string, mensagem: string): Promise<void> {
+    await this.prisma.alteracaoClienteErp.update({
+      where: { id: alteracaoId },
+      data: { status: 'ERRO', erro: mensagem.slice(0, 1000) },
+    });
   }
 
   private async marcarErro(clienteId: string, mensagem: string): Promise<void> {

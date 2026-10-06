@@ -151,6 +151,7 @@ model Cliente {
   visitas                Visita[]
   tabelasPreco           ClienteTabelaPreco[]
   agendamentosVisita     AgendamentoVisita[]
+  alteracoesErp          AlteracaoClienteErp[]
   localizacaoDefinidaPor Vendedor?            @relation("ClienteLocalizacaoDefinidaPor", fields: [localizacaoDefinidaPorId], references: [id])
 
   @@map("clientes")
@@ -206,6 +207,30 @@ model ClienteVendedor {
   @@unique([clienteId, vendedorId])
   @@index([vendedorId])
   @@map("clientes_vendedores")
+}
+
+// Edicao de cliente feita por nos (PATCH /clientes/:id) a ser aplicada no WK
+// Radar (PATCH /empresarial/v1/cliente/{id}) pela fila - uma linha por edicao,
+// na ordem: trilha de quem alterou o que e de quando chegou ao ERP. `payload`
+// guarda a INTENCAO (so os campos que mudaram, com o valor desejado); o job le
+// o cliente atual no Radar e manda cada bloco tocado completo, pra um bloco
+// parcial nunca apagar os campos que nao editamos.
+model AlteracaoClienteErp {
+  id        String         @id @default(uuid())
+  clienteId String         @map("cliente_id")
+  usuarioId String         @map("usuario_id")
+  payload   Json
+  status    StatusEnvioErp @default(PENDENTE)
+  erro      String?
+  criadoEm  DateTime       @default(now()) @map("criado_em")
+  enviadoEm DateTime?      @map("enviado_em")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([clienteId, criadoEm])
+  @@index([status])
+  @@map("alteracoes_cliente_erp")
 }
 
 // Contatos tem identidade propria no WK Radar (id + codigoIntegrador
@@ -925,6 +950,7 @@ model Usuario {
   notificacoes              NotificacaoUsuario[]
   mensagensEnviadas         MensagemNotificacao[]
   mensagemPeriodicas        MensagemPeriodica[]
+  alteracoesClienteErp      AlteracaoClienteErp[]
 
   @@map("usuarios")
 }

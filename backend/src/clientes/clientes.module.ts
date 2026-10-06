@@ -16,6 +16,8 @@ import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteBoletoService } from './cliente-boleto.service';
 import { ClienteCadastroService } from './cliente-cadastro.service';
+import { ClienteEdicaoService } from './cliente-edicao.service';
+import { EnderecoClienteService } from './endereco-cliente.service';
 import { CLIENTE_ENVIO_ERP_QUEUE } from './cliente-envio-erp.constants';
 import { ClienteEnvioErpProcessor } from './cliente-envio-erp.processor';
 import { ClienteEnvioErpScheduler } from './cliente-envio-erp.scheduler';
@@ -64,6 +66,8 @@ import { ClientesService } from './clientes.service';
     ClienteBoletoService,
     ClienteTimelineService,
     ClienteCadastroService,
+    ClienteEdicaoService,
+    EnderecoClienteService,
     ClienteEnvioErpService,
     ClienteEnvioErpProcessor,
     ClienteEnvioErpScheduler,

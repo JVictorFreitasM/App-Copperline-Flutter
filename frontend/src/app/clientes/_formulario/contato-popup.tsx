@@ -55,12 +55,20 @@ export function ContatoPopup({
   return (
     <Modal open={open} onClose={fechar} title="Adicionar contato ao cliente">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Campo label="Nome" value={contato.nome} onChange={(nome) => atualizar({ nome })} placeholder="Nome do contato" autoFocus />
+        <Campo
+          label="Nome"
+          value={contato.nome}
+          onChange={(nome) => atualizar({ nome })}
+          placeholder="Nome do contato"
+          maxLength={50}
+          autoFocus
+        />
         <Campo
           label="Cargo"
           value={contato.funcao}
           onChange={(funcao) => atualizar({ funcao })}
           placeholder="Cargo ou função"
+          maxLength={30}
         />
         <div className="flex flex-col gap-1 text-xs text-muted">
           Telefone
@@ -72,6 +80,7 @@ export function ContatoPopup({
           onChange={(email) => atualizar({ email })}
           type="email"
           placeholder="Email do contato"
+          maxLength={64}
         />
         <Campo
           label="Data de aniversário"

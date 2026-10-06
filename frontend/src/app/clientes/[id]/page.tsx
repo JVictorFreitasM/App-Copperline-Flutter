@@ -12,7 +12,7 @@ import { formatarData, formatarMoeda } from "@/lib/formatacao";
 import { EstadoVazio, ErroConexao } from "@/components/listagem-feedback";
 import { Badge } from "@/components/badge";
 import { Card } from "@/components/design/card";
-import { PrimaryButton } from "@/components/design/button";
+import { PrimaryButton, SecondaryButton } from "@/components/design/button";
 import { ListItem } from "@/components/design/list-item";
 import { StatCard } from "@/components/design/stat-card";
 import { Timeline } from "@/components/design/timeline";
@@ -111,9 +111,14 @@ export default async function ClienteDetalhePage({
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
-      <Link href="/clientes" className="text-sm font-medium text-primary hover:underline">
-        ← Voltar para clientes
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/clientes" className="text-sm font-medium text-primary hover:underline">
+          ← Voltar para clientes
+        </Link>
+        {cliente && (
+          <SecondaryButton href={`/clientes/${encodeURIComponent(id)}/editar`}>Editar cliente</SecondaryButton>
+        )}
+      </div>
 
       {erro ? (
         <ErroConexao mensagem={erro} />

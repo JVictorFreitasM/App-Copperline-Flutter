@@ -4,6 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ClienteCadastroService } from './cliente-cadastro.service';
+import { EnderecoClienteService } from './endereco-cliente.service';
 import type { CriarClienteDto } from './dto/criar-cliente.dto';
 
 const CNPJ_VALIDO = '07127994000150';
@@ -43,8 +44,7 @@ function montar() {
   const fila = { add: jest.fn().mockResolvedValue(undefined) };
   const service = new ClienteCadastroService(
     prisma as never,
-    municipioWkService as never,
-    consultaCepService as never,
+    new EnderecoClienteService(municipioWkService as never, consultaCepService as never),
     fila as never,
   );
   return { service, prisma, tx, municipioWkService, consultaCepService, fila };

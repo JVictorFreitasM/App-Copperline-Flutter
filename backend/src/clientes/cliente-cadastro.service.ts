@@ -9,8 +9,6 @@ import {
 import type { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
-import { ConsultaCepService } from '../consulta-cep/consulta-cep.service';
-import { MunicipioWkService } from '../municipio-wk/municipio-wk.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import {
@@ -25,16 +23,9 @@ import {
   tipoPessoaDoDocumento,
   variantesParaBusca,
 } from './domain/documento';
-import type {
-  ClienteCriadoDto,
-  CriarClienteDto,
-  EnderecoClienteDto,
-  TelefoneClienteDto,
-} from './dto/criar-cliente.dto';
-import {
-  montarPayloadWkCliente,
-  type EnderecoParaWk,
-} from './montar-payload-wk-cliente';
+import type { ClienteCriadoDto, CriarClienteDto } from './dto/criar-cliente.dto';
+import { EnderecoClienteService } from './endereco-cliente.service';
+import { montarPayloadWkCliente } from './montar-payload-wk-cliente';
 
 // Cadastro de cliente novo: valida, grava no Postgres (o cliente ja aparece na
 // carteira de quem cadastrou, com status PENDENTE) e enfileira o envio ao WK
@@ -46,8 +37,7 @@ export class ClienteCadastroService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly municipioWkService: MunicipioWkService,
-    private readonly consultaCepService: ConsultaCepService,
+    private readonly enderecoClienteService: EnderecoClienteService,
     @InjectQueue(CLIENTE_ENVIO_ERP_QUEUE) private readonly fila: Queue,
   ) {}
 
@@ -87,7 +77,21 @@ export class ClienteCadastroService {
       );
     }
 
-    const enderecos = await this.resolverEnderecos(dto);
+    // Telefones do cliente vao no endereco de cobranca (o Radar guarda telefone
+    // dentro do endereco).
+    const cobranca = await this.enderecoClienteService.resolver(
+      'Padrao',
+      dto.enderecoCobranca,
+      [...(dto.enderecoCobranca.telefones ?? []), ...(dto.telefones ?? [])],
+    );
+    const entrega = dto.enderecoEntrega
+      ? await this.enderecoClienteService.resolver(
+          'Entrega',
+          dto.enderecoEntrega,
+          dto.enderecoEntrega.telefones ?? [],
+        )
+      : null;
+    const enderecos = entrega ? [cobranca, entrega] : [cobranca];
     const clienteId = randomUUID();
 
     const payload = montarPayloadWkCliente({
@@ -103,7 +107,7 @@ export class ClienteCadastroService {
       nomeMae: dto.nomeMae?.trim() || undefined,
       email: dto.email,
       limiteCredito: dto.limiteCredito,
-      enderecos: enderecos.paraWk,
+      enderecos: enderecos.map((endereco) => endereco.paraWk),
       contatos: dto.contatos.map((contato) => ({
         nome: contato.nome.trim(),
         funcao: contato.funcao,
@@ -133,7 +137,9 @@ export class ClienteCadastroService {
           nomeFantasia: dto.nomeFantasia?.trim() || null,
           inscricaoEstadual: dto.inscricaoEstadual?.trim() || null,
           email: dto.email ?? null,
-          enderecos: enderecos.paraBanco as unknown as Prisma.InputJsonValue,
+          enderecos: enderecos.map(
+            (endereco) => endereco.paraBanco,
+          ) as unknown as Prisma.InputJsonValue,
           limiteCredito: dto.limiteCredito ?? null,
           incompleto: false,
           sincronizadoEm: agora,
@@ -179,7 +185,7 @@ export class ClienteCadastroService {
   }
 
   // Tambem usado pelo scheduler que re-enfileira PENDENTE (Redis perdido,
-  // backend reiniciado no meio).
+  // backend reiniciado no meio) e pela edicao de um cadastro ainda nao enviado.
   async enfileirarEnvio(clienteId: string): Promise<void> {
     try {
       await this.fila.add(
@@ -199,6 +205,21 @@ export class ClienteCadastroService {
         `Falha ao enfileirar envio do cliente ${clienteId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // Antes de editar um cadastro que ainda nao chegou ao Radar: recusa se o
+  // envio esta EM ANDAMENTO agora (o job ja leu o payload antigo) e tira da
+  // fila o job antigo parado (falho/aguardando nova tentativa) - com o mesmo
+  // jobId, o BullMQ ignoraria o envio novo.
+  async garantirEnvioParado(clienteId: string): Promise<void> {
+    const job = await this.fila.getJob(jobIdEnvioErp(clienteId));
+    if (!job) return;
+    if (await job.isActive()) {
+      throw new ConflictException(
+        'O cadastro deste cliente está sendo enviado ao ERP agora - tente de novo em instantes',
+      );
+    }
+    await job.remove();
   }
 
   private async garantirDocumentoInedito(documento: string): Promise<void> {
@@ -221,87 +242,5 @@ export class ClienteCadastroService {
           : 'Cliente já cadastrado',
       );
     }
-  }
-
-  private async resolverEnderecos(dto: CriarClienteDto): Promise<{
-    paraWk: EnderecoParaWk[];
-    paraBanco: Record<string, unknown>[];
-  }> {
-    const telefonesDoCliente = dto.telefones ?? [];
-    const entradas: { tipo: 'Padrao' | 'Entrega'; endereco: EnderecoClienteDto }[] = [
-      { tipo: 'Padrao', endereco: dto.enderecoCobranca },
-      ...(dto.enderecoEntrega
-        ? [{ tipo: 'Entrega' as const, endereco: dto.enderecoEntrega }]
-        : []),
-    ];
-
-    const paraWk: EnderecoParaWk[] = [];
-    const paraBanco: Record<string, unknown>[] = [];
-    for (const { tipo, endereco } of entradas) {
-      const { idMunicipio, codigoIbge } = await this.resolverMunicipio(endereco);
-      const telefones: TelefoneClienteDto[] = [
-        ...(endereco.telefones ?? []),
-        ...(tipo === 'Padrao' ? telefonesDoCliente : []),
-      ];
-      const semNumero = endereco.semNumero === true || endereco.numero === undefined;
-
-      paraWk.push({
-        tipo,
-        cep: endereco.cep,
-        logradouro: endereco.logradouro.trim(),
-        numero: endereco.numero,
-        semNumero,
-        complemento: endereco.complemento?.trim() || undefined,
-        bairro: endereco.bairro.trim(),
-        idMunicipio,
-        telefones,
-        email: endereco.email,
-      });
-      // Mesmas chaves que o sync grava a partir do Radar - o resto do sistema
-      // le `enderecos` sem distinguir se a linha e' local ou sincronizada.
-      paraBanco.push({
-        tipo,
-        cep: `${endereco.cep.slice(0, 5)}-${endereco.cep.slice(5)}`,
-        nomeEndereco: endereco.logradouro.trim(),
-        numero: semNumero ? 0 : endereco.numero,
-        semNumero,
-        complemento: endereco.complemento?.trim() ?? '',
-        bairro: endereco.bairro.trim(),
-        idMunicipio,
-        uf: endereco.uf?.toUpperCase() ?? null,
-        codigoIBGE: codigoIbge,
-        telefones,
-        email: endereco.email ?? null,
-      });
-    }
-    return { paraWk, paraBanco };
-  }
-
-  // idMunicipio do Radar: direto, ou via IBGE, ou via CEP -> IBGE. O front ja
-  // manda o IBGE (vem da consulta de CEP), mas o backend nao depende disso.
-  private async resolverMunicipio(
-    endereco: EnderecoClienteDto,
-  ): Promise<{ idMunicipio: string; codigoIbge: string | null }> {
-    let codigoIbge = endereco.codigoIbge ?? null;
-    if (endereco.idMunicipio) {
-      return { idMunicipio: endereco.idMunicipio, codigoIbge };
-    }
-
-    if (!codigoIbge) {
-      try {
-        codigoIbge = (await this.consultaCepService.consultar(endereco.cep)).codigoIbge;
-      } catch {
-        codigoIbge = null;
-      }
-    }
-    const idMunicipio = codigoIbge
-      ? await this.municipioWkService.idPorCodigoIbge(codigoIbge)
-      : null;
-    if (!idMunicipio) {
-      throw new BadRequestException(
-        `Não foi possível identificar o município do CEP ${endereco.cep} - confira o CEP`,
-      );
-    }
-    return { idMunicipio, codigoIbge };
   }
 }

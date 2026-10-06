@@ -1,22 +1,7 @@
 import type { TipoPessoa } from './domain/documento';
+import { enderecoWkParaRadar, type EnderecoParaWk } from './endereco-wk';
 
-export interface TelefoneWk {
-  ddd: string;
-  numero: string;
-}
-
-export interface EnderecoParaWk {
-  tipo: 'Padrao' | 'Entrega';
-  cep: string;
-  logradouro: string;
-  numero?: number;
-  semNumero: boolean;
-  complemento?: string;
-  bairro: string;
-  idMunicipio: string;
-  telefones: TelefoneWk[];
-  email?: string;
-}
+export type { EnderecoParaWk, TelefoneWk } from './endereco-wk';
 
 export interface ContatoParaWk {
   nome: string;
@@ -68,18 +53,7 @@ export function montarPayloadWkCliente(dados: DadosCadastroParaWk) {
     razaoSocial: dados.razaoSocial,
     ...(dados.nomeFantasia ? { nomeFantasia: dados.nomeFantasia } : {}),
     ...(dados.email ? { email: dados.email } : {}),
-    enderecos: dados.enderecos.map((endereco) => ({
-      tipo: endereco.tipo,
-      cep: endereco.cep,
-      nomeEndereco: endereco.logradouro,
-      semNumero: endereco.semNumero,
-      ...(endereco.semNumero ? {} : { numero: endereco.numero ?? 0 }),
-      ...(endereco.complemento ? { complemento: endereco.complemento } : {}),
-      bairro: endereco.bairro,
-      idMunicipio: endereco.idMunicipio,
-      telefones: endereco.telefones,
-      ...(endereco.email ? { email: endereco.email } : {}),
-    })),
+    enderecos: dados.enderecos.map(enderecoWkParaRadar),
     ...(dados.inscricaoEstadual
       ? { inscricoesLegais: { inscricaoEstadual: dados.inscricaoEstadual } }
       : {}),

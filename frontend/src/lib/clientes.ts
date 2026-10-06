@@ -54,6 +54,12 @@ export interface ClienteDetalheDto extends ClienteResumoDto {
   inscricaoEstadual: string | null;
   enderecos: EnderecoClienteDto[];
   contatos: ContatoClienteDto[];
+  // Última edição ainda não aplicada no WK Radar (PENDENTE na fila ou ERRO).
+  alteracaoErp: {
+    status: "PENDENTE" | "ERRO";
+    erro: string | null;
+    criadoEm: string;
+  } | null;
 }
 
 // Mesmo shape de backend/src/clientes/cliente-estatisticas.service.ts

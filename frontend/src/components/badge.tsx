@@ -30,6 +30,20 @@ export function BadgeStatusEnvioErp({
   return <Badge enfase={status === "ERRO"}>{status === "ERRO" ? "Erro no envio ao ERP" : "Pendente de envio ao ERP"}</Badge>;
 }
 
+// Edição de cliente ainda não aplicada no WK Radar.
+export function BadgeAlteracaoErp({
+  alteracao,
+}: {
+  alteracao: { status: "PENDENTE" | "ERRO" } | null;
+}) {
+  if (!alteracao) return null;
+  return (
+    <Badge enfase={alteracao.status === "ERRO"}>
+      {alteracao.status === "ERRO" ? "Erro ao enviar alteração ao ERP" : "Alteração pendente de envio ao ERP"}
+    </Badge>
+  );
+}
+
 export function BadgeAtivoInativo({ inativo }: { inativo: boolean }) {
   return <Badge enfase={!inativo}>{inativo ? "Inativo" : "Ativo"}</Badge>;
 }

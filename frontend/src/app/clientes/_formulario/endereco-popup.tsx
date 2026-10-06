@@ -10,7 +10,7 @@ import {
   formatarCep,
   type EnderecoFormulario,
 } from "@/lib/cadastro-cliente";
-import { buscarCepAction, localizarEnderecoAction } from "./actions";
+import { buscarCepAction, localizarEnderecoAction } from "./acoes-endereco";
 import { Campo, MensagemErro } from "./campos";
 import { MapaEnderecoWrapper } from "./mapa-endereco-wrapper";
 
@@ -129,6 +129,7 @@ export function EnderecoPopup({
               value={endereco.logradouro}
               onChange={(logradouro) => atualizar({ logradouro })}
               className="flex-1"
+              maxLength={84}
             />
             <Campo
               label="Número"
@@ -153,12 +154,14 @@ export function EnderecoPopup({
               value={endereco.complemento}
               onChange={(complemento) => atualizar({ complemento })}
               className="flex-1"
+              maxLength={60}
             />
             <Campo
               label="Bairro"
               value={endereco.bairro}
               onChange={(bairro) => atualizar({ bairro })}
               className="flex-1"
+              maxLength={60}
             />
           </div>
           <div className="flex gap-3">

@@ -1,4 +1,4 @@
-import type { Cliente, ContatoCliente } from '../../../generated/prisma/client';
+import type { AlteracaoClienteErp, Cliente, ContatoCliente } from '../../../generated/prisma/client';
 
 // So os campos relevantes pra consumo externo (web/mobile) - nunca o campo
 // Prisma cru direto (ver skill security-review, "Prisma/Postgres": select
@@ -76,6 +76,13 @@ export interface ClienteDetalheDto extends ClienteResumoDto {
   inscricaoEstadual: string | null;
   enderecos: EnderecoClienteDto[];
   contatos: ContatoClienteDto[];
+  // Ultima edicao ainda NAO aplicada no Radar (PENDENTE na fila, ou ERRO -
+  // o ERP recusou). null = nenhuma pendencia.
+  alteracaoErp: {
+    status: 'PENDENTE' | 'ERRO';
+    erro: string | null;
+    criadoEm: Date;
+  } | null;
 }
 
 const textoOuNull = (valor: unknown): string | null =>
@@ -128,8 +135,12 @@ export function paraClienteResumoDto(cliente: Cliente): ClienteResumoDto {
 }
 
 export function paraClienteDetalheDto(
-  cliente: Cliente & { contatos: ContatoCliente[] },
+  cliente: Cliente & {
+    contatos: ContatoCliente[];
+    alteracoesErp?: Pick<AlteracaoClienteErp, 'status' | 'erro' | 'criadoEm'>[];
+  },
 ): ClienteDetalheDto {
+  const alteracao = cliente.alteracoesErp?.find((a) => a.status !== 'ENVIADO');
   return {
     ...paraClienteResumoDto(cliente),
     codigo: cliente.codigo,
@@ -139,5 +150,9 @@ export function paraClienteDetalheDto(
     inscricaoEstadual: cliente.inscricaoEstadual,
     enderecos: paraEnderecosClienteDto(cliente.enderecos),
     contatos: cliente.contatos.map(paraContatoClienteDto),
+    alteracaoErp:
+      alteracao && alteracao.status !== 'ENVIADO'
+        ? { status: alteracao.status, erro: alteracao.erro, criadoEm: alteracao.criadoEm }
+        : null,
   };
 }

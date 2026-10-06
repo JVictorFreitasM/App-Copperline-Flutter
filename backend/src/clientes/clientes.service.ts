@@ -95,7 +95,15 @@ export class ClientesService {
 
     const cliente = await this.prisma.cliente.findFirst({
       where: { id, ...whereEscopo },
-      include: { contatos: true },
+      include: {
+        contatos: true,
+        alteracoesErp: {
+          where: { status: { not: 'ENVIADO' } },
+          orderBy: { criadoEm: 'desc' },
+          take: 1,
+          select: { status: true, erro: true, criadoEm: true },
+        },
+      },
     });
 
     if (!cliente) {

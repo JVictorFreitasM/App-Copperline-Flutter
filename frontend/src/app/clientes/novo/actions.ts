@@ -1,26 +1,10 @@
 "use server";
 
 import { apiFetch, ApiError } from "@/lib/api";
-import type { ClienteCriadoDto, CriarClientePayload, GeocodificacaoDto } from "@/lib/cadastro-cliente";
+import type { ClienteCriadoDto, CriarClientePayload } from "@/lib/cadastro-cliente";
 import { normalizarDocumento, tipoPessoaDoDocumento } from "@/lib/cadastro-cliente";
-import type { ConsultaCepDto } from "@/lib/consulta-cep";
-import { cepEhValido, normalizarCep } from "@/lib/consulta-cep";
 import type { ClienteJaCadastradoDto, ConsultaCnpjResultadoDto } from "@/lib/consulta-cnpj";
-
-// O backend devolve o corpo do erro dentro da mensagem do ApiError
-// ("API respondeu 409 para ...: {"message":"..."}") - extrai só o texto.
-function extrairMensagem(error: ApiError): string {
-  const inicioJson = error.message.indexOf("{");
-  if (inicioJson === -1) {
-    return error.message;
-  }
-  try {
-    const corpo = JSON.parse(error.message.slice(inicioJson)) as { message?: string | string[] };
-    return Array.isArray(corpo.message) ? corpo.message.join("; ") : (corpo.message ?? error.message);
-  } catch {
-    return error.message;
-  }
-}
+import { extrairMensagemApi } from "@/lib/mensagem-erro-api";
 
 // ---------------------------------------------------------------- documento
 // Validação por cálculo ANTES de qualquer chamada. CNPJ: o backend checa a
@@ -77,64 +61,9 @@ export async function consultarDocumentoAction(entrada: string): Promise<Resulta
     }
     return {
       status: "erro",
-      mensagem: error instanceof ApiError ? extrairMensagem(error) : "Erro desconhecido ao consultar o documento.",
+      mensagem: error instanceof ApiError ? extrairMensagemApi(error) : "Erro desconhecido ao consultar o documento.",
     };
   }
-}
-
-// ---------------------------------------------------------------------- CEP
-export type ResultadoCep =
-  | { status: "ok"; cep: ConsultaCepDto }
-  | { status: "nao-encontrado" }
-  | { status: "erro"; mensagem: string };
-
-export async function buscarCepAction(entrada: string): Promise<ResultadoCep> {
-  if (!cepEhValido(entrada)) {
-    return { status: "erro", mensagem: "CEP inválido." };
-  }
-  try {
-    const cep = await apiFetch<ConsultaCepDto>(`/consulta-cep/${encodeURIComponent(normalizarCep(entrada))}`, {
-      cache: "no-store",
-    });
-    return { status: "ok", cep };
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
-      return { status: "nao-encontrado" };
-    }
-    return {
-      status: "erro",
-      mensagem: error instanceof ApiError ? extrairMensagem(error) : "Erro desconhecido ao consultar o CEP.",
-    };
-  }
-}
-
-// ------------------------------------------------------------------- mapa
-export type ResultadoLocalizacao =
-  | { status: "ok"; local: GeocodificacaoDto }
-  | { status: "nao-encontrado" }
-  | { status: "erro"; mensagem: string };
-
-// "Localizar": tenta cada texto (do mais específico pro mais geral) até o
-// mapa achar. Cada tentativa passa pelo backend (cache + limite de 1 req/s do
-// Nominatim) - nunca direto do navegador.
-export async function localizarEnderecoAction(consultas: string[]): Promise<ResultadoLocalizacao> {
-  for (const consulta of consultas.slice(0, 3)) {
-    try {
-      const local = await apiFetch<GeocodificacaoDto>(`/geocodificacao?q=${encodeURIComponent(consulta)}`, {
-        cache: "no-store",
-      });
-      return { status: "ok", local };
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        continue;
-      }
-      return {
-        status: "erro",
-        mensagem: error instanceof ApiError ? extrairMensagem(error) : "Erro desconhecido ao localizar o endereço.",
-      };
-    }
-  }
-  return { status: "nao-encontrado" };
 }
 
 // ----------------------------------------------------------------- cadastro
@@ -154,7 +83,7 @@ export async function criarClienteAction(payload: CriarClientePayload): Promise<
   } catch (error) {
     return {
       status: "erro",
-      mensagem: error instanceof ApiError ? extrairMensagem(error) : "Erro desconhecido ao cadastrar o cliente.",
+      mensagem: error instanceof ApiError ? extrairMensagemApi(error) : "Erro desconhecido ao cadastrar o cliente.",
     };
   }
 }

@@ -12,3 +12,12 @@ export function jobIdEnvioErp(clienteId: string): string {
   // duplicado enquanto o anterior ainda existe na fila.
   return `cliente-${clienteId}`;
 }
+
+// Edicao de cliente que ja esta no Radar (PATCH /empresarial/v1/cliente/{id}) -
+// MESMA fila do envio de cadastro: concurrency 1, entao as alteracoes saem na
+// ordem em que foram feitas.
+export const CLIENTE_ALTERACAO_ERP_JOB_NAME = 'cliente.atualizar-erp';
+
+export function jobIdAlteracaoErp(alteracaoId: string): string {
+  return `alteracao-${alteracaoId}`;
+}

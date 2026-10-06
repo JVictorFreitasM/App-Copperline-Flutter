@@ -40,7 +40,7 @@ export class EnderecoClienteDto {
 
   @IsString()
   @MinLength(1)
-  @MaxLength(100)
+  @MaxLength(84)
   logradouro!: string;
 
   @IsOptional()
@@ -105,19 +105,21 @@ export class EnderecoClienteDto {
   longitude?: number;
 }
 
+// Limites do CreateContatoDto do Radar (swagger).
 export class ContatoNovoClienteDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(100)
+  @MaxLength(50)
   nome!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(60)
+  @MaxLength(30)
   funcao?: string;
 
   @IsOptional()
   @IsEmail()
+  @MaxLength(64)
   email?: string;
 
   @IsOptional()
@@ -135,6 +137,8 @@ export class ContatoNovoClienteDto {
   dataNascimento?: string;
 }
 
+// Limites de tamanho = os do CreateClienteDto do Radar (swagger, 2026-10-06):
+// passar disso seria recusado so no envio, depois de o cliente ja estar salvo.
 export class CriarClienteDto {
   // CPF ou CNPJ, com ou sem pontuacao - validado por calculo (DV) no backend.
   @IsString()
@@ -143,29 +147,29 @@ export class CriarClienteDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(20)
+  @MaxLength(10)
   codigo?: string;
 
   // Razao social (PJ) ou nome (PF).
   @IsString()
   @MinLength(1)
-  @MaxLength(150)
+  @MaxLength(80)
   razaoSocial!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(150)
+  @MaxLength(50)
   nomeFantasia?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(30)
+  @MaxLength(17)
   inscricaoEstadual?: string;
 
   // Pessoa fisica (informacoesCadastrais no Radar) - ignorados pra CNPJ.
   @IsOptional()
   @IsString()
-  @MaxLength(20)
+  @MaxLength(15)
   rg?: string;
 
   @IsOptional()
@@ -174,7 +178,7 @@ export class CriarClienteDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(50)
   nomeMae?: string;
 
   @ValidateNested()
