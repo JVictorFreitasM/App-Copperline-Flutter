@@ -73,7 +73,6 @@ export class ConsultaCnpjService {
         jaCadastrado,
         dados: null,
         enderecoSugerido: null,
-        observacoesSugeridas: null,
       };
     }
 
@@ -84,7 +83,6 @@ export class ConsultaCnpjService {
       jaCadastrado: null,
       dados,
       enderecoSugerido: await this.montarEnderecoSugerido(dados),
-      observacoesSugeridas: montarObservacoes(dados),
     };
   }
 
@@ -254,21 +252,4 @@ export class ConsultaCnpjService {
       idMunicipioErp,
     };
   }
-}
-
-// Mesmo texto da tela de referencia (cadCliente exemplo cnpj consultado):
-// Situacao / Abertura / Atividade / Atividade secundaria.
-function montarObservacoes(dados: ConsultaCnpjDto): string | null {
-  const linhas = [
-    dados.situacao ? `Situação: ${dados.situacao}` : null,
-    dados.abertura ? `Abertura: ${dados.abertura}` : null,
-    dados.atividadePrincipal
-      ? `Atividade: ${dados.atividadePrincipal.codigo} - ${dados.atividadePrincipal.descricao}`
-      : null,
-    ...dados.atividadesSecundarias.map(
-      (atividade) =>
-        `Atividade secundária: ${atividade.codigo} - ${atividade.descricao}`,
-    ),
-  ].filter((linha): linha is string => linha !== null);
-  return linhas.length > 0 ? linhas.join('\n') : null;
 }

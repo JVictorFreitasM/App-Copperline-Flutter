@@ -19,6 +19,7 @@ export interface EnderecoCnpjDto {
   municipio: string | null;
   uf: string | null;
   cep: string | null;
+  codigoIbge: string | null;
 }
 
 export interface ConsultaCnpjDto {
@@ -117,5 +118,4 @@ export interface ConsultaCnpjResultadoDto {
   jaCadastrado: ClienteJaCadastradoDto | null;
   dados: ConsultaCnpjDto | null;
   enderecoSugerido: EnderecoSugeridoDto | null;
-  observacoesSugeridas: string | null;
 }

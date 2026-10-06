@@ -43,8 +43,6 @@ export interface DadosCadastroParaWk {
   nomeMae?: string;
   email?: string;
   limiteCredito?: number;
-  suframa?: string;
-  observacoes?: string;
   enderecos: EnderecoParaWk[];
   contatos: ContatoParaWk[];
   // idExternoErp do vendedor responsavel - sem ele o sync apagaria o vinculo
@@ -58,8 +56,9 @@ export interface DadosCadastroParaWk {
 // de ir "" ou 0. Funcao pura (sem Prisma/HTTP), testada isolada.
 //
 // Campos do swagger que NAO preenchemos de proposito: tipoICMS/categoriaFiscal
-// (enums sem valor confirmado), classificacao, categorias, tabela de preco e
-// condicoes de pagamento (sem mapeamento definido com o usuario).
+// (enums sem valor confirmado), classificacao, categorias, tabela de preco,
+// condicoes de pagamento, Suframa e anotacoes gerais (sem mapeamento definido
+// com o usuario, ou retirados da tela).
 export function montarPayloadWkCliente(dados: DadosCadastroParaWk) {
   return {
     codigoIntegrador: dados.clienteId,
@@ -81,15 +80,8 @@ export function montarPayloadWkCliente(dados: DadosCadastroParaWk) {
       telefones: endereco.telefones,
       ...(endereco.email ? { email: endereco.email } : {}),
     })),
-    ...(dados.inscricaoEstadual || dados.suframa
-      ? {
-          inscricoesLegais: {
-            ...(dados.inscricaoEstadual
-              ? { inscricaoEstadual: dados.inscricaoEstadual }
-              : {}),
-            ...(dados.suframa ? { registroSuframa: dados.suframa } : {}),
-          },
-        }
+    ...(dados.inscricaoEstadual
+      ? { inscricoesLegais: { inscricaoEstadual: dados.inscricaoEstadual } }
       : {}),
     ...(dados.tipoPessoa === 'Fisica' &&
     (dados.rg || dados.dataNascimento || dados.nomeMae)
@@ -103,9 +95,6 @@ export function montarPayloadWkCliente(dados: DadosCadastroParaWk) {
       : {}),
     ...(dados.limiteCredito !== undefined
       ? { informacoesFinanceiras: { limiteCredito: dados.limiteCredito } }
-      : {}),
-    ...(dados.observacoes
-      ? { informacoesExtras: { anotacoesGerais: dados.observacoes } }
       : {}),
     ...(dados.vendedorIdExterno
       ? { detalhes: { idVendedores: [dados.vendedorIdExterno] } }

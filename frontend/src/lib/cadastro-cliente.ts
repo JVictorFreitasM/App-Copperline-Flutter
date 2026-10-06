@@ -225,9 +225,8 @@ export interface CriarClientePayload {
   telefones?: TelefoneInput[];
   email?: string;
   limiteCredito?: number;
-  suframa?: string;
-  observacoes?: string;
-  contatos?: {
+  // Pelo menos um contato e obrigatorio (o backend recusa sem).
+  contatos: {
     nome: string;
     funcao?: string;
     email?: string;

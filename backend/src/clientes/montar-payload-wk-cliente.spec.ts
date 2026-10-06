@@ -50,16 +50,14 @@ describe('montarPayloadWkCliente', () => {
     expect(montarPayloadWkCliente(BASE).codigoIntegrador).toBe('cli-1');
   });
 
-  it('inclui IE, Suframa, limite de credito, observacoes, vendedor e contatos quando informados', () => {
+  it('inclui IE, limite de credito, vendedor e contatos quando informados', () => {
     const payload = montarPayloadWkCliente({
       ...BASE,
       codigo: '10458',
       nomeFantasia: 'MEGA',
       email: 'a@b.com',
       inscricaoEstadual: '123456',
-      suframa: '999',
       limiteCredito: 5000,
-      observacoes: 'Situação: ATIVA',
       vendedorIdExterno: 'vend-ext-1',
       contatos: [
         {
@@ -77,9 +75,8 @@ describe('montarPayloadWkCliente', () => {
       codigo: '10458',
       nomeFantasia: 'MEGA',
       email: 'a@b.com',
-      inscricoesLegais: { inscricaoEstadual: '123456', registroSuframa: '999' },
+      inscricoesLegais: { inscricaoEstadual: '123456' },
       informacoesFinanceiras: { limiteCredito: 5000 },
-      informacoesExtras: { anotacoesGerais: 'Situação: ATIVA' },
       detalhes: { idVendedores: ['vend-ext-1'] },
       contatos: [
         {
@@ -119,7 +116,7 @@ describe('montarPayloadWkCliente', () => {
     expect(payload.enderecos.map((e) => e.tipo)).toEqual(['Padrao', 'Entrega']);
   });
 
-  it('nao envia blocos vazios (sem IE/Suframa, sem limite, sem obs, sem vendedor, sem contatos)', () => {
+  it('nao envia blocos vazios (sem IE, sem limite, sem vendedor, sem contatos)', () => {
     const payload = montarPayloadWkCliente(BASE);
 
     for (const campo of [

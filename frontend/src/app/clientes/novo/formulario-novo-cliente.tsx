@@ -74,12 +74,12 @@ export function FormularioNovoCliente() {
 
   const [enderecos, setEnderecos] = useState<EstadoEnderecos>({ lista: [], cobranca: null, entrega: null });
   const [popupEndereco, setPopupEndereco] = useState<"cobranca" | "entrega" | null>(null);
+  // Marcado (padrão): entrega = cobrança, e o seletor de entrega some.
+  const [entregaIgual, setEntregaIgual] = useState(true);
 
   const [telefones, setTelefones] = useState<TelefoneInput[]>([]);
   const [email, setEmail] = useState("");
   const [limiteCredito, setLimiteCredito] = useState("");
-  const [suframa, setSuframa] = useState("");
-  const [observacoes, setObservacoes] = useState("");
 
   const [contatos, setContatos] = useState<ContatoFormulario[]>([]);
   const [popupContato, setPopupContato] = useState(false);
@@ -170,7 +170,6 @@ export function FormularioNovoCliente() {
     setNomeFantasia((atual) => atual || dados.nomeFantasia || "");
     setEmail((atual) => atual || dados.email || "");
     setTelefones((atual) => (atual.length > 0 ? atual : extrairTelefones(dados.telefone)));
-    setObservacoes((atual) => atual || resultado.observacoesSugeridas || "");
 
     const sugerido = resultado.enderecoSugerido;
     if (sugerido?.cep && sugerido.logradouro) {
@@ -230,6 +229,12 @@ export function FormularioNovoCliente() {
     if (enderecos.cobranca === null) {
       return "Defina o endereço de cobrança.";
     }
+    if (!entregaIgual && enderecos.entrega === null) {
+      return "Defina o endereço de entrega ou marque que é o mesmo da cobrança.";
+    }
+    if (contatos.length === 0) {
+      return "Adicione pelo menos um contato.";
+    }
     if (email.trim() !== "" && !/^\S+@\S+\.\S+$/.test(email.trim())) {
       return "E-mail inválido.";
     }
@@ -246,7 +251,11 @@ export function FormularioNovoCliente() {
       return;
     }
     const cobranca = enderecos.lista[enderecos.cobranca!];
-    const entrega = enderecos.entrega !== null ? enderecos.lista[enderecos.entrega] : undefined;
+    const entrega = entregaIgual
+      ? cobranca
+      : enderecos.entrega !== null
+        ? enderecos.lista[enderecos.entrega]
+        : undefined;
     const fisica = tipoPessoa === "Fisica";
     const texto = (valor: string) => (valor.trim() === "" ? undefined : valor.trim());
 
@@ -264,9 +273,7 @@ export function FormularioNovoCliente() {
       telefones: telefones.length > 0 ? telefones : undefined,
       email: texto(email),
       limiteCredito: parseValorMonetario(limiteCredito),
-      suframa: texto(suframa),
-      observacoes: texto(observacoes),
-      contatos: contatos.length > 0 ? contatos.map(contatoParaPayload) : undefined,
+      contatos: contatos.map(contatoParaPayload),
     };
 
     setSalvando(true);
@@ -318,7 +325,14 @@ export function FormularioNovoCliente() {
             <Switch checked={fisica} onChange={aoMudarTipo} label="Pessoa Física" />
             Pessoa Física
           </label>
-          <Campo label="Código" value={codigo} onChange={setCodigo} placeholder="Código" className="w-40" maxLength={20} />
+          <Campo
+            label="Código do cliente (Radar)"
+            value={codigo}
+            onChange={setCodigo}
+            placeholder="Em branco: o Radar gera"
+            className="w-56"
+            maxLength={20}
+          />
         </div>
 
         {/* Nomes */}
@@ -346,19 +360,31 @@ export function FormularioNovoCliente() {
         </div>
 
         {/* Endereços */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <SeletorEndereco
-            rotulo="Endereço de Cobrança"
-            enderecos={enderecos.lista}
-            selecionado={enderecos.cobranca}
-            onEscolher={(valor) => aoEscolherEndereco("cobranca", valor)}
-          />
-          <SeletorEndereco
-            rotulo="Endereço de Entrega"
-            enderecos={enderecos.lista}
-            selecionado={enderecos.entrega}
-            onEscolher={(valor) => aoEscolherEndereco("entrega", valor)}
-          />
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <SeletorEndereco
+              rotulo="Endereço de Cobrança"
+              enderecos={enderecos.lista}
+              selecionado={enderecos.cobranca}
+              onEscolher={(valor) => aoEscolherEndereco("cobranca", valor)}
+            />
+            {!entregaIgual && (
+              <SeletorEndereco
+                rotulo="Endereço de Entrega"
+                enderecos={enderecos.lista}
+                selecionado={enderecos.entrega}
+                onEscolher={(valor) => aoEscolherEndereco("entrega", valor)}
+              />
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={entregaIgual}
+              onChange={(evento) => setEntregaIgual(evento.target.checked)}
+            />
+            Endereço de entrega igual ao de cobrança
+          </label>
         </div>
 
         {/* Contato e financeiro */}
@@ -375,25 +401,16 @@ export function FormularioNovoCliente() {
             inputMode="decimal"
             placeholder="Digite o valor limite"
           />
-          <Campo label="Suframa" value={suframa} onChange={setSuframa} placeholder="Digite o código Suframa" maxLength={20} />
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Observações
-          <textarea
-            value={observacoes}
-            onChange={(evento) => setObservacoes(evento.target.value)}
-            rows={5}
-            maxLength={2000}
-            placeholder="Nenhuma observação"
-            className="rounded-card bg-background px-4 py-3 text-sm text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-primary-light"
-          />
-        </label>
       </Card>
 
       <Card className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-ink">Contatos</h2>
+          <div className="flex flex-col">
+            <h2 className="text-base font-semibold text-ink">Contatos</h2>
+            <span className="text-xs text-muted">Obrigatório: adicione pelo menos um contato.</span>
+          </div>
           <SecondaryButton onClick={() => setPopupContato(true)}>Adicionar contato</SecondaryButton>
         </div>
         {contatos.length === 0 ? (

@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEmail,
@@ -180,7 +181,8 @@ export class CriarClienteDto {
   @Type(() => EnderecoClienteDto)
   enderecoCobranca!: EnderecoClienteDto;
 
-  // Omitido = so o endereco de cobranca (padrao) e' enviado.
+  // Omitido = so o endereco de cobranca (padrao) e' enviado. Quando o usuario
+  // marca "entrega igual a cobranca", o front manda o MESMO endereco aqui.
   @IsOptional()
   @ValidateNested()
   @Type(() => EnderecoClienteDto)
@@ -204,22 +206,13 @@ export class CriarClienteDto {
   @Min(0)
   limiteCredito?: number;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  suframa?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  observacoes?: string;
-
-  @IsOptional()
+  // Pelo menos UM contato e obrigatorio pra cadastrar o cliente.
   @IsArray()
+  @ArrayMinSize(1, { message: 'Adicione pelo menos um contato' })
   @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => ContatoNovoClienteDto)
-  contatos?: ContatoNovoClienteDto[];
+  contatos!: ContatoNovoClienteDto[];
 }
 
 // Resposta do POST /clientes - o cliente ja existe localmente (PENDENTE) e

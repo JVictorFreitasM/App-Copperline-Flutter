@@ -80,6 +80,4 @@ export interface ConsultaCnpjResultadoDto {
   // null quando origem = BASE (nao foi consultada a Receita).
   dados: ConsultaCnpjDto | null;
   enderecoSugerido: EnderecoSugeridoDto | null;
-  // Texto pronto pro campo Observacoes (situacao, abertura, atividades).
-  observacoesSugeridas: string | null;
 }

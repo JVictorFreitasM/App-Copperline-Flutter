@@ -20,6 +20,7 @@ function dtoBase(sobrescrever: Partial<CriarClienteDto> = {}): CriarClienteDto {
       codigoIbge: '2211001',
       uf: 'PI',
     },
+    contatos: [{ nome: 'Maria', funcao: 'Compras' }],
     ...sobrescrever,
   };
 }
@@ -87,6 +88,17 @@ describe('ClienteCadastroService.criar - validacoes antes de gravar', () => {
         where: { cpfCnpj: { in: [CNPJ_VALIDO, '07.127.994/0001-50'] } },
       }),
     );
+  });
+
+  it('sem nenhum contato nao cadastra (pelo menos um e obrigatorio)', async () => {
+    const m = montar();
+
+    await expect(
+      m.service.criar(dtoBase({ contatos: [] }), 'u1', ESCOPO_PROPRIO),
+    ).rejects.toThrow(new BadRequestException('Adicione pelo menos um contato'));
+
+    expect(m.prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.fila.add).not.toHaveBeenCalled();
   });
 
   it('escopo NENHUM nao cadastra', async () => {

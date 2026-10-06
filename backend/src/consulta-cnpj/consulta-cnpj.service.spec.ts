@@ -347,23 +347,4 @@ describe('ConsultaCnpjService - autopreenchimento', () => {
 
     expect(resultado.enderecoSugerido).toMatchObject({ numero: null, semNumero: true });
   });
-
-  it('gera as observacoes no formato da tela de referencia', async () => {
-    const m = montar();
-    m.receitaWsClient.consultar.mockResolvedValue({
-      ...RESPOSTA,
-      atividades_secundarias: [{ code: '94.93-6-00', text: 'Atividades associativas' }],
-    });
-
-    const resultado = await m.service.consultar(CNPJ);
-
-    expect(resultado.observacoesSugeridas).toBe(
-      [
-        'Situação: ATIVA',
-        'Abertura: 10/12/2004',
-        'Atividade: 27.33-3-00 - Fabricacao de fios',
-        'Atividade secundária: 94.93-6-00 - Atividades associativas',
-      ].join('\n'),
-    );
-  });
 });

@@ -64,6 +64,11 @@ export class ClienteCadastroService {
     if (!tipoPessoa) {
       throw new BadRequestException('CPF/CNPJ inválido');
     }
+    // A validacao do DTO ja exige, mas a regra vale tambem pra quem chamar o
+    // servico direto (fila, outros modulos).
+    if (!dto.contatos || dto.contatos.length === 0) {
+      throw new BadRequestException('Adicione pelo menos um contato');
+    }
     const documentoFormatado = formatarDocumento(dto.cpfCnpj);
 
     await this.garantirDocumentoInedito(dto.cpfCnpj);
@@ -98,10 +103,8 @@ export class ClienteCadastroService {
       nomeMae: dto.nomeMae?.trim() || undefined,
       email: dto.email,
       limiteCredito: dto.limiteCredito,
-      suframa: dto.suframa?.trim() || undefined,
-      observacoes: dto.observacoes?.trim() || undefined,
       enderecos: enderecos.paraWk,
-      contatos: (dto.contatos ?? []).map((contato) => ({
+      contatos: dto.contatos.map((contato) => ({
         nome: contato.nome.trim(),
         funcao: contato.funcao,
         email: contato.email,
@@ -148,7 +151,7 @@ export class ClienteCadastroService {
         },
       });
 
-      for (const contato of dto.contatos ?? []) {
+      for (const contato of dto.contatos) {
         await tx.contatoCliente.create({
           data: {
             idExternoErp: `LOCAL-${randomUUID()}`,
