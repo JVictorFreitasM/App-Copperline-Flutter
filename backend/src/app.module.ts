@@ -34,6 +34,7 @@ import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acon
 import { PagamentoModule } from './pagamento/pagamento.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
+import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
     PagamentoModule,
     ConfiguracoesModule,
     ConsultaCnpjModule,
+    ConsultaCepModule,
   ],
 })
 export class AppModule {}

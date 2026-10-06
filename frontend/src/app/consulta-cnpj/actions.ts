@@ -1,41 +1,78 @@
 "use server";
 
 import { apiFetch, ApiError } from "@/lib/api";
-import { cnpjEhValido, normalizarCnpj, type ConsultaCnpjDto } from "@/lib/consulta-cnpj";
+import { cepEhValido, normalizarCep, type ConsultaCepDto } from "@/lib/consulta-cep";
+import {
+  cnpjEhValido,
+  formatarCnpj,
+  normalizarCnpj,
+  type ConsultaCnpjDto,
+} from "@/lib/consulta-cnpj";
 
-// Discriminado por `status` (mesmo padrão de estoque/actions.ts).
-export type ResultadoConsultaCnpj =
+// Discriminado por `status` (mesmo padrão de estoque/actions.ts). Um campo
+// só aceita CNPJ ou CEP: depois de tirar a pontuação, 8 dígitos é CEP e 14
+// caracteres é CNPJ - os tamanhos nunca colidem.
+export type ResultadoConsulta =
   | { status: "idle" }
   | { status: "invalido"; mensagem: string }
-  | { status: "nao-encontrado"; cnpj: string }
+  | { status: "nao-encontrado"; mensagem: string }
   | { status: "limite"; mensagem: string }
-  | { status: "encontrado"; resultado: ConsultaCnpjDto }
+  | { status: "cnpj-encontrado"; resultado: ConsultaCnpjDto }
+  | { status: "cep-encontrado"; resultado: ConsultaCepDto }
   | { status: "erro"; mensagem: string };
 
-export async function consultarCnpj(
-  _estadoAnterior: ResultadoConsultaCnpj,
-  formData: FormData,
-): Promise<ResultadoConsultaCnpj> {
-  const entrada = String(formData.get("cnpj") ?? "").trim();
+type TipoConsulta = "cnpj" | "cep";
 
-  // Validação ANTES da chamada à API - o provedor externo tem limite de
-  // requisições, CNPJ inválido nem sai do servidor do front.
-  if (!cnpjEhValido(entrada)) {
+function identificarTipo(entrada: string): TipoConsulta | null {
+  if (cepEhValido(entrada)) {
+    return "cep";
+  }
+  if (cnpjEhValido(entrada)) {
+    return "cnpj";
+  }
+  return null;
+}
+
+export async function consultar(
+  _estadoAnterior: ResultadoConsulta,
+  formData: FormData,
+): Promise<ResultadoConsulta> {
+  const entrada = String(formData.get("termo") ?? "").trim();
+
+  // Validação ANTES da chamada à API - os provedores externos têm limite de
+  // requisições, entrada inválida nem sai do servidor do front.
+  const tipo = identificarTipo(entrada);
+  if (!tipo) {
     return {
       status: "invalido",
-      mensagem: "CNPJ inválido. Confira os 14 caracteres e os dígitos verificadores.",
+      mensagem:
+        "Informe um CNPJ (14 caracteres) ou um CEP (8 dígitos) válido. Confira os dígitos verificadores do CNPJ.",
     };
   }
 
-  const cnpj = normalizarCnpj(entrada);
   try {
+    if (tipo === "cep") {
+      const resultado = await apiFetch<ConsultaCepDto>(
+        `/consulta-cep/${encodeURIComponent(normalizarCep(entrada))}`,
+        { cache: "no-store" },
+      );
+      return { status: "cep-encontrado", resultado };
+    }
+
+    const cnpj = normalizarCnpj(entrada);
     const resultado = await apiFetch<ConsultaCnpjDto>(`/consulta-cnpj/${encodeURIComponent(cnpj)}`, {
       cache: "no-store",
     });
-    return { status: "encontrado", resultado };
+    return { status: "cnpj-encontrado", resultado };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
-      return { status: "nao-encontrado", cnpj };
+      return {
+        status: "nao-encontrado",
+        mensagem:
+          tipo === "cep"
+            ? `CEP ${normalizarCep(entrada)} não encontrado.`
+            : `CNPJ ${formatarCnpj(entrada)} não encontrado na Receita Federal.`,
+      };
     }
     if (error instanceof ApiError && error.status === 429) {
       return { status: "limite", mensagem: "Muitas consultas seguidas. Aguarde alguns instantes e tente de novo." };

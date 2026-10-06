@@ -54,7 +54,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
         { href: "/pedidos", rotulo: "Pedidos", icone: <IconeClipboard /> },
         { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/notas-fiscais", rotulo: "Notas fiscais", icone: <IconeRecibo /> },
-        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ", icone: <IconeBusca /> },
+        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ / CEP", icone: <IconeBusca /> },
         { href: "/tabelas-preco", rotulo: "Tabelas de preço", icone: <IconeMoeda /> },
         { href: "/metas", rotulo: "Metas e ranking", icone: <IconeGrafico /> },
         { href: "/oportunidades", rotulo: "Oportunidades", icone: <IconeAlerta /> },
