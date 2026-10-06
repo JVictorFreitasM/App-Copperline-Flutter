@@ -2,8 +2,7 @@ import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type { IdpUser } from '@copperline/idp-client';
-import type { Prisma } from '../../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { IdempotenciaAcaoService } from '../idempotencia-acao/idempotencia-acao.service';
 import { CriarPedidoService } from '../pedidos/criar-pedido.service';
 import { RastreioService } from '../rastreio/rastreio.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
@@ -29,7 +28,7 @@ import {
 @Injectable()
 export class FilaPendenteService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly idempotencia: IdempotenciaAcaoService,
     private readonly criarPedidoService: CriarPedidoService,
     private readonly visitasService: VisitasService,
     private readonly rastreioService: RastreioService,
@@ -67,88 +66,57 @@ export class FilaPendenteService {
       };
     }
 
-    const existente = await this.prisma.acaoFilaProcessada.findUnique({
-      where: { usuarioId_idLocal: { usuarioId, idLocal: acao.idLocal } },
-    });
-    if (existente) {
-      // Mesmo idLocal com conteudo DIFERENTE do que foi processado: nao e'
-      // reenvio, e' conflito - nunca devolve sucesso de outra acao.
-      if (existente.payloadHash && existente.payloadHash !== comprovante.hash) {
+    // Reserva o idLocal ANTES de executar (a constraint unica do banco e' a
+    // trava): requisicoes concorrentes com o mesmo idLocal - sincronizacao
+    // disparada por mais de um gatilho no app - nunca executam a acao duas
+    // vezes. Ver IdempotenciaAcaoService.
+    const reserva = await this.idempotencia.reservar(
+      usuarioId,
+      acao.idLocal,
+      acao.tipo,
+      comprovante.hash,
+    );
+
+    switch (reserva.situacao) {
+      case 'conflito':
+        // Mesmo idLocal com conteudo DIFERENTE do que foi processado: nao e'
+        // reenvio, e' conflito - nunca devolve sucesso de outra acao.
         return {
           idLocal: acao.idLocal,
           status: 'ERRO',
           erro: 'Conflito: este idLocal já foi processado com conteúdo diferente',
           ack: comprovante,
         };
-      }
-      // Reenvio (retry de rede no meio do envio anterior, criterio de
-      // aceite) - devolve o resultado JA CONGELADO, nunca re-executa.
-      return {
-        idLocal: acao.idLocal,
-        status: existente.status,
-        resultado: existente.resultado ?? undefined,
-        erro: existente.erro ?? undefined,
-        ack: { hash: existente.payloadHash ?? comprovante.hash, bytes: comprovante.bytes },
-      };
-    }
-
-    try {
-      const resultado = await this.executar(usuarioId, idpUser, acao);
-      return await this.registrarResultado(usuarioId, acao, comprovante, 'SUCESSO', resultado);
-    } catch (error) {
-      const mensagem = extrairMensagemErro(error);
-      return await this.registrarResultado(
-        usuarioId,
-        acao,
-        comprovante,
-        'ERRO',
-        undefined,
-        mensagem,
-      );
-    }
-  }
-
-  // Cria o registro de idempotencia so DEPOIS de executar - se duas
-  // chamadas concorrentes (mesmo idLocal) escaparem da checagem acima
-  // (corrida rara), a constraint @@unique([usuarioId, idLocal]) do banco
-  // rejeita a segunda gravacao (P2002); nesse caso busca o que a primeira
-  // ja gravou em vez de estourar erro pro app.
-  private async registrarResultado(
-    usuarioId: string,
-    acao: AcaoFilaDto,
-    comprovante: ComprovanteAcao,
-    status: 'SUCESSO' | 'ERRO',
-    resultado?: unknown,
-    erro?: string,
-  ): Promise<ResultadoAcaoFilaDto> {
-    try {
-      await this.prisma.acaoFilaProcessada.create({
-        data: {
-          usuarioId,
-          idLocal: acao.idLocal,
-          tipo: acao.tipo,
-          status,
-          resultado: resultado as Prisma.InputJsonValue,
-          erro,
-          payloadHash: comprovante.hash,
-        },
-      });
-      return { idLocal: acao.idLocal, status, resultado, erro, ack: comprovante };
-    } catch {
-      const jaGravado = await this.prisma.acaoFilaProcessada.findUnique({
-        where: { usuarioId_idLocal: { usuarioId, idLocal: acao.idLocal } },
-      });
-      if (jaGravado) {
+      case 'em-processamento':
+        // Outra requisicao esta executando esta mesma acao agora - o app
+        // mantem PENDENTE e reenvia depois (recebe o resultado congelado).
+        return { idLocal: acao.idLocal, status: 'PROCESSANDO', ack: comprovante };
+      case 'concluida':
+        // Reenvio (retry de rede no meio do envio anterior) - devolve o
+        // resultado JA CONGELADO, nunca re-executa.
         return {
           idLocal: acao.idLocal,
-          status: jaGravado.status,
-          resultado: jaGravado.resultado ?? undefined,
-          erro: jaGravado.erro ?? undefined,
-          ack: { hash: jaGravado.payloadHash ?? comprovante.hash, bytes: comprovante.bytes },
+          status: reserva.status,
+          resultado: reserva.resultado,
+          erro: reserva.erro,
+          ack: { hash: reserva.payloadHash ?? comprovante.hash, bytes: comprovante.bytes },
         };
-      }
-      throw new Error(`Falha ao registrar resultado da ação '${acao.idLocal}'`);
+      case 'nova':
+        break;
     }
+
+    let resultado: unknown;
+    try {
+      resultado = await this.executar(usuarioId, idpUser, acao);
+    } catch (error) {
+      const mensagem = extrairMensagemErro(error);
+      await this.idempotencia.concluir(reserva.registroId, 'ERRO', undefined, mensagem);
+      return { idLocal: acao.idLocal, status: 'ERRO', erro: mensagem, ack: comprovante };
+    }
+    // Fora do try de proposito: a acao JA foi executada - falha ao gravar o
+    // resultado nao pode virar ERRO de uma acao que deu certo.
+    await this.idempotencia.concluir(reserva.registroId, 'SUCESSO', resultado);
+    return { idLocal: acao.idLocal, status: 'SUCESSO', resultado, ack: comprovante };
   }
 
   private async executar(

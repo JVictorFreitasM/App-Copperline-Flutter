@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../core/api_exception.dart';
 import '../core/formatacao.dart';
 import '../core/local_db/acao_pendente.dart';
@@ -389,7 +390,22 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     );
   }
 
+  // Trava de reentrada: `_enviando` só vira true DEPOIS do diálogo de
+  // confirmação, então um toque duplo rápido antes disso abria dois fluxos de
+  // envio. Esta flag cobre o método inteiro, do primeiro toque ao fim.
+  bool _submetendo = false;
+
   Future<void> _onSubmeter({bool salvarComoOrcamento = false}) async {
+    if (_submetendo) return;
+    _submetendo = true;
+    try {
+      await _executarSubmissao(salvarComoOrcamento: salvarComoOrcamento);
+    } finally {
+      _submetendo = false;
+    }
+  }
+
+  Future<void> _executarSubmissao({bool salvarComoOrcamento = false}) async {
     setState(() => _erro = null);
     if (_cliente == null) {
       setState(() => _erro = 'Selecione um cliente.');
@@ -439,6 +455,13 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     );
     if (confirmado != true) return;
 
+    // Chave de idempotência DESTA tentativa de envio: vale pro POST direto e,
+    // se a resposta se perder por timeout, pro mesmo pedido na fila offline -
+    // o servidor reconhece que é o mesmo e não cria outro. Nova a cada
+    // tentativa (depois de um erro de negócio o usuário corrige e reenvia, e
+    // isso NÃO pode devolver o erro congelado da tentativa anterior).
+    final idLocal = const Uuid().v4();
+
     setState(() => _enviando = true);
     try {
       // Posição best-effort (Épico 4, config-aba-rastreio.jpg -
@@ -477,6 +500,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
             codigoTabelaPreco: _codigoTabelaPreco,
             contatoId: _contatoId,
             vendedorId: _vendedorId,
+            idLocal: idLocal,
           );
       if (!mounted) return;
       if (resultado.status == 'ORCAMENTO') {
@@ -503,6 +527,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
       // reenviar do mesmo jeito só repetiria a mesma rejeição.
       if (erro.statusCode == null) {
         await _enfileirarOffline(
+          idLocal: idLocal,
           clienteId: _cliente!.id,
           formaPagamentoId: _formaPagamentoId!,
           condicaoPagamentoId: _condicaoPagamentoId!,
@@ -525,6 +550,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
   }
 
   Future<void> _enfileirarOffline({
+    required String idLocal,
     required String clienteId,
     required String formaPagamentoId,
     required String condicaoPagamentoId,
@@ -534,6 +560,9 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
     try {
       final fila = await ref.read(filaPendenteServiceProvider.future);
       await fila.enfileirar(
+        // MESMO idLocal do envio direto que deu timeout - se o servidor chegou a
+        // criar o pedido, a fila recebe o pedido existente em vez de criar outro.
+        idLocal: idLocal,
         tipo: TipoAcaoFila.criarPedido,
         timestamp: DateTime.now(),
         // Mesmo shape de CriarPedidoDto (backend, ver

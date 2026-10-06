@@ -3,6 +3,7 @@ import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { IdempotenciaAcaoModule } from '../idempotencia-acao/idempotencia-acao.module';
 import { PedidosModule } from '../pedidos/pedidos.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RastreioModule } from '../rastreio/rastreio.module';
@@ -21,6 +22,7 @@ import { MobileSnapshotService } from './mobile-snapshot.service';
   // FilaPendenteService/MobileSnapshotService.
   imports: [
     PrismaModule,
+    IdempotenciaAcaoModule,
     UsuariosModule,
     VendedoresModule,
     PedidosModule,

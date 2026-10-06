@@ -36,6 +36,14 @@ export class CriarPedidoItemDto {
 }
 
 export class CriarPedidoDto {
+  // Chave de idempotencia gerada no APP por tentativa de envio (opcional -
+  // web nao manda). Reenviar o mesmo idLocal (ex: o app desistiu da resposta
+  // por timeout e reenvia pela fila offline) devolve o pedido ja criado em
+  // vez de criar outro. Ver CriarPedidoIdempotenteService.
+  @IsOptional()
+  @IsUUID()
+  idLocal?: string;
+
   @IsUUID()
   clienteId!: string;
 

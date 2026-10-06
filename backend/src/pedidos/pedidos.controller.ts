@@ -20,6 +20,7 @@ import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitaco
 import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
+import { CriarPedidoIdempotenteService } from './criar-pedido-idempotente.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import type { CriarPedidoResultadoDto } from './criar-pedido.service';
 import { AlterarVendedorOrcamentoDto } from './dto/alterar-vendedor-orcamento.dto';
@@ -52,6 +53,7 @@ export class PedidosController {
     private readonly decisaoDescontoPedidoService: DecisaoDescontoPedidoService,
     private readonly prisma: PrismaService,
     private readonly pedidoPdfService: PedidoPdfService,
+    private readonly criarPedidoIdempotenteService: CriarPedidoIdempotenteService,
   ) {}
 
   @Get()
@@ -243,7 +245,7 @@ export class PedidosController {
       idpUser,
       usuario.id,
     );
-    return this.criarPedidoService.criar(dto, usuario.id, escopo);
+    return this.criarPedidoIdempotenteService.criar(dto, usuario.id, escopo);
   }
 
   // Epico 4 (config-aba-orcamento.jpg) - "transformar um Orçamento em

@@ -5,6 +5,7 @@ import { RequireSessionMiddleware } from '../common/middleware/require-session.m
 import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { ErpClientModule } from '../erp-client/erp-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { IdempotenciaAcaoModule } from '../idempotencia-acao/idempotencia-acao.module';
 import { RELATORIO_DIARIO_QUEUE } from '../notificacoes/notificacao.constants';
 import { RelatorioDiarioNotificacaoProcessor } from '../notificacoes/relatorio-diario-notificacao.processor';
 import { RelatorioDiarioNotificacaoScheduler } from '../notificacoes/relatorio-diario-notificacao.scheduler';
@@ -15,6 +16,7 @@ import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoe
 import { TabelasPrecoModule } from '../tabelas-preco/tabelas-preco.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
+import { CriarPedidoIdempotenteService } from './criar-pedido-idempotente.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import { PedidoErpClientService } from './pedido-erp-client.service';
 import { PedidoPdfService } from './pedido-pdf.service';
@@ -42,6 +44,7 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
   // NotificacoesModule.
   imports: [
     PrismaModule,
+    IdempotenciaAcaoModule,
     ProdutosModule,
     SolicitacoesDescontoModule,
     TabelasPrecoModule,
@@ -55,6 +58,7 @@ import { RelatorioPedidosService } from './relatorio-pedidos.service';
   providers: [
     PedidosService,
     CriarPedidoService,
+    CriarPedidoIdempotenteService,
     DecisaoDescontoPedidoService,
     PedidoErpClientService,
     RelatorioPedidosService,

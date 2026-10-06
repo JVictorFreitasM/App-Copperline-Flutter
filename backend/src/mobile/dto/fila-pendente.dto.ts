@@ -84,7 +84,9 @@ export interface AckAcaoFilaDto {
 
 export interface ResultadoAcaoFilaDto {
   idLocal: string;
-  status: 'SUCESSO' | 'ERRO';
+  // PROCESSANDO: a mesma acao ja esta sendo executada por outra requisicao
+  // - o app mantem PENDENTE e reenvia depois.
+  status: 'SUCESSO' | 'ERRO' | 'PROCESSANDO';
   resultado?: unknown;
   erro?: string;
   ack?: AckAcaoFilaDto;

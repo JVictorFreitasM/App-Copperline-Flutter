@@ -2,6 +2,7 @@ import { FilaPendenteService } from './fila-pendente.service';
 import type { AcaoFilaDto } from './dto/fila-pendente.dto';
 import type { IdpUser } from '@copperline/idp-client';
 import { comprovanteDaAcao } from './hash-acao';
+import { IdempotenciaAcaoService } from '../idempotencia-acao/idempotencia-acao.service';
 
 const IDP_USER: IdpUser = { sub: 's1', email: 'a@a.com', name: 'A', role: null, system: 'x' };
 
@@ -13,13 +14,25 @@ function prismaFake(overrides: { jaProcessada?: Record<string, unknown> | null }
         if ('jaProcessada' in overrides) return overrides.jaProcessada;
         return null;
       }),
+      // Reserva: se ja existe registro (override), viola a unicidade como o banco.
       create: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+        if (overrides.jaProcessada) {
+          throw Object.assign(new Error('Unique constraint'), { code: 'P2002' });
+        }
         registros.set(data.idLocal as string, data);
-        return data;
+        return { id: `registro-${data.idLocal as string}`, ...data };
       }),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     _registros: registros,
   };
+}
+
+// FilaPendenteService depende da idempotencia, nao do prisma direto - aqui
+// usa a implementacao REAL sobre o prisma fake.
+function idempotenciaDe(prisma: ReturnType<typeof prismaFake>) {
+  return new IdempotenciaAcaoService(prisma as never);
 }
 
 function criarPedidoServiceFake() {
@@ -51,7 +64,7 @@ function acao(overrides: Partial<AcaoFilaDto> = {}): AcaoFilaDto {
 
 function montarService(prisma: ReturnType<typeof prismaFake>) {
   return new FilaPendenteService(
-    prisma as never,
+    idempotenciaDe(prisma) as never,
     criarPedidoServiceFake() as never,
     visitasServiceFake() as never,
     rastreioServiceFake() as never,
@@ -80,7 +93,7 @@ describe('FilaPendenteService.processar - ack/integridade', () => {
     const prisma = prismaFake();
     const rastreioService = rastreioServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasServiceFake() as never,
       rastreioService as never,
@@ -122,7 +135,7 @@ describe('FilaPendenteService.processar - ack/integridade', () => {
     const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash })]);
 
     expect(resultado.ack?.hash).toBe(hash);
-    expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
+    expect(prisma.acaoFilaProcessada.update).not.toHaveBeenCalled();
   });
 });
 
@@ -137,7 +150,7 @@ describe('FilaPendenteService.processar - idempotencia', () => {
     });
     const rastreioService = rastreioServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasServiceFake() as never,
       rastreioService as never,
@@ -147,7 +160,7 @@ describe('FilaPendenteService.processar - idempotencia', () => {
     const resultado = await service.processar('u1', IDP_USER, [acao()]);
 
     expect(rastreioService.registrarLote).not.toHaveBeenCalled();
-    expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
+    expect(prisma.acaoFilaProcessada.update).not.toHaveBeenCalled();
     expect(resultado).toEqual([
       {
         idLocal: 'acao-1',
@@ -165,11 +178,14 @@ describe('FilaPendenteService.processar - idempotencia', () => {
 
     const resultado = await service.processar('u1', IDP_USER, [acao()]);
 
-    expect(prisma.acaoFilaProcessada.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ idLocal: 'acao-1', status: 'SUCESSO' }),
-      }),
-    );
+    // Reserva ANTES de executar (PROCESSANDO) e resultado gravado depois.
+    expect(prisma.acaoFilaProcessada.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ idLocal: 'acao-1', status: 'PROCESSANDO' }),
+    });
+    expect(prisma.acaoFilaProcessada.update).toHaveBeenCalledWith({
+      where: { id: 'registro-acao-1' },
+      data: expect.objectContaining({ status: 'SUCESSO' }),
+    });
     expect(resultado[0].status).toBe('SUCESSO');
   });
 });
@@ -210,7 +226,7 @@ describe('FilaPendenteService.processar - status individual por item', () => {
       }),
     };
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasService as never,
       rastreioService as never,
@@ -236,7 +252,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
     const criarPedidoService = criarPedidoServiceFake();
     const vendedorEscopoService = vendedorEscopoServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoService as never,
       visitasServiceFake() as never,
       rastreioServiceFake() as never,
@@ -275,7 +291,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
     const prisma = prismaFake();
     const visitasService = visitasServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasService as never,
       rastreioServiceFake() as never,
@@ -308,7 +324,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
     const prisma = prismaFake();
     const rastreioService = rastreioServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasServiceFake() as never,
       rastreioService as never,
@@ -334,7 +350,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
     const prisma = prismaFake();
     const visitasService = visitasServiceFake();
     const service = new FilaPendenteService(
-      prisma as never,
+      idempotenciaDe(prisma) as never,
       criarPedidoServiceFake() as never,
       visitasService as never,
       rastreioServiceFake() as never,
@@ -358,5 +374,27 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
       'errei o cliente',
       new Date('2026-01-01T08:30:00.000Z'),
     );
+  });
+});
+
+describe('FilaPendenteService.processar - concorrencia', () => {
+  it('mesmo idLocal ja reservado por outra requisicao (PROCESSANDO) NAO executa e devolve PROCESSANDO', async () => {
+    const hash = comprovanteDaAcao(acao()).hash;
+    const prisma = prismaFake({
+      jaProcessada: { id: 'r1', status: 'PROCESSANDO', resultado: null, erro: null, payloadHash: hash },
+    });
+    const rastreioService = rastreioServiceFake();
+    const service = new FilaPendenteService(
+      idempotenciaDe(prisma) as never,
+      criarPedidoServiceFake() as never,
+      visitasServiceFake() as never,
+      rastreioService as never,
+      vendedorEscopoServiceFake() as never,
+    );
+
+    const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash })]);
+
+    expect(resultado.status).toBe('PROCESSANDO');
+    expect(rastreioService.registrarLote).not.toHaveBeenCalled();
   });
 });

@@ -1586,6 +1586,9 @@ enum TipoAcaoFila {
 enum StatusAcaoFila {
   SUCESSO
   ERRO
+  // Reservado ANTES de executar a acao (ver IdempotenciaAcaoService) - e' a
+  // trava contra duas requisicoes concorrentes com o mesmo idLocal.
+  PROCESSANDO
 
   @@map("status_acao_fila")
 }

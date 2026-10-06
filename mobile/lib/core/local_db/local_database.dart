@@ -30,7 +30,7 @@ class LocalDatabase {
     final caminho = caminhoOverride ?? join(await getDatabasesPath(), 'copperline_offline.db');
     final db = await openDatabase(
       caminho,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE clientes (id TEXT PRIMARY KEY, dados TEXT NOT NULL)
@@ -60,7 +60,8 @@ class LocalDatabase {
             status TEXT NOT NULL,
             resultado TEXT,
             erro TEXT,
-            criado_em TEXT NOT NULL
+            criado_em TEXT NOT NULL,
+            enviando_em TEXT
           )
         ''');
       },
@@ -77,6 +78,11 @@ class LocalDatabase {
         // dados_comerciais_service.dart).
         if (oldVersion < 3) {
           await _criarTabelasDadosComerciais(db);
+        }
+        // v4: reivindicação da ação em envio (ver FilaPendenteService.sincronizar) -
+        // momento em que um envio (qualquer isolate) pegou a ação.
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE acoes_pendentes ADD COLUMN enviando_em TEXT');
         }
       },
     );

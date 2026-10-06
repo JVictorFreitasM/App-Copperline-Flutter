@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SolicitacoesDescontoService } from '../solicitacoes-desconto/solicitacoes-desconto.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
+import { CriarPedidoIdempotenteService } from './criar-pedido-idempotente.service';
 import { CriarPedidoService } from './criar-pedido.service';
 import { DecisaoDescontoPedidoService } from './decisao-desconto-pedido.service';
 import { PedidoPdfService } from './pedido-pdf.service';
@@ -35,6 +36,7 @@ describe('PedidosController - ordem de rotas estaticas vs :id', () => {
       providers: [
         { provide: PedidosService, useValue: pedidosService },
         { provide: CriarPedidoService, useValue: {} },
+        { provide: CriarPedidoIdempotenteService, useValue: {} },
         { provide: UsuariosService, useValue: usuariosService },
         { provide: VendedorEscopoService, useValue: vendedorEscopoService },
         { provide: RelatorioPedidosService, useValue: relatorioPedidosService },

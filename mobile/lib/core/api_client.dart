@@ -157,9 +157,21 @@ class ApiClient implements ApiJsonClient {
   // Primeiro POST do app (OS-MOBILE-16, registro de dispositivo pra push) -
   // resposta pode vir vazia (ex: 204 No Content, como POST /dispositivos),
   // por isso Map vazio como default em vez de exigir corpo.
-  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> corpo) async {
+  //
+  // [receiveTimeout] opcional: chamadas que esperam o ERP (ex: criar pedido)
+  // precisam de mais que os 15 s padrão - desistir cedo demais faz o app achar
+  // que falhou uma requisição que o servidor concluiu.
+  Future<Map<String, dynamic>> postJson(
+    String path,
+    Map<String, dynamic> corpo, {
+    Duration? receiveTimeout,
+  }) async {
     try {
-      final resposta = await _dio.post<Map<String, dynamic>>(path, data: corpo);
+      final resposta = await _dio.post<Map<String, dynamic>>(
+        path,
+        data: corpo,
+        options: receiveTimeout == null ? null : Options(receiveTimeout: receiveTimeout),
+      );
       return resposta.data ?? <String, dynamic>{};
     } on DioException catch (erro) {
       throw ApiException(

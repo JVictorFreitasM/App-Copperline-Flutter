@@ -101,6 +101,9 @@ final criarPedidoServiceProvider = Provider<CriarPedidoService>((ref) {
 class CriarPedidoService {
   CriarPedidoService(this._apiClient);
 
+  // O envio do pedido espera a resposta do ERP - bem mais que os 15 s padrão.
+  static const _timeoutCriarPedido = Duration(seconds: 60);
+
   final ApiClient _apiClient;
 
   Future<ResultadoCalculoQuantidade> calcular({
@@ -160,8 +163,13 @@ class CriarPedidoService {
     String? codigoTabelaPreco,
     String? contatoId,
     String? vendedorId,
+    // Chave de idempotência desta tentativa de envio (ver criar_pedido_screen.dart):
+    // se a resposta se perder por timeout e o pedido for reenviado pela fila com
+    // o mesmo id, o servidor devolve o pedido já criado em vez de criar outro.
+    String? idLocal,
   }) async {
     final json = await _apiClient.postJson('/pedidos', {
+      if (idLocal != null) 'idLocal': idLocal,
       'clienteId': clienteId,
       'formaPagamentoId': formaPagamentoId,
       'condicaoPagamentoId': condicaoPagamentoId,
@@ -175,7 +183,7 @@ class CriarPedidoService {
       if (codigoTabelaPreco != null) 'codigoTabelaPreco': codigoTabelaPreco,
       if (contatoId != null) 'contatoId': contatoId,
       if (vendedorId != null) 'vendedorId': vendedorId,
-    });
+    }, receiveTimeout: _timeoutCriarPedido);
     return (pedidoId: json['pedidoId'] as String, status: json['status'] as String);
   }
 
