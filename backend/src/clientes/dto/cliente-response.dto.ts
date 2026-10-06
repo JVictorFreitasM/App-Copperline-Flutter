@@ -19,6 +19,10 @@ export interface ClienteResumoDto {
   // vendedor - null quando o cliente ainda nao teve o pin definido.
   localizacaoLat: number | null;
   localizacaoLng: number | null;
+  // Cadastro feito por nos (POST /clientes): PENDENTE/ERRO ate o WK Radar
+  // aceitar. Cliente vindo do sync e' sempre ENVIADO.
+  statusEnvioErp: 'PENDENTE' | 'ENVIADO' | 'ERRO';
+  erroEnvioErp: string | null;
 }
 
 export interface ContatoClienteDto {
@@ -118,6 +122,8 @@ export function paraClienteResumoDto(cliente: Cliente): ClienteResumoDto {
     sincronizadoEm: cliente.sincronizadoEm,
     localizacaoLat: cliente.localizacaoLat?.toNumber() ?? null,
     localizacaoLng: cliente.localizacaoLng?.toNumber() ?? null,
+    statusEnvioErp: cliente.statusEnvioErp,
+    erroEnvioErp: cliente.erroEnvioErp,
   };
 }
 

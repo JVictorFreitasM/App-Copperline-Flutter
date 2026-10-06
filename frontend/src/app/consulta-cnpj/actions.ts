@@ -6,7 +6,9 @@ import {
   cnpjEhValido,
   formatarCnpj,
   normalizarCnpj,
+  type ClienteJaCadastradoDto,
   type ConsultaCnpjDto,
+  type ConsultaCnpjResultadoDto,
 } from "@/lib/consulta-cnpj";
 
 // Discriminado por `status` (mesmo padrão de estoque/actions.ts). Um campo
@@ -18,6 +20,8 @@ export type ResultadoConsulta =
   | { status: "nao-encontrado"; mensagem: string }
   | { status: "limite"; mensagem: string }
   | { status: "cnpj-encontrado"; resultado: ConsultaCnpjDto }
+  // CNPJ ja na base da empresa: o backend nem consulta a Receita.
+  | { status: "ja-cadastrado"; cliente: ClienteJaCadastradoDto }
   | { status: "cep-encontrado"; resultado: ConsultaCepDto }
   | { status: "erro"; mensagem: string };
 
@@ -60,10 +64,13 @@ export async function consultar(
     }
 
     const cnpj = normalizarCnpj(entrada);
-    const resultado = await apiFetch<ConsultaCnpjDto>(`/consulta-cnpj/${encodeURIComponent(cnpj)}`, {
+    const resposta = await apiFetch<ConsultaCnpjResultadoDto>(`/consulta-cnpj/${encodeURIComponent(cnpj)}`, {
       cache: "no-store",
     });
-    return { status: "cnpj-encontrado", resultado };
+    if (resposta.jaCadastrado) {
+      return { status: "ja-cadastrado", cliente: resposta.jaCadastrado };
+    }
+    return { status: "cnpj-encontrado", resultado: resposta.dados! };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return {

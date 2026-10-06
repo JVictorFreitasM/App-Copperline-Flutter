@@ -10,6 +10,10 @@ export interface ClienteResumoDto {
   inativo: boolean;
   incompleto: boolean;
   sincronizadoEm: string;
+  // Cadastro feito por nós: PENDENTE/ERRO até o WK Radar aceitar (ver
+  // /clientes/novo). Cliente do sync é sempre ENVIADO.
+  statusEnvioErp: "PENDENTE" | "ENVIADO" | "ERRO";
+  erroEnvioErp: string | null;
 }
 
 export interface ContatoClienteDto {

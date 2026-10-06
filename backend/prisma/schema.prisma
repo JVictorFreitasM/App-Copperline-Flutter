@@ -53,6 +53,14 @@ model SyncLog {
   @@map("sync_logs")
 }
 
+enum StatusEnvioErp {
+  PENDENTE
+  ENVIADO
+  ERRO
+
+  @@map("status_envio_erp")
+}
+
 // Sincronizado do WK Radar (GET /empresarial/v1/cliente) - so leitura, ver
 // skill wk-radar-client. codigoIntegrador existe desde ja para quando
 // houver escrita de volta no ERP (fora de escopo nesta OS).
@@ -87,6 +95,19 @@ model Cliente {
   // atualizando.
   incompleto        Boolean  @default(false)
   sincronizadoEm    DateTime @map("sincronizado_em")
+
+  // Cadastro de cliente feito por NOS (POST /clientes) e enviado ao WK Radar
+  // por fila (job `cliente.enviar-erp`). Linhas vindas do sync ficam sempre
+  // ENVIADO/false (default). Enquanto PENDENTE/ERRO, `idExternoErp` e' um
+  // valor sintetico "PENDENTE-<uuid>" (a coluna e' unica e obrigatoria) e o
+  // `codigoIntegrador` enviado ao Radar e' o `id` desta linha - e' por ele que
+  // o sync reconcilia com o cliente real (ver ClienteSyncStrategy.upsert).
+  statusEnvioErp    StatusEnvioErp @default(ENVIADO) @map("status_envio_erp")
+  erroEnvioErp      String?  @map("erro_envio_erp")
+  // Corpo exato enviado ao Radar (montado uma vez, na criacao) - o job so
+  // reenvia isto, nao remonta a partir de colunas.
+  payloadEnvioErp   Json?    @map("payload_envio_erp")
+  criadoLocalmente  Boolean  @default(false) @map("criado_localmente")
 
   // Dados financeiros embutidos no proprio cadastro do cliente no WK Radar
   // (informacoesFinanceiras) - vem junto do sync normal, sem chamada extra

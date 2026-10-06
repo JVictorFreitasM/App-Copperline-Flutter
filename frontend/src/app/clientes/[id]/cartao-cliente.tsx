@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BadgeAtivoInativo } from "@/components/badge";
+import { BadgeAtivoInativo, BadgeStatusEnvioErp } from "@/components/badge";
 import { Card } from "@/components/design/card";
 import type { ClienteDetalheDto, EnderecoClienteDto } from "@/lib/clientes";
 import { formatarTelefone } from "@/lib/formatacao";
@@ -69,7 +69,11 @@ export function CartaoCliente({ cliente }: { cliente: ClienteDetalheDto }) {
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold text-ink">{titulo}</h1>
             <BadgeAtivoInativo inativo={cliente.inativo} />
+            <BadgeStatusEnvioErp status={cliente.statusEnvioErp} />
           </div>
+          {cliente.statusEnvioErp === "ERRO" && cliente.erroEnvioErp && (
+            <p className="text-xs text-muted">O ERP recusou o cadastro: {cliente.erroEnvioErp}</p>
+          )}
           {cliente.nomeFantasia && cliente.nomeFantasia !== cliente.razaoSocial && (
             <p className="text-sm text-muted">{cliente.nomeFantasia}</p>
           )}

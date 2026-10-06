@@ -182,12 +182,23 @@ describe('ClienteSyncStrategy.map', () => {
   });
 });
 
-function prismaFake(vendedorExistente: { id: string; incompleto: boolean } | null) {
+function prismaFake(
+  vendedorExistente: { id: string; incompleto: boolean } | null,
+  clienteCriadoLocalmente = false,
+) {
   const tx = {
     cliente: {
-      upsert: jest.fn().mockImplementation(({ create }) => ({ id: 'cliente-1', ...create })),
+      upsert: jest.fn().mockImplementation(({ create }) => ({
+        id: 'cliente-1',
+        ...create,
+        criadoLocalmente: clienteCriadoLocalmente,
+      })),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
-    contatoCliente: { upsert: jest.fn().mockResolvedValue(undefined) },
+    contatoCliente: {
+      upsert: jest.fn().mockResolvedValue(undefined),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     clienteVendedor: {
       deleteMany: jest.fn().mockResolvedValue(undefined),
       create: jest.fn().mockResolvedValue(undefined),
@@ -276,5 +287,96 @@ describe('ClienteSyncStrategy.upsert (OS-BACKEND-23, vinculo N:N com vendedor)',
     await strategy.upsert({ ...MAPEADO_BASE, vendedoresExternoIds: [] });
 
     expect(prisma.tx.clienteVendedor.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ClienteSyncStrategy.upsert - reconciliacao do cliente criado por nos (POST /clientes)', () => {
+  const configServiceFake = { get: () => undefined } as never;
+  const strategy = (prisma: ReturnType<typeof prismaFake>) =>
+    new ClienteSyncStrategy(undefined as never, prisma as never, configServiceFake);
+
+  it('troca o id sintetico PENDENTE-<uuid> pelo id real ANTES do upsert (senao duplicaria o cliente)', async () => {
+    const prisma = prismaFake({ id: 'v1', incompleto: false });
+    const ordem: string[] = [];
+    prisma.tx.cliente.updateMany.mockImplementation(async () => {
+      ordem.push('reconcilia');
+      return { count: 1 };
+    });
+    prisma.tx.cliente.upsert.mockImplementation(async ({ create }) => {
+      ordem.push('upsert');
+      return { id: 'cliente-1', ...create };
+    });
+
+    await strategy(prisma).upsert({ ...MAPEADO_BASE, codigoIntegrador: 'cliente-local-1' });
+
+    expect(prisma.tx.cliente.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: 'cliente-local-1',
+        criadoLocalmente: true,
+        idExternoErp: { startsWith: 'PENDENTE-' },
+      },
+      data: { idExternoErp: '123' },
+    });
+    expect(ordem[0]).toBe('reconcilia');
+    expect(ordem[1]).toBe('upsert');
+  });
+
+  it('sem codigoIntegrador nao tenta reconciliar', async () => {
+    const prisma = prismaFake({ id: 'v1', incompleto: false });
+
+    await strategy(prisma).upsert({ ...MAPEADO_BASE, codigoIntegrador: null });
+
+    expect(prisma.tx.cliente.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ idExternoErp: { startsWith: 'PENDENTE-' } }),
+      }),
+    );
+  });
+
+  it('cliente criado por nos que chegou do Radar vira ENVIADO', async () => {
+    const prisma = prismaFake({ id: 'v1', incompleto: false }, true);
+
+    await strategy(prisma).upsert({ ...MAPEADO_BASE });
+
+    expect(prisma.tx.cliente.updateMany).toHaveBeenCalledWith({
+      where: { id: 'cliente-1', criadoLocalmente: true },
+      data: { statusEnvioErp: 'ENVIADO', erroEnvioErp: null },
+    });
+  });
+
+  it('remove contatos locais (sem pedido) quando o Radar devolve os contatos do cliente criado por nos', async () => {
+    const prisma = prismaFake({ id: 'v1', incompleto: false }, true);
+    const contato = {
+      idExternoErp: 'c-1',
+      codigoIntegrador: null,
+      nome: 'Maria',
+      email: null,
+      telefoneDdd: null,
+      telefoneNumero: null,
+      funcao: null,
+    };
+
+    await strategy(prisma).upsert({ ...MAPEADO_BASE, contatos: [contato] });
+
+    expect(prisma.tx.contatoCliente.deleteMany).toHaveBeenCalledWith({
+      where: { clienteId: 'cliente-1', criadoLocalmente: true, pedidos: { none: {} } },
+    });
+  });
+
+  it('cliente que nao foi criado por nos nunca tem contatos apagados', async () => {
+    const prisma = prismaFake({ id: 'v1', incompleto: false }, false);
+    const contato = {
+      idExternoErp: 'c-1',
+      codigoIntegrador: null,
+      nome: 'Maria',
+      email: null,
+      telefoneDdd: null,
+      telefoneNumero: null,
+      funcao: null,
+    };
+
+    await strategy(prisma).upsert({ ...MAPEADO_BASE, contatos: [contato] });
+
+    expect(prisma.tx.contatoCliente.deleteMany).not.toHaveBeenCalled();
   });
 });

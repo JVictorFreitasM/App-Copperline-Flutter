@@ -13,6 +13,7 @@ import { ConsultaCepService } from './consulta-cep.service';
   imports: [HttpModule, RedisModule],
   controllers: [ConsultaCepController],
   providers: [ConsultaCepService, CepApiClientService, RateLimitGuard],
+  exports: [ConsultaCepService],
 })
 export class ConsultaCepModule implements NestModule {
   constructor(@Inject(IDP_AUTH) private readonly idpAuth: IdpAuth) {}

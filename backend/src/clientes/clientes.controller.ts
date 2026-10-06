@@ -17,6 +17,7 @@ import { UsuariosService } from '../usuarios/usuarios.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
 import { ClienteBoletoService } from './cliente-boleto.service';
+import { ClienteCadastroService } from './cliente-cadastro.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteTimelineService } from './cliente-timeline.service';
 import type { TimelineEvento } from './cliente-timeline.service';
@@ -39,6 +40,8 @@ import type {
 } from './dto/cliente-response.dto';
 import { ClienteEstatisticasQueryDto } from './dto/cliente-estatisticas-query.dto';
 import { CriarContatoClienteDto } from './dto/criar-contato-cliente.dto';
+import { CriarClienteDto } from './dto/criar-cliente.dto';
+import type { ClienteCriadoDto } from './dto/criar-cliente.dto';
 import { DefinirLocalizacaoClienteDto } from './dto/definir-localizacao-cliente.dto';
 import { ListarClientesQueryDto } from './dto/listar-clientes-query.dto';
 import { VerificarConflitoQueryDto } from './dto/verificar-conflito-query.dto';
@@ -65,6 +68,7 @@ export class ClientesController {
     private readonly visitasService: VisitasService,
     private readonly clienteLocalizacaoService: ClienteLocalizacaoService,
     private readonly clienteTabelaPrecoService: ClienteTabelaPrecoService,
+    private readonly clienteCadastroService: ClienteCadastroService,
   ) {}
 
   @Get()
@@ -74,6 +78,24 @@ export class ClientesController {
   ): Promise<PaginatedResult<ClienteResumoDto>> {
     const escopo = await this.resolverEscopo(idpUser);
     return this.clientesService.listar(query, escopo);
+  }
+
+  // Cadastro de cliente novo (web e mobile): grava no Postgres como PENDENTE e
+  // enfileira o envio ao WK Radar (ver ClienteCadastroService). Rate limit por
+  // usuario - cada cadastro valida documento e pode consultar CEP/municipio.
+  @Post()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ prefixo: 'clientes-criar', limite: 20, janelaSegundos: 60 })
+  async criar(
+    @Body() dto: CriarClienteDto,
+    @CurrentUser() idpUser: IdpUser,
+  ): Promise<ClienteCriadoDto> {
+    const usuario = await this.usuariosService.obterOuCriarPorSub(idpUser);
+    const escopo = await this.vendedorEscopoService.resolverEscopoClientes(
+      idpUser,
+      usuario.id,
+    );
+    return this.clienteCadastroService.criar(dto, usuario.id, escopo);
   }
 
   // Literal, ANTES de `:id` - mesmo motivo de 'favoritos' em

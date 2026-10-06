@@ -4,7 +4,8 @@ import type { ClienteResumoDto } from "@/lib/clientes";
 import type { PaginatedResult } from "@/lib/pagination";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
 import { Paginacao } from "@/components/paginacao";
-import { BadgeAtivoInativo } from "@/components/badge";
+import { BadgeAtivoInativo, BadgeStatusEnvioErp } from "@/components/badge";
+import { PrimaryButton } from "@/components/design/button";
 import { FiltroForm, CampoFiltro } from "@/components/filtro";
 import { ListItem } from "@/components/design/list-item";
 
@@ -48,7 +49,10 @@ export default async function ClientesPage({
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-8">
-      <h1 className="text-2xl font-bold text-ink">Clientes</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-ink">Clientes</h1>
+        <PrimaryButton href="/clientes/novo">Novo cliente</PrimaryButton>
+      </div>
 
       <FiltroForm rota="/clientes">
         <CampoFiltro label="Nome / Razão social" name="nome" defaultValue={nome} />
@@ -72,7 +76,13 @@ export default async function ClientesPage({
                     avatar={titulo.charAt(0).toUpperCase()}
                     titulo={titulo}
                     subtitulo={cliente.cpfCnpj ?? "Sem CPF/CNPJ"}
-                    tag={<BadgeAtivoInativo inativo={cliente.inativo} />}
+                    tag={
+                      cliente.statusEnvioErp === "ENVIADO" ? (
+                        <BadgeAtivoInativo inativo={cliente.inativo} />
+                      ) : (
+                        <BadgeStatusEnvioErp status={cliente.statusEnvioErp} />
+                      )
+                    }
                   />
                 );
               })}

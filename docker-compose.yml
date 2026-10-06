@@ -91,6 +91,12 @@ services:
       SEGREDO_CRYPTO_KEY: ${SEGREDO_CRYPTO_KEY}
       WK_RADAR_API_URL: ${WK_RADAR_API_URL}
       RECEITAWS_TOKEN: ${RECEITAWS_TOKEN:-}
+      # ReceitaWS (plano gratis): 3 consultas por JANELA de 60 s (nao por segundo).
+      RECEITAWS_LIMITE: ${RECEITAWS_LIMITE:-3}
+      RECEITAWS_JANELA_SEGUNDOS: ${RECEITAWS_JANELA_SEGUNDOS:-60}
+      # Envio de cliente novo ao WK Radar fica DESLIGADO ate alguem acompanhar o
+      # primeiro envio real (escrita no ERP) - ver ClienteEnvioErpService.
+      CLIENTE_ENVIO_ERP_HABILITADO: ${CLIENTE_ENVIO_ERP_HABILITADO:-false}
       WK_RADAR_EMPRESA: ${WK_RADAR_EMPRESA}
       WK_RADAR_USUARIO: ${WK_RADAR_USUARIO}
       WK_RADAR_SENHA: ${WK_RADAR_SENHA}

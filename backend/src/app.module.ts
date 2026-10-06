@@ -35,6 +35,7 @@ import { PagamentoModule } from './pagamento/pagamento.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
 import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
+import { GeocodificacaoModule } from './geocodificacao/geocodificacao.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
     ConfiguracoesModule,
     ConsultaCnpjModule,
     ConsultaCepModule,
+    GeocodificacaoModule,
   ],
 })
 export class AppModule {}

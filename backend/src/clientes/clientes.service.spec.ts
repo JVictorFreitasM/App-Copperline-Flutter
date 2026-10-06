@@ -346,14 +346,16 @@ describe('ClientesService.verificarConflito', () => {
     expect(resultado).toEqual({ existe: false, vendedorResponsavel: null });
   });
 
-  it('normaliza o documento (remove mascara) antes de buscar', async () => {
+  it('busca pelas DUAS formas do documento (o sync grava cpf_cnpj formatado)', async () => {
     const prisma = prismaFake({ findFirst: null });
     const service = new ClientesService(prisma as never);
 
     await service.verificarConflito('123.456.789-00');
 
     expect(prisma.cliente.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { cpfCnpj: '12345678900' } }),
+      expect.objectContaining({
+        where: { cpfCnpj: { in: ['12345678900', '123.456.789-00'] } },
+      }),
     );
   });
 

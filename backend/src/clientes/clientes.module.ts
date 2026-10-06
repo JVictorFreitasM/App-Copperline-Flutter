@@ -1,6 +1,10 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
+import { ConsultaCepModule } from '../consulta-cep/consulta-cep.module';
+import { ErpClientModule } from '../erp-client/erp-client.module';
+import { MunicipioWkModule } from '../municipio-wk/municipio-wk.module';
 import { FinanceiroSvcClientModule } from '../financeiro-svc-client/financeiro-svc-client.module';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
 import { LlmClientModule } from '../llm-client/llm-client.module';
@@ -11,6 +15,11 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { VendedoresModule } from '../vendedores/vendedores.module';
 import { VisitasModule } from '../visitas/visitas.module';
 import { ClienteBoletoService } from './cliente-boleto.service';
+import { ClienteCadastroService } from './cliente-cadastro.service';
+import { CLIENTE_ENVIO_ERP_QUEUE } from './cliente-envio-erp.constants';
+import { ClienteEnvioErpProcessor } from './cliente-envio-erp.processor';
+import { ClienteEnvioErpScheduler } from './cliente-envio-erp.scheduler';
+import { ClienteEnvioErpService } from './cliente-envio-erp.service';
 import { ClienteEstatisticasService } from './cliente-estatisticas.service';
 import { ClienteTimelineService } from './cliente-timeline.service';
 import { ClienteFinanceiroService } from './cliente-financeiro.service';
@@ -37,6 +46,12 @@ import { ClientesService } from './clientes.service';
     VisitasModule,
     FinanceiroSvcClientModule,
     TabelasPrecoModule,
+    // Cadastro de cliente novo (POST /clientes): CEP -> IBGE, IBGE -> municipio do
+    // Radar e fila de envio ao Radar.
+    ConsultaCepModule,
+    MunicipioWkModule,
+    ErpClientModule,
+    BullModule.registerQueue({ name: CLIENTE_ENVIO_ERP_QUEUE }),
   ],
   controllers: [ClientesController],
   providers: [
@@ -48,6 +63,10 @@ import { ClientesService } from './clientes.service';
     ClienteFinanceiroService,
     ClienteBoletoService,
     ClienteTimelineService,
+    ClienteCadastroService,
+    ClienteEnvioErpService,
+    ClienteEnvioErpProcessor,
+    ClienteEnvioErpScheduler,
   ],
 })
 export class ClientesModule implements NestModule {

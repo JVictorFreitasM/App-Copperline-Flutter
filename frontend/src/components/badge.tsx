@@ -18,6 +18,18 @@ export function Badge({ enfase = false, children }: { enfase?: boolean; children
   );
 }
 
+// Cliente cadastrado por nós (POST /clientes) ainda não aceito pelo WK Radar:
+// PENDENTE (na fila) ou ERRO (o ERP recusou - ver erroEnvioErp). ENVIADO não
+// mostra nada (é o estado normal de todo cliente do sync).
+export function BadgeStatusEnvioErp({
+  status,
+}: {
+  status: "PENDENTE" | "ENVIADO" | "ERRO";
+}) {
+  if (status === "ENVIADO") return null;
+  return <Badge enfase={status === "ERRO"}>{status === "ERRO" ? "Erro no envio ao ERP" : "Pendente de envio ao ERP"}</Badge>;
+}
+
 export function BadgeAtivoInativo({ inativo }: { inativo: boolean }) {
   return <Badge enfase={!inativo}>{inativo ? "Inativo" : "Ativo"}</Badge>;
 }

@@ -112,6 +112,21 @@ export class ClienteSyncStrategy implements SyncStrategy<
     const enderecos = mapeado.enderecos as unknown as Prisma.InputJsonValue;
 
     await this.prisma.$transaction(async (tx) => {
+      // Cliente cadastrado por nos (POST /clientes) e enviado ao Radar: o
+      // codigoIntegrador que mandamos e' o id LOCAL. Troca o id sintetico
+      // ("PENDENTE-<uuid>") pelo real ANTES do upsert - senao o upsert criaria
+      // uma segunda linha pro mesmo cliente.
+      if (mapeado.codigoIntegrador) {
+        await tx.cliente.updateMany({
+          where: {
+            id: mapeado.codigoIntegrador,
+            criadoLocalmente: true,
+            idExternoErp: { startsWith: 'PENDENTE-' },
+          },
+          data: { idExternoErp: mapeado.idExternoErp },
+        });
+      }
+
       const cliente = await tx.cliente.upsert({
         where: { idExternoErp: mapeado.idExternoErp },
         create: {
@@ -155,6 +170,23 @@ export class ClienteSyncStrategy implements SyncStrategy<
           tabelaPrecoIdExterno: mapeado.tabelaPrecoIdExterno,
         },
       });
+
+      // Chegou do Radar = ele ja tem o cliente. Fecha o ciclo do envio e tira
+      // os contatos que criamos localmente (o Radar devolve os mesmos com id
+      // proprio - ficariam duplicados). Contato ligado a pedido fica.
+      await tx.cliente.updateMany({
+        where: { id: cliente.id, criadoLocalmente: true },
+        data: { statusEnvioErp: 'ENVIADO', erroEnvioErp: null },
+      });
+      if (cliente.criadoLocalmente && mapeado.contatos.length > 0) {
+        await tx.contatoCliente.deleteMany({
+          where: {
+            clienteId: cliente.id,
+            criadoLocalmente: true,
+            pedidos: { none: {} },
+          },
+        });
+      }
 
       for (const contato of mapeado.contatos) {
         await tx.contatoCliente.upsert({

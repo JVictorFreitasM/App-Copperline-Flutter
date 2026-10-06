@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { CepApiClientService } from './cep-api-client.service';
 import type { CepApiData } from './cep-api.types';
 import { ConsultaCepService } from './consulta-cep.service';
@@ -18,11 +18,25 @@ const DADOS: CepApiData = {
 
 describe('ConsultaCepService', () => {
   const consultar = jest.fn<Promise<CepApiData>, [string]>();
-  const service = new ConsultaCepService({
-    consultar,
-  } as unknown as CepApiClientService);
+  const redisMem = new Map<string, string>();
+  const redis = {
+    get: jest.fn(async (chave: string) => redisMem.get(chave) ?? null),
+    set: jest.fn(async (chave: string, valor: string) => {
+      redisMem.set(chave, valor);
+      return 'OK';
+    }),
+  };
+  const service = new ConsultaCepService(
+    { consultar } as unknown as CepApiClientService,
+    redis as never,
+  );
 
-  beforeEach(() => consultar.mockReset());
+  beforeEach(() => {
+    consultar.mockReset();
+    redisMem.clear();
+    redis.get.mockClear();
+    redis.set.mockClear();
+  });
 
   it('nao chama o provedor quando o CEP e invalido', async () => {
     await expect(service.consultar('123')).rejects.toBeInstanceOf(
@@ -60,5 +74,51 @@ describe('ConsultaCepService', () => {
     expect((await service.consultar('01311902')).logradouro).toBe(
       'Rua das Flores',
     );
+  });
+
+  it('segunda consulta do mesmo CEP sai do cache (provedor chamado uma vez so)', async () => {
+    consultar.mockResolvedValue(DADOS);
+
+    const primeira = await service.consultar('01311-902');
+    const segunda = await service.consultar('01311902');
+
+    expect(segunda).toEqual(primeira);
+    expect(consultar).toHaveBeenCalledTimes(1);
+    expect(redis.set).toHaveBeenCalledWith(
+      'cache:cep:01311902',
+      expect.any(String),
+      'EX',
+      30 * 24 * 60 * 60,
+    );
+  });
+
+  it('CEP inexistente fica em cache negativo e nao volta ao provedor', async () => {
+    consultar.mockRejectedValue(new NotFoundException('CEP nao encontrado'));
+
+    await expect(service.consultar('99999999')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.consultar('99999999')).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(consultar).toHaveBeenCalledTimes(1);
+  });
+
+  it('falha do provedor (nao 404) NAO vai pro cache negativo', async () => {
+    consultar.mockRejectedValueOnce(new Error('provedor fora'));
+    consultar.mockResolvedValueOnce(DADOS);
+
+    await expect(service.consultar('01311902')).rejects.toThrow('provedor fora');
+    expect((await service.consultar('01311902')).localidade).toBe('Sao Paulo');
+  });
+
+  it('consultas SIMULTANEAS do mesmo CEP (cache frio) dividem uma chamada so ao provedor', async () => {
+    consultar.mockImplementation(
+      () => new Promise((resolver) => setTimeout(() => resolver(DADOS), 20)),
+    );
+
+    const resultados = await Promise.all(
+      Array.from({ length: 6 }, () => service.consultar('01311902')),
+    );
+
+    expect(consultar).toHaveBeenCalledTimes(1);
+    expect(resultados.every((r) => r.localidade === 'Sao Paulo')).toBe(true);
   });
 });

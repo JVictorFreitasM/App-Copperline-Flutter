@@ -47,6 +47,18 @@ export function BuscaCnpj() {
         <EstadoVazio mensagem={estado.mensagem} />
       )}
 
+      {!pending && estado.status === "ja-cadastrado" && (
+        <EstadoVazio
+          mensagem={`Este CNPJ já está cadastrado na base${
+            estado.cliente.razaoSocial ? ` (${estado.cliente.razaoSocial})` : ""
+          }${
+            estado.cliente.vendedorResponsavel
+              ? ` - vendedor responsável: ${estado.cliente.vendedorResponsavel}`
+              : ""
+          }.`}
+        />
+      )}
+
       {!pending && estado.status === "cnpj-encontrado" && <CnpjResultadoView resultado={estado.resultado} />}
 
       {!pending && estado.status === "cep-encontrado" && <CepResultadoView resultado={estado.resultado} />}

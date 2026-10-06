@@ -83,3 +83,39 @@ export function formatarCnpj(entrada: string): string {
   }
   return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
 }
+
+// ---- Resposta do GET /consulta-cnpj/:cnpj (backend: ConsultaCnpjResultadoDto)
+// O backend NAO consulta a Receita quando o CNPJ ja esta na base (origem BASE,
+// dados null) nem quando ha cache (origem CACHE).
+export type OrigemConsultaCnpj = "BASE" | "CACHE" | "API";
+
+export interface ClienteJaCadastradoDto {
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  vendedorResponsavel: string | null;
+  statusEnvioErp: "PENDENTE" | "ENVIADO" | "ERRO";
+}
+
+// Endereço pronto pro cadastro: Receita + IBGE (API de CEP) + id do município
+// no WK Radar.
+export interface EnderecoSugeridoDto {
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  semNumero: boolean;
+  complemento: string | null;
+  bairro: string | null;
+  municipio: string | null;
+  uf: string | null;
+  codigoIbge: string | null;
+  idMunicipioErp: string | null;
+}
+
+export interface ConsultaCnpjResultadoDto {
+  cnpj: string;
+  origem: OrigemConsultaCnpj;
+  jaCadastrado: ClienteJaCadastradoDto | null;
+  dados: ConsultaCnpjDto | null;
+  enderecoSugerido: EnderecoSugeridoDto | null;
+  observacoesSugeridas: string | null;
+}

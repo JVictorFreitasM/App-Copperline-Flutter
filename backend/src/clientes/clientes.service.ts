@@ -7,6 +7,7 @@ import {
 } from '../vendedores/vendedor-escopo.service';
 import { paginar, type PaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { variantesParaBusca } from './domain/documento';
 import {
   paraClienteDetalheDto,
   paraClienteResumoDto,
@@ -144,12 +145,12 @@ export class ClientesService {
   // cadastrado, independente de quem e' o responsavel - e' o proposito do
   // endpoint (evitar cadastro/prospeccao duplicada). NAO aplica
   // EscopoClientes aqui de proposito. Documento normalizado (so digitos)
-  // pra nao depender de como o CPF/CNPJ foi digitado.
+  // pra nao depender de como o CPF/CNPJ foi digitado - e busca pelas DUAS formas
+  // gravadas: o sync grava cpf_cnpj FORMATADO ("19.243.253/0001-14"), entao
+  // comparar so com os digitos nunca achava ninguem.
   async verificarConflito(documento: string): Promise<ConflitoClienteDto> {
-    const documentoNormalizado = documento.replace(/\D/g, '');
-
     const cliente = await this.prisma.cliente.findFirst({
-      where: { cpfCnpj: documentoNormalizado },
+      where: { cpfCnpj: { in: variantesParaBusca(documento) } },
       select: {
         vendedores: {
           take: 1,
