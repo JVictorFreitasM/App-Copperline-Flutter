@@ -167,6 +167,9 @@ services:
       - copperline-visitas-fotos:/workspace/backend/uploads/visitas
       - copperline-documentos:/workspace/backend/uploads/documentos
       - copperline-produtos-imagens:/workspace/backend/uploads/produtos-imagens
+      # APKs publicados por mobile/tools/publicar-apk.mjs (pasta na raiz do repo, no
+      # .gitignore) - :ro porque o backend so LE e serve pro app se atualizar.
+      - ./app-releases:/app-releases:ro
       # Copia local de TESTE (pasta com nome do CNPJ na raiz do repo, ja
       # no .gitignore - dados fiscais reais de cliente, nunca versionar) -
       # :ro (read-only) porque o backend so LE PDF, nunca escreve nessa

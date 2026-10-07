@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/auth/auth_notifier.dart';
 import '../core/providers/offline_provider.dart';
 import '../core/providers/sincronizacao_provider.dart';
+import '../widgets/atualizacao_gate.dart';
 import '../core/push/push_service.dart';
 import '../core/rastreio/rastreio_config.dart';
 import '../core/rastreio/rastreio_service.dart';
@@ -57,7 +58,10 @@ class AuthGate extends ConsumerWidget {
     });
 
     return auth.when(
-      data: (estado) => estado.autenticado ? const AppShell() : const LoginScreen(),
+      // Logado: o app inteiro passa pelo gate de atualização obrigatória (só
+      // depois do login - o endpoint da versão exige sessão).
+      data: (estado) =>
+          estado.autenticado ? const AtualizacaoGate(child: AppShell()) : const LoginScreen(),
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (erro, _) => Scaffold(
         body: Center(

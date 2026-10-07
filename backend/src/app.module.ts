@@ -35,6 +35,7 @@ import { PagamentoModule } from './pagamento/pagamento.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
 import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
+import { AppVersaoModule } from './app-versao/app-versao.module';
 import { GeocodificacaoModule } from './geocodificacao/geocodificacao.module';
 
 @Module({
@@ -81,6 +82,7 @@ import { GeocodificacaoModule } from './geocodificacao/geocodificacao.module';
     ConsultaCnpjModule,
     ConsultaCepModule,
     GeocodificacaoModule,
+    AppVersaoModule,
   ],
 })
 export class AppModule {}

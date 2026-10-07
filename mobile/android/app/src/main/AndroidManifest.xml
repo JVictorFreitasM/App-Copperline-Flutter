@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Atualizacao do proprio app: abre o instalador do Android com o APK baixado
+         do backend (ver core/atualizacao). O usuario ainda confirma a instalacao e,
+         na primeira vez, libera "instalar apps desta fonte". -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- connectivity_plus (OS-MOBILE-22) - detectar volta de conectividade
          pra disparar sincronizacao da fila offline (ver offline_provider.dart). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

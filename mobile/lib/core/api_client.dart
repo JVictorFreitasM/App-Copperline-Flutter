@@ -130,6 +130,28 @@ class ApiClient implements ApiJsonClient {
     }
   }
 
+  // Download direto pra um arquivo em disco (sem carregar tudo na memória) -
+  // usado pra baixar o APK da atualização do app. Sem retry automático: um
+  // download interrompido recomeça do zero na próxima tentativa do usuário.
+  Future<void> baixarArquivo(
+    String path,
+    String destino, {
+    void Function(int recebidos, int total)? aoProgredir,
+  }) async {
+    try {
+      await _dio.download(
+        path,
+        destino,
+        onReceiveProgress: aoProgredir,
+        // O timeout de recebimento padrão (15 s) é entre pedaços de dados; numa
+        // rede lenta um APK de ~20 MB precisa de folga.
+        options: Options(receiveTimeout: const Duration(seconds: 60)),
+      );
+    } on DioException catch (erro) {
+      throw ApiException(_mensagemErro(erro), statusCode: erro.response?.statusCode);
+    }
+  }
+
   // Reexecuta `chamada` com backoff exponencial quando a falha é
   // transitória de rede (timeout/conexão recusada/sem rota/DNS) - erro de
   // negócio (4xx/5xx com resposta do servidor) nunca cai aqui, propaga na

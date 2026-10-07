@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -6,6 +8,17 @@ plugins {
     // gera os recursos que o firebase_core/firebase_messaging usam em runtime.
     id("com.google.gms.google-services")
 }
+
+// Assinatura de release (android/key.properties + .jks, nunca versionados). O
+// Android so aceita atualizar um app se o APK novo tiver a MESMA assinatura do
+// instalado - por isso o build de release usa SEMPRE esta chave. Sem o arquivo
+// (ex: outro computador), cai na chave de debug so pra `flutter run --release`
+// continuar funcionando; o script de publicacao recusa esse caso.
+val keystoreProperties = Properties().apply {
+    val arquivo = rootProject.file("key.properties")
+    if (arquivo.exists()) arquivo.inputStream().use { load(it) }
+}
+val temChaveDeRelease = keystoreProperties.containsKey("storeFile")
 
 android {
     namespace = "br.com.copperline.copperline_mobile"
@@ -32,11 +45,24 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (temChaveDeRelease) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (temChaveDeRelease) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

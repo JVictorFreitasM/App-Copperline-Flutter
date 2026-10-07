@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Assinatura de release do app Android - NUNCA versionar (perder a chave = ninguem
+# consegue atualizar o app, so reinstalar). Backup fora desta maquina.
+/android/key.properties
+/android/*.jks
+/android/*.keystore
