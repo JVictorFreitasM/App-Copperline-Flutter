@@ -58,6 +58,7 @@ export class NotificacaoDispatchService {
           `Evento ${evento.id} (${evento.tipo}): ${resultado.falha.length} dispositivo(s) falharam`,
         );
       }
+      await this.removerTokensInvalidos(resultado.invalidos);
       // Sucesso parcial ainda conta como ENVIADO (a intencao foi
       // cumprida pra quem pode receber) - o detalhe de quem falhou fica
       // registrado em `erro` pra diagnostico, nao pra retry automatico
@@ -161,6 +162,27 @@ export class NotificacaoDispatchService {
       where: { usuarioId },
     });
     return dispositivos.map((d) => d.token);
+  }
+
+  // O Firebase so autoriza apagar o registro quando o erro e do TOKEN
+  // (UNREGISTERED / token malformado) - ver PushNotificationClientService. Sem
+  // isso cada reinstalacao do app deixa um token morto pra sempre, e todo
+  // envio volta a tentar (e a falhar em) cada um deles. Falha ao limpar nunca
+  // muda o resultado do evento: o push JA foi enviado.
+  private async removerTokensInvalidos(tokens: string[]): Promise<void> {
+    if (tokens.length === 0) {
+      return;
+    }
+    try {
+      const { count } = await this.prisma.dispositivoUsuario.deleteMany({
+        where: { token: { in: tokens } },
+      });
+      this.logger.log(`${count} token(s) de push invalido(s) removido(s)`);
+    } catch (error) {
+      this.logger.error(
+        `Falha ao remover tokens de push invalidos: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async marcarComo(

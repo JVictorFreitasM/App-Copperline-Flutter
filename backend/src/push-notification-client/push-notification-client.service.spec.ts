@@ -45,7 +45,7 @@ describe('PushNotificationClientService', () => {
 
     const resultado = await service.enviar([], { titulo: 't', corpo: 'c' });
 
-    expect(resultado).toEqual({ sucesso: [], falha: [] });
+    expect(resultado).toEqual({ sucesso: [], falha: [], invalidos: [] });
   });
 
   it('enviar() separa tokens com sucesso/falha a partir da resposta do FCM', async () => {
@@ -54,7 +54,10 @@ describe('PushNotificationClientService', () => {
     };
     getMessaging.mockReturnValue({
       sendEachForMulticast: jest.fn().mockResolvedValue({
-        responses: [{ success: true }, { success: false }],
+        responses: [
+          { success: true },
+          { success: false, error: { code: 'messaging/internal-error' } },
+        ],
       }),
     });
     const service = new PushNotificationClientService(
@@ -67,6 +70,40 @@ describe('PushNotificationClientService', () => {
       corpo: 'c',
     });
 
-    expect(resultado).toEqual({ sucesso: ['token-ok'], falha: ['token-falho'] });
+    expect(resultado).toEqual({
+      sucesso: ['token-ok'],
+      falha: ['token-falho'],
+      invalidos: [],
+    });
+  });
+
+  it('enviar() marca como invalidos SO os tokens que o Firebase diz que nao existem', async () => {
+    const { getMessaging } = jest.requireMock('firebase-admin/messaging') as {
+      getMessaging: jest.Mock;
+    };
+    getMessaging.mockReturnValue({
+      sendEachForMulticast: jest.fn().mockResolvedValue({
+        responses: [
+          { success: true },
+          { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+          { success: false, error: { code: 'messaging/invalid-registration-token' } },
+          { success: false, error: { code: 'messaging/server-unavailable' } },
+          { success: false, error: { code: 'messaging/quota-exceeded' } },
+          { success: false, error: { code: 'messaging/invalid-argument' } },
+        ],
+      }),
+    });
+    const service = new PushNotificationClientService(
+      configServiceFake(JSON.stringify({ project_id: 'fake' })) as never,
+    );
+    service.onModuleInit();
+
+    const resultado = await service.enviar(['ok', 'morto-1', 'morto-2', 'fora', 'cota', 'payload'], {
+      titulo: 't',
+      corpo: 'c',
+    });
+
+    expect(resultado.invalidos).toEqual(['morto-1', 'morto-2']);
+    expect(resultado.falha).toEqual(['morto-1', 'morto-2', 'fora', 'cota', 'payload']);
   });
 });

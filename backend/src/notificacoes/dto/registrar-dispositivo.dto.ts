@@ -10,3 +10,9 @@ export class RegistrarDispositivoDto {
   @IsIn(PLATAFORMAS)
   plataforma!: (typeof PLATAFORMAS)[number];
 }
+
+export class RemoverDispositivoDto {
+  @IsString()
+  @IsNotEmpty()
+  token!: string;
+}

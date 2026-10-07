@@ -1,4 +1,5 @@
 import '../providers/sincronizacao_provider.dart';
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,11 @@ class PushService {
   /// em vez de ficarem mostrando o valor antigo.
   final void Function()? aoReceberEmPrimeiroPlano;
 
+  // Um só listener de renovação de token: `inicializar` roda a cada login, e
+  // sem guardar a assinatura cada login empilhava mais um listener (cada
+  // renovação passava a registrar o token N vezes).
+  StreamSubscription<String>? _assinaturaRenovacaoToken;
+
   Future<void> inicializar() async {
     final permissao = await FirebaseMessaging.instance.requestPermission();
     if (permissao.authorizationStatus == AuthorizationStatus.denied) {
@@ -42,7 +48,8 @@ class PushService {
     }
 
     await _registrarToken();
-    FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registrarToken());
+    await _assinaturaRenovacaoToken?.cancel();
+    _assinaturaRenovacaoToken = FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registrarToken());
 
     FirebaseMessaging.onBackgroundMessage(tratarMensagemEmBackground);
 
@@ -67,13 +74,42 @@ class PushService {
   }
 
   Future<void> _registrarToken() async {
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token == null) {
-      return;
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null) {
+        return;
+      }
+      final plataforma = Platform.isIOS ? 'IOS' : 'ANDROID';
+      await _apiClient.postJson('/dispositivos', {'token': token, 'plataforma': plataforma});
+    } catch (_) {
+      // Sem rede/sessão agora (ex: renovação de token logo depois do logout) -
+      // o próximo login registra de novo. Erro aqui nunca pode virar exceção
+      // não tratada num listener.
     }
-    debugPrint('Token FCM: $token'); // TODO remover apos testar push
-    final plataforma = Platform.isIOS ? 'IOS' : 'ANDROID';
-    await _apiClient.postJson('/dispositivos', {'token': token, 'plataforma': plataforma});
+  }
+
+  /// Logout: tira ESTE aparelho de quem recebe push (o servidor só remove token
+  /// da própria conta) e invalida o token local. Sem isso, quem saiu da conta
+  /// continuava recebendo as notificações dela no celular. Melhor esforço e com
+  /// limite de tempo: logout nunca fica preso por falta de rede - se o servidor
+  /// não for avisado, o token invalidado localmente vira "não registrado" no
+  /// Firebase e o backend o apaga no próximo envio.
+  Future<void> desregistrar() async {
+    try {
+      await _assinaturaRenovacaoToken?.cancel();
+      _assinaturaRenovacaoToken = null;
+      await _desregistrarNoServidorEFirebase().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Ver comentário acima.
+    }
+  }
+
+  Future<void> _desregistrarNoServidorEFirebase() async {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null) {
+      await _apiClient.postJson('/dispositivos/remover', {'token': token});
+    }
+    await FirebaseMessaging.instance.deleteToken();
   }
 
   Future<void> _mostrarBannerForeground(RemoteMessage mensagem) async {

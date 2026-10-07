@@ -26,3 +26,30 @@ describe('DispositivosService.registrar', () => {
     });
   });
 });
+
+describe('DispositivosService.remover (logout)', () => {
+  function montar() {
+    const prisma = { dispositivoUsuario: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) } };
+    const usuariosService = {
+      obterOuCriarPorSub: jest.fn().mockResolvedValue({ id: 'usuario-1' }),
+    };
+    return { prisma, service: new DispositivosService(prisma as never, usuariosService as never) };
+  }
+
+  it('remove o token SO se ele pertence a quem chama (confere na propria query)', async () => {
+    const { prisma, service } = montar();
+
+    await service.remover(IDP_USER_FAKE, { token: 'token-abc' });
+
+    expect(prisma.dispositivoUsuario.deleteMany).toHaveBeenCalledWith({
+      where: { token: 'token-abc', usuarioId: 'usuario-1' },
+    });
+  });
+
+  it('token que nao existe ou e de outro usuario e no-op, sem erro (nao confirma existencia)', async () => {
+    const { prisma, service } = montar();
+    prisma.dispositivoUsuario.deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.remover(IDP_USER_FAKE, { token: 'de-outro' })).resolves.toBeUndefined();
+  });
+});

@@ -34,6 +34,7 @@ function prismaFake(overrides: {
       update: jest.fn().mockResolvedValue(undefined),
     },
     dispositivoUsuario: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       findMany: jest
         .fn()
         .mockImplementation(async ({ where }: { where?: { usuarioId?: string } } = {}) => {
@@ -70,8 +71,8 @@ function prismaFake(overrides: {
   };
 }
 
-function pushClientFake(resultado: { sucesso: string[]; falha: string[] }) {
-  return { enviar: jest.fn().mockResolvedValue(resultado) };
+function pushClientFake(resultado: { sucesso: string[]; falha: string[]; invalidos?: string[] }) {
+  return { enviar: jest.fn().mockResolvedValue({ invalidos: [], ...resultado }) };
 }
 
 describe('NotificacaoDispatchService.processarPendentes', () => {
@@ -276,7 +277,7 @@ describe('NotificacaoDispatchService.processarPendentes', () => {
       enviar: jest
         .fn()
         .mockRejectedValueOnce(new Error('FCM indisponível'))
-        .mockResolvedValueOnce({ sucesso: ['token-a'], falha: [] }),
+        .mockResolvedValueOnce({ sucesso: ['token-a'], falha: [], invalidos: [] }),
     };
     const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
 
@@ -296,6 +297,61 @@ describe('NotificacaoDispatchService.processarPendentes', () => {
         where: { id: 'evento-2' },
         data: expect.objectContaining({ status: 'ENVIADO' }),
       }),
+    );
+  });
+});
+
+describe('NotificacaoDispatchService - limpeza de tokens invalidos', () => {
+  it('apaga os tokens que o Firebase disse que nao existem mais (so esses)', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake()],
+      dispositivos: [{ token: 'vivo' }, { token: 'morto' }, { token: 'falhou-por-rede' }],
+    });
+    const pushClient = pushClientFake({
+      sucesso: ['vivo'],
+      falha: ['morto', 'falhou-por-rede'],
+      invalidos: ['morto'],
+    });
+    const service = new NotificacaoDispatchService(prisma as never, pushClient as never);
+
+    await service.processarPendentes();
+
+    expect(prisma.dispositivoUsuario.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prisma.dispositivoUsuario.deleteMany).toHaveBeenCalledWith({
+      where: { token: { in: ['morto'] } },
+    });
+  });
+
+  it('sem tokens invalidos nao mexe na tabela', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake()],
+      dispositivos: [{ token: 'a' }],
+    });
+    const service = new NotificacaoDispatchService(
+      prisma as never,
+      pushClientFake({ sucesso: ['a'], falha: [] }) as never,
+    );
+
+    await service.processarPendentes();
+
+    expect(prisma.dispositivoUsuario.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('falha ao limpar NAO vira ERRO do evento (o push ja foi enviado)', async () => {
+    const prisma = prismaFake({
+      pendentes: [eventoFake()],
+      dispositivos: [{ token: 'morto' }],
+    });
+    prisma.dispositivoUsuario.deleteMany.mockRejectedValue(new Error('banco fora'));
+    const service = new NotificacaoDispatchService(
+      prisma as never,
+      pushClientFake({ sucesso: [], falha: ['morto'], invalidos: ['morto'] }) as never,
+    );
+
+    await service.processarPendentes();
+
+    expect(prisma.eventoNotificacao.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ENVIADO' }) }),
     );
   });
 });

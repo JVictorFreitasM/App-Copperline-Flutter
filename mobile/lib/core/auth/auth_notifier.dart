@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api_client.dart';
+import '../push/push_service.dart';
 import 'idp_user.dart';
 import 'logout_service.dart';
 import 'session_storage.dart';
@@ -136,6 +137,13 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> logout() async {
     final storage = ref.read(sessionStorageProvider);
     final logoutService = ref.read(logoutServiceProvider);
+
+    // ANTES de encerrar a sessão: tirar o aparelho do push exige estar logado.
+    try {
+      await ref.read(pushServiceProvider).desregistrar();
+    } catch (_) {
+      // Push é complemento do logout, nunca pode impedi-lo.
+    }
 
     try {
       await logoutService.encerrarSessaoNoServidor();
