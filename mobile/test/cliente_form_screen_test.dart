@@ -103,12 +103,14 @@ Future<void> _abrir(WidgetTester tester, Widget app) async {
 Finder _campoDocumento() => find.widgetWithText(TextField, 'CNPJ');
 
 void main() {
-  testWidgets('abre o cadastro com contato obrigatório e entrega igual à cobrança marcada', (tester) async {
+  testWidgets('abre o cadastro com contato obrigatório e "Usar o mesmo endereço" marcado', (tester) async {
     await _abrir(tester, _app(_ServicoFalso()));
 
     expect(find.text('Novo cliente'), findsOneWidget);
     expect(find.text('Obrigatório: adicione pelo menos um contato.'), findsOneWidget);
     expect(find.text('Endereço de Entrega'), findsNothing);
+    // Marcado: um seletor só, de cobrança e entrega.
+    expect(find.text('Endereço de Cobrança e Entrega'), findsOneWidget);
     final checkbox = tester.widget<CheckboxListTile>(find.byType(CheckboxListTile).first);
     expect(checkbox.value, isTrue);
     // Suframa e Observações saíram do cadastro.
@@ -116,13 +118,15 @@ void main() {
     expect(find.text('Observações'), findsNothing);
   });
 
-  testWidgets('desmarcar "entrega igual" mostra o seletor de entrega', (tester) async {
+  testWidgets('desmarcar "Usar o mesmo endereço" separa cobrança e entrega', (tester) async {
     await _abrir(tester, _app(_ServicoFalso()));
 
-    await tester.tap(find.text('Endereço de entrega igual ao de cobrança'));
+    await tester.tap(find.text('Usar o mesmo endereço'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Endereço de Cobrança'), findsWidgets);
     expect(find.text('Endereço de Entrega'), findsWidgets);
+    expect(find.text('Endereço de Cobrança e Entrega'), findsNothing);
   });
 
   testWidgets('CNPJ com dígito errado é recusado SEM chamar o servidor', (tester) async {

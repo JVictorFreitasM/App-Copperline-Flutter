@@ -217,9 +217,15 @@ export function FormularioEditarCliente({ cliente }: { cliente: ClienteEdicaoDto
         )}
 
         <div className="flex flex-col gap-3">
+          {/* Antes dos seletores: marcado, um único endereço serve de cobrança e entrega. */}
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={entregaIgual} onChange={(evento) => setEntregaIgual(evento.target.checked)} />
+            Usar o mesmo endereço
+            <span className="text-xs text-muted">(cobrança e entrega)</span>
+          </label>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <SeletorEndereco
-              rotulo="Endereço de Cobrança"
+              rotulo={entregaIgual ? "Endereço de Cobrança e Entrega" : "Endereço de Cobrança"}
               enderecos={enderecos.lista}
               selecionado={enderecos.cobranca}
               onEscolher={(valor) => aoEscolherEndereco("cobranca", valor)}
@@ -233,10 +239,6 @@ export function FormularioEditarCliente({ cliente }: { cliente: ClienteEdicaoDto
               />
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={entregaIgual} onChange={(evento) => setEntregaIgual(evento.target.checked)} />
-            Endereço de entrega igual ao de cobrança
-          </label>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

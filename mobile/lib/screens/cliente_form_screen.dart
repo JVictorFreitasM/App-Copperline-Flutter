@@ -539,26 +539,31 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Antes dos seletores: marcado, um único endereço serve de cobrança e
+              // entrega.
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Usar o mesmo endereço'),
+                subtitle: const Text('Cobrança e entrega'),
+                value: _entregaIgual,
+                onChanged: (marcado) => setState(() => _entregaIgual = marcado ?? true),
+              ),
               SeletorEndereco(
-                rotulo: 'Endereço de Cobrança',
+                rotulo: _entregaIgual ? 'Endereço de Cobrança e Entrega' : 'Endereço de Cobrança',
                 enderecos: _enderecos,
                 selecionado: _cobranca,
                 aoEscolher: (valor) => _aoEscolherEndereco(true, valor),
               ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Endereço de entrega igual ao de cobrança'),
-                value: _entregaIgual,
-                onChanged: (marcado) => setState(() => _entregaIgual = marcado ?? true),
-              ),
-              if (!_entregaIgual)
+              if (!_entregaIgual) ...[
+                const SizedBox(height: 12),
                 SeletorEndereco(
                   rotulo: 'Endereço de Entrega',
                   enderecos: _enderecos,
                   selecionado: _entrega,
                   aoEscolher: (valor) => _aoEscolherEndereco(false, valor),
                 ),
+              ],
             ],
           ),
         ),
