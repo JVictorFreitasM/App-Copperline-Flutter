@@ -10,6 +10,8 @@ class ClienteResumo {
     required this.inativo,
     this.localizacaoLat,
     this.localizacaoLng,
+    this.statusEnvioErp = 'ENVIADO',
+    this.erroEnvioErp,
   });
 
   factory ClienteResumo.fromJson(Map<String, dynamic> json) {
@@ -21,6 +23,8 @@ class ClienteResumo {
       inativo: json['inativo'] as bool,
       localizacaoLat: (json['localizacaoLat'] as num?)?.toDouble(),
       localizacaoLng: (json['localizacaoLng'] as num?)?.toDouble(),
+      statusEnvioErp: json['statusEnvioErp'] as String? ?? 'ENVIADO',
+      erroEnvioErp: json['erroEnvioErp'] as String?,
     );
   }
 
@@ -33,6 +37,15 @@ class ClienteResumo {
   // OS-MOBILE-17) - null quando o cliente ainda nao teve o pin definido.
   final double? localizacaoLat;
   final double? localizacaoLng;
+
+  /// Cadastro feito pelo app: PENDENTE (na fila pro WK Radar) ou ERRO (o ERP
+  /// recusou - ver [erroEnvioErp]). Cliente do sync é sempre ENVIADO; snapshot
+  /// antigo, sem o campo, também.
+  final String statusEnvioErp;
+  final String? erroEnvioErp;
+
+  bool get envioPendente => statusEnvioErp == 'PENDENTE';
+  bool get envioComErro => statusEnvioErp == 'ERRO';
 
   String get titulo => razaoSocial ?? nomeFantasia ?? '—';
 
@@ -176,6 +189,20 @@ class EnderecoCliente {
   }
 }
 
+/// Última edição ainda NÃO aplicada no WK Radar (PENDENTE na fila, ou ERRO -
+/// o ERP recusou).
+class AlteracaoErp {
+  const AlteracaoErp({required this.status, this.erro});
+
+  factory AlteracaoErp.fromJson(Map<String, dynamic> json) =>
+      AlteracaoErp(status: json['status'] as String, erro: json['erro'] as String?);
+
+  final String status;
+  final String? erro;
+
+  bool get comErro => status == 'ERRO';
+}
+
 class ClienteDetalhe extends ClienteResumo {
   const ClienteDetalhe({
     required super.id,
@@ -185,6 +212,9 @@ class ClienteDetalhe extends ClienteResumo {
     required super.inativo,
     super.localizacaoLat,
     super.localizacaoLng,
+    super.statusEnvioErp,
+    super.erroEnvioErp,
+    this.alteracaoErp,
     required this.idExternoErp,
     required this.codigo,
     required this.email,
@@ -204,6 +234,11 @@ class ClienteDetalhe extends ClienteResumo {
       inativo: json['inativo'] as bool,
       localizacaoLat: (json['localizacaoLat'] as num?)?.toDouble(),
       localizacaoLng: (json['localizacaoLng'] as num?)?.toDouble(),
+      statusEnvioErp: json['statusEnvioErp'] as String? ?? 'ENVIADO',
+      erroEnvioErp: json['erroEnvioErp'] as String?,
+      alteracaoErp: json['alteracaoErp'] is Map<String, dynamic>
+          ? AlteracaoErp.fromJson(json['alteracaoErp'] as Map<String, dynamic>)
+          : null,
       idExternoErp: json['idExternoErp'] as String,
       codigo: json['codigo'] as String?,
       email: json['email'] as String?,
@@ -220,6 +255,9 @@ class ClienteDetalhe extends ClienteResumo {
           .toList(),
     );
   }
+
+  /// Edição ainda não aplicada no Radar; null = nenhuma pendência.
+  final AlteracaoErp? alteracaoErp;
 
   /// ID do cliente no ERP (WK Radar) - `id` acima é o uuid interno.
   final String idExternoErp;

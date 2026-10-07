@@ -26,7 +26,9 @@ import 'cliente_produtos_precos_screen.dart';
 import '../widgets/list_item_tile.dart';
 import '../widgets/listagem_feedback.dart';
 import '../widgets/stat_card.dart';
+import '../widgets/status_badge.dart';
 import '../widgets/timeline.dart';
+import 'cliente_form_screen.dart';
 
 String _hojeIso() => DateTime.now().toIso8601String().substring(0, 10);
 
@@ -38,12 +40,35 @@ class ClienteDetalheScreen extends ConsumerWidget {
 
   final String id;
 
+  Future<void> _editar(BuildContext context) async {
+    final salvou = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => ClienteFormScreen(clienteId: id)));
+    if (salvou == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Alteração salva - será enviada ao ERP.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final clienteAsync = ref.watch(clienteDetalheProvider(id));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cliente')),
+      appBar: AppBar(
+        title: const Text('Cliente'),
+        actions: [
+          // Edição precisa do servidor (e do Radar na fila) - só com o cliente já
+          // carregado, nunca no estado de erro/carregando.
+          if (clienteAsync.hasValue)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar cliente',
+              onPressed: () => _editar(context),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: clienteAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
@@ -65,6 +90,7 @@ class ClienteDetalheScreen extends ConsumerWidget {
             },
             padding: const EdgeInsets.all(18),
             children: [
+              _StatusEnvioErp(cliente: cliente),
               CartaoCliente(cliente: cliente),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -107,6 +133,65 @@ class ClienteDetalheScreen extends ConsumerWidget {
                 ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Situação do envio ao WK Radar: cadastro feito pelo app que ainda não foi
+/// aceito (PENDENTE) ou foi recusado (ERRO), e edição ainda não aplicada. Some
+/// quando está tudo no Radar.
+class _StatusEnvioErp extends StatelessWidget {
+  const _StatusEnvioErp({required this.cliente});
+
+  final ClienteDetalhe cliente;
+
+  @override
+  Widget build(BuildContext context) {
+    final alteracao = cliente.alteracaoErp;
+    if (!cliente.envioPendente && !cliente.envioComErro && alteracao == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (cliente.envioPendente)
+                  const StatusBadge(texto: 'Cadastro pendente de envio ao ERP', tom: Tom.pendente),
+                if (cliente.envioComErro)
+                  const StatusBadge(texto: 'Erro no envio ao ERP', tom: Tom.atencao),
+                if (alteracao != null)
+                  StatusBadge(
+                    texto: alteracao.comErro
+                        ? 'Erro ao enviar alteração ao ERP'
+                        : 'Alteração pendente de envio ao ERP',
+                    tom: alteracao.comErro ? Tom.atencao : Tom.pendente,
+                  ),
+              ],
+            ),
+            if (cliente.envioComErro && cliente.erroEnvioErp != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'O ERP recusou o cadastro: ${cliente.erroEnvioErp}. Corrija em "Editar cliente" - ao salvar, '
+                'o cadastro é enviado de novo.',
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
+            if (alteracao != null && alteracao.comErro && alteracao.erro != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'O ERP recusou a última alteração: ${alteracao.erro}',
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
+          ],
         ),
       ),
     );

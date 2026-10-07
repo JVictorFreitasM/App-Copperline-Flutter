@@ -7,6 +7,7 @@ import '../widgets/listagem_feedback.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/status_badge.dart';
 import 'cliente_detalhe_screen.dart';
+import 'cliente_form_screen.dart';
 import 'verificar_conflito_screen.dart';
 
 /// Aba "Clientes" - replica a referência "Nexo Comercial"
@@ -36,6 +37,15 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   void dispose() {
     _buscaController.dispose();
     super.dispose();
+  }
+
+  // Cadastro de cliente novo; ao salvar, abre o detalhe do cliente criado.
+  Future<void> _novoCliente() async {
+    final id = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const ClienteFormScreen()));
+    if (id == null || !mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClienteDetalheScreen(id: id)));
   }
 
   // Um campo só, como a referência ("Buscar por nome ou CNPJ") - o
@@ -100,6 +110,21 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: _novoCliente,
+                child: Container(
+                  height: 44,
+                  width: 44,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.person_add_alt_1_outlined, size: 18, color: AppColors.surface),
                 ),
               ),
             ),
@@ -306,10 +331,15 @@ class _LinhaCliente extends StatelessWidget {
                   ],
                 ),
               ),
-              StatusBadge(
-                texto: cliente.inativo ? 'Inativo' : 'Ativo',
-                tom: cliente.inativo ? Tom.atencao : Tom.ok,
-              ),
+              if (cliente.envioPendente as bool)
+                const StatusBadge(texto: 'Pendente no ERP', tom: Tom.pendente)
+              else if (cliente.envioComErro as bool)
+                const StatusBadge(texto: 'Erro no ERP', tom: Tom.atencao)
+              else
+                StatusBadge(
+                  texto: cliente.inativo ? 'Inativo' : 'Ativo',
+                  tom: cliente.inativo ? Tom.atencao : Tom.ok,
+                ),
               const SizedBox(width: 6),
               const Icon(Icons.chevron_right, size: 16, color: Color(0xFF9AA8B1)),
             ],
