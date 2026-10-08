@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/atualizacao/notas_versao.dart';
 import '../core/providers/atualizacao_provider.dart';
 import '../screens/atualizacao_obrigatoria_screen.dart';
 
@@ -21,6 +22,26 @@ class _AtualizacaoGateState extends ConsumerState<AtualizacaoGate> with WidgetsB
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Primeira abertura depois de atualizar: mostra o que há de novo (uma vez).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _mostrarNovidades());
+  }
+
+  Future<void> _mostrarNovidades() async {
+    try {
+      final servico = ref.read(atualizacaoAppServiceProvider);
+      final novidades = await servico.novidadesParaMostrar();
+      if (novidades == null || !mounted) return;
+      // Marca ANTES de mostrar: se o app fechar com o aviso aberto, não repete.
+      await servico.marcarNovidadesVistas(novidades.versionCode);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _DialogNovidades(notas: novidades),
+      );
+    } catch (_) {
+      // Novidades são um complemento: qualquer falha aqui (serviço indisponível,
+      // armazenamento) nunca pode derrubar o app nem o gate de atualização.
+    }
   }
 
   @override
@@ -45,5 +66,24 @@ class _AtualizacaoGateState extends ConsumerState<AtualizacaoGate> with WidgetsB
       return AtualizacaoObrigatoriaScreen(atualizacao: atualizacao);
     }
     return widget.child;
+  }
+}
+
+/// "Novidades da versão X" - aparece uma vez, na primeira abertura depois de
+/// atualizar.
+class _DialogNovidades extends StatelessWidget {
+  const _DialogNovidades({required this.notas});
+
+  final NotasVersao notas;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Novidades da versão ${notas.versionName}'),
+      content: SingleChildScrollView(child: Text(notas.notas)),
+      actions: [
+        FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Entendi')),
+      ],
+    );
   }
 }

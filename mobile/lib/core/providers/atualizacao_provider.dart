@@ -6,15 +6,16 @@ import 'package:path_provider/path_provider.dart';
 import '../api_client.dart';
 import '../api_exception.dart';
 import '../atualizacao/atualizacao_app.dart';
+import '../atualizacao/notas_versao.dart';
 
 const _tipoApk = 'application/vnd.android.package-archive';
 
 final atualizacaoAppServiceProvider = Provider<AtualizacaoAppService>((ref) {
   final apiClient = ref.watch(apiClientProvider);
   return AtualizacaoAppService(
-    buscarVersao: () async {
+    buscarVersao: (instalada) async {
       try {
-        return await apiClient.getJson('/app/versao/android');
+        return await apiClient.getJson('/app/versao/android?instalada=$instalada');
       } on ApiException catch (erro) {
         // 404 = nada publicado ainda: não é falha, é "sem atualização".
         if (erro.statusCode == 404) return null;
@@ -40,8 +41,17 @@ final atualizacaoAppServiceProvider = Provider<AtualizacaoAppService>((ref) {
       final externa = await getExternalStorageDirectory();
       return Directory('${(externa ?? await getTemporaryDirectory()).path}/atualizacao');
     },
+    notasStore: NotasVersaoStore(),
   );
 });
+
+/// Versão do app instalado (nome e build), pra tela "Sobre o app".
+final infoDoAppProvider = FutureProvider<PackageInfo>((ref) => PackageInfo.fromPlatform());
+
+/// Notas da versão que está rodando (null = sem notas disponíveis).
+final notasDaVersaoInstaladaProvider = FutureProvider<NotasVersao?>(
+  (ref) => ref.watch(atualizacaoAppServiceProvider).notasDaVersaoInstalada(),
+);
 
 /// Versão mais nova publicada, se for maior que a instalada - null = nada a
 /// fazer (inclusive sem rede: o app nunca é bloqueado por não conseguir

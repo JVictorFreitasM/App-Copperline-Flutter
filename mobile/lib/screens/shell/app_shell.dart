@@ -1,3 +1,4 @@
+import '../sobre_app_screen.dart';
 import '../../core/providers/sincronizacao_provider.dart';
 import '../sincronizacao_screen.dart';
 import 'dart:async';
@@ -495,6 +496,17 @@ class _MenuLateral extends ConsumerWidget {
                         Navigator.of(
                           context,
                         ).push(MaterialPageRoute(builder: (_) => const NotificacoesConfigScreen()));
+                      },
+                    ),
+                    _ItemMenu(
+                      icone: Icons.info_outline,
+                      rotulo: 'Sobre o app',
+                      ativo: false,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const SobreAppScreen()));
                       },
                     ),
                   ],

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import '../api_exception.dart';
+import 'notas_versao.dart';
 
 /// Versão mais nova publicada no backend (GET /app/versao/android) - mesmo
 /// shape de `backend/src/app-versao/app-versao.service.ts`.
@@ -55,10 +56,12 @@ class AtualizacaoAppService {
     required this.abrirInstalador,
     required this.versaoInstalada,
     required this.pastaDeDownload,
+    required this.notasStore,
   });
 
-  /// GET /app/versao/android -> JSON, ou null se nada foi publicado (404).
-  final Future<Map<String, dynamic>?> Function() buscarVersao;
+  /// GET /app/versao/android -> JSON, ou null se nada foi publicado (404). Recebe
+  /// o versionCode instalado só pra o servidor registrar quem roda o quê.
+  final Future<Map<String, dynamic>?> Function(int instalada) buscarVersao;
 
   /// GET /app/versao/android/apk gravado em `destino`.
   final Future<void> Function(String destino, void Function(int, int) aoProgredir) baixar;
@@ -69,6 +72,7 @@ class AtualizacaoAppService {
   /// versionCode do app instalado.
   final Future<int> Function() versaoInstalada;
   final Future<Directory> Function() pastaDeDownload;
+  final NotasVersaoStore notasStore;
 
   /// Versão publicada, se for MAIS NOVA que a instalada. Qualquer falha (sem
   /// rede, servidor fora, manifesto ruim) vira null: o app é offline-first e
@@ -76,10 +80,10 @@ class AtualizacaoAppService {
   /// versão nova que ele CONSEGUIU confirmar que existe.
   Future<AtualizacaoApp?> verificar() async {
     try {
-      final json = await buscarVersao();
+      final instalado = await versaoInstalada();
+      final json = await buscarVersao(instalado);
       if (json == null) return null;
       final publicada = AtualizacaoApp.fromJson(json);
-      final instalado = await versaoInstalada();
       return precisaAtualizar(instalado: instalado, publicado: publicada.versionCode)
           ? publicada
           : null;
@@ -112,6 +116,55 @@ class AtualizacaoAppService {
       await arquivo.delete();
       throw const ApkCorrompidoException();
     }
+    // Guarda as notas ANTES de abrir o instalador: depois de instalar o processo
+    // é reiniciado e esta é a única chance de levá-las pra versão nova. Se o
+    // usuário cancelar a instalação, não faz mal - as notas são de uma versão
+    // (versionCode) e só valem quando o app instalado for exatamente essa.
+    await notasStore.salvar(
+      NotasVersao(
+        versionCode: atualizacao.versionCode,
+        versionName: atualizacao.versionName,
+        notas: atualizacao.notas,
+      ),
+    );
     await abrirInstalador(arquivo.path);
+  }
+
+  /// Novidades da versão que está rodando, SE ainda não foram mostradas: só
+  /// aparecem na primeira abertura depois de atualizar (e só se a versão
+  /// instalada for a das notas guardadas e tiver texto).
+  Future<NotasVersao?> novidadesParaMostrar() async {
+    try {
+      final instalada = await versaoInstalada();
+      final notas = await notasStore.ler();
+      if (notas == null || notas.versionCode != instalada || !notas.temTexto) return null;
+      return await notasStore.versaoJaVista() >= instalada ? null : notas;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> marcarNovidadesVistas(int versionCode) => notasStore.marcarComoVista(versionCode);
+
+  /// Notas da versão instalada, pra tela "Sobre o app": primeiro as guardadas
+  /// na atualização; senão (app instalado direto do APK) as do servidor, se o
+  /// publicado for exatamente a versão instalada. Sem nenhuma, null.
+  Future<NotasVersao?> notasDaVersaoInstalada() async {
+    try {
+      final instalada = await versaoInstalada();
+      final guardadas = await notasStore.ler();
+      if (guardadas != null && guardadas.versionCode == instalada) return guardadas;
+      final json = await buscarVersao(instalada);
+      if (json == null) return null;
+      final publicada = AtualizacaoApp.fromJson(json);
+      if (publicada.versionCode != instalada) return null;
+      return NotasVersao(
+        versionCode: publicada.versionCode,
+        versionName: publicada.versionName,
+        notas: publicada.notas,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

@@ -5,9 +5,11 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:copperline_mobile/core/api_exception.dart';
 import 'package:copperline_mobile/core/atualizacao/atualizacao_app.dart';
+import 'package:copperline_mobile/core/atualizacao/notas_versao.dart';
 import 'package:copperline_mobile/core/providers/atualizacao_provider.dart';
 import 'package:copperline_mobile/widgets/atualizacao_gate.dart';
 
@@ -38,10 +40,12 @@ class _Montagem {
   List<int>? conteudoBaixado;
 
   final apksAbertos = <String>[];
+  final versoesConsultadas = <int>[];
   final pasta = Directory.systemTemp.createTempSync('atualizacao-test-');
 
   AtualizacaoAppService get service => AtualizacaoAppService(
-    buscarVersao: () async {
+    buscarVersao: (instalada) async {
+      versoesConsultadas.add(instalada);
       if (falharBusca) throw ApiException('sem rede');
       return publicada;
     },
@@ -54,10 +58,14 @@ class _Montagem {
     abrirInstalador: (caminho) async => apksAbertos.add(caminho),
     versaoInstalada: () async => instalado,
     pastaDeDownload: () async => pasta,
+    notasStore: NotasVersaoStore(),
   );
 }
 
 void main() {
+  // O serviço guarda as notas da versão em SharedPreferences.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('precisaAtualizar', () {
     test('só quando o publicado é MAIOR que o instalado', () {
       expect(precisaAtualizar(instalado: 5, publicado: 6), isTrue);
