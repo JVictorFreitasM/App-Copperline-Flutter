@@ -5,6 +5,7 @@ import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
   ComunicadoPedidoPdfDto,
+  ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
@@ -13,11 +14,12 @@ import type {
 import { Card } from "@/components/design/card";
 import { AbaAlcadaAprovacao } from "./aba-alcada-aprovacao";
 import { AbaDocumentoPedido } from "./aba-documento-pedido";
+import { AbaFuncionalidades } from "./aba-funcionalidades";
 import { AbaLlm } from "./aba-llm";
 import { AbaOrcamento } from "./aba-orcamento";
 import { AbaRastreio } from "./aba-rastreio";
 
-type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido";
+type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido" | "funcionalidades";
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "orcamento", rotulo: "Orçamento" },
@@ -25,6 +27,7 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "alcada", rotulo: "Alçada de aprovação" },
   { id: "llm", rotulo: "LLM" },
   { id: "documento-pedido", rotulo: "Documento do Pedido" },
+  { id: "funcionalidades", rotulo: "Funcionalidades" },
 ];
 
 export function ConfiguracoesTabs({
@@ -35,6 +38,7 @@ export function ConfiguracoesTabs({
   chavesLlmIniciais,
   empresaPdfInicial,
   comunicadoPdfInicial,
+  funcionalidadesInicial,
 }: {
   alcadaInicial: AlcadaAprovacaoDto;
   orcamentoInicial: ConfiguracaoOrcamentoDto;
@@ -43,6 +47,7 @@ export function ConfiguracoesTabs({
   chavesLlmIniciais: ChaveLlmDto[];
   empresaPdfInicial: DadosEmpresaPdfDto;
   comunicadoPdfInicial: ComunicadoPedidoPdfDto;
+  funcionalidadesInicial: ConfiguracaoFuncionalidadesDto;
 }) {
   const [abaAtiva, setAbaAtiva] = useState<Aba>("alcada");
 
@@ -68,6 +73,7 @@ export function ConfiguracoesTabs({
       <Card>
         {abaAtiva === "alcada" && <AbaAlcadaAprovacao inicial={alcadaInicial} />}
         {abaAtiva === "orcamento" && <AbaOrcamento inicial={orcamentoInicial} />}
+        {abaAtiva === "funcionalidades" && <AbaFuncionalidades inicial={funcionalidadesInicial} />}
         {abaAtiva === "rastreio" && <AbaRastreio inicial={rastreioInicial} />}
         {abaAtiva === "llm" && (
           <AbaLlm configuracaoInicial={llmInicial} chavesIniciais={chavesLlmIniciais} />

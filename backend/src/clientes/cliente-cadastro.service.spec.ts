@@ -26,7 +26,7 @@ function dtoBase(sobrescrever: Partial<CriarClienteDto> = {}): CriarClienteDto {
   };
 }
 
-function montar() {
+function montar(cadastroClientesHabilitado = true) {
   const tx = {
     cliente: { create: jest.fn().mockResolvedValue({}) },
     contatoCliente: { create: jest.fn().mockResolvedValue({}) },
@@ -42,10 +42,14 @@ function montar() {
   const municipioWkService = { idPorCodigoIbge: jest.fn().mockResolvedValue('52002816') };
   const consultaCepService = { consultar: jest.fn().mockResolvedValue({ codigoIbge: '2211001' }) };
   const fila = { add: jest.fn().mockResolvedValue(undefined) };
+  const funcionalidades = {
+    obter: jest.fn().mockResolvedValue({ envioPedidosHabilitado: true, cadastroClientesHabilitado }),
+  };
   const service = new ClienteCadastroService(
     prisma as never,
     new EnderecoClienteService(municipioWkService as never, consultaCepService as never),
     fila as never,
+    funcionalidades as never,
   );
   return { service, prisma, tx, municipioWkService, consultaCepService, fila };
 }
@@ -53,6 +57,17 @@ function montar() {
 const ESCOPO_PROPRIO = { tipo: 'PROPRIO', vendedorId: 'vend-1' } as const;
 
 describe('ClienteCadastroService.criar - validacoes antes de gravar', () => {
+  it('cadastro de clientes desativado: recusa (403) sem tocar na base nem na fila', async () => {
+    const m = montar(false);
+
+    await expect(m.service.criar(dtoBase(), 'u1', ESCOPO_PROPRIO)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    expect(m.prisma.cliente.findFirst).not.toHaveBeenCalled();
+    expect(m.fila.add).not.toHaveBeenCalled();
+  });
+
   it('documento invalido (DV) e rejeitado sem tocar na base', async () => {
     const m = montar();
 

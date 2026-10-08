@@ -95,6 +95,7 @@ function montar(
     { obterCodigoSelecionado: jest.fn().mockResolvedValue('110') } as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   return { service, tx, prisma, pedidoErpClientService };
 }

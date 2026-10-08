@@ -62,6 +62,10 @@ function acao(overrides: Partial<AcaoFilaDto> = {}): AcaoFilaDto {
   };
 }
 
+function funcionalidadesFake(envioPedidosHabilitado = true) {
+  return { obter: jest.fn().mockResolvedValue({ envioPedidosHabilitado, cadastroClientesHabilitado: true }) };
+}
+
 function montarService(prisma: ReturnType<typeof prismaFake>) {
   return new FilaPendenteService(
     idempotenciaDe(prisma) as never,
@@ -69,6 +73,7 @@ function montarService(prisma: ReturnType<typeof prismaFake>) {
     visitasServiceFake() as never,
     rastreioServiceFake() as never,
     vendedorEscopoServiceFake() as never,
+    funcionalidadesFake() as never,
   );
 }
 
@@ -98,6 +103,7 @@ describe('FilaPendenteService.processar - ack/integridade', () => {
       visitasServiceFake() as never,
       rastreioService as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash: 'a'.repeat(64) })]);
@@ -155,6 +161,7 @@ describe('FilaPendenteService.processar - idempotencia', () => {
       visitasServiceFake() as never,
       rastreioService as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     const resultado = await service.processar('u1', IDP_USER, [acao()]);
@@ -231,6 +238,7 @@ describe('FilaPendenteService.processar - status individual por item', () => {
       visitasService as never,
       rastreioService as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     await service.processar('u1', IDP_USER, [
@@ -257,6 +265,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
       visitasServiceFake() as never,
       rastreioServiceFake() as never,
       vendedorEscopoService as never,
+      funcionalidadesFake() as never,
     );
 
     await service.processar('u1', IDP_USER, [
@@ -296,6 +305,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
       visitasService as never,
       rastreioServiceFake() as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
     const fotoBase64 = Buffer.from('foto-fake').toString('base64');
 
@@ -329,6 +339,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
       visitasServiceFake() as never,
       rastreioService as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     await service.processar('u1', IDP_USER, [
@@ -355,6 +366,7 @@ describe('FilaPendenteService.processar - despacha pro service correto por tipo'
       visitasService as never,
       rastreioServiceFake() as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     await service.processar('u1', IDP_USER, [
@@ -390,11 +402,61 @@ describe('FilaPendenteService.processar - concorrencia', () => {
       visitasServiceFake() as never,
       rastreioService as never,
       vendedorEscopoServiceFake() as never,
+      funcionalidadesFake() as never,
     );
 
     const [resultado] = await service.processar('u1', IDP_USER, [acao({ hash })]);
 
     expect(resultado.status).toBe('PROCESSANDO');
     expect(rastreioService.registrarLote).not.toHaveBeenCalled();
+  });
+});
+
+describe('FilaPendenteService.processar - envio de pedidos desativado', () => {
+  const pedido = (salvarComoOrcamento?: boolean) =>
+    acao({ tipo: 'CRIAR_PEDIDO', payload: { salvarComoOrcamento } as never });
+
+  function montarComEnvio(envioPedidosHabilitado: boolean) {
+    const prisma = prismaFake();
+    const criarPedido = criarPedidoServiceFake();
+    const service = new FilaPendenteService(
+      idempotenciaDe(prisma) as never,
+      criarPedido as never,
+      visitasServiceFake() as never,
+      rastreioServiceFake() as never,
+      vendedorEscopoServiceFake() as never,
+      funcionalidadesFake(envioPedidosHabilitado) as never,
+    );
+    return { service, prisma, criarPedido };
+  }
+
+  it('pedido que iria ao ERP fica retido (PROCESSANDO), sem reservar o idLocal nem executar', async () => {
+    const { service, prisma, criarPedido } = montarComEnvio(false);
+
+    const [resultado] = await service.processar('u1', IDP_USER, [pedido()]);
+
+    expect(resultado.status).toBe('PROCESSANDO');
+    expect(criarPedido.criar).not.toHaveBeenCalled();
+    expect(prisma.acaoFilaProcessada.create).not.toHaveBeenCalled();
+  });
+
+  it('orcamento (salvarComoOrcamento) passa direto mesmo com o envio desativado', async () => {
+    const { service } = montarComEnvio(false);
+
+    const [resultado] = await service.processar('u1', IDP_USER, [
+      acao({ tipo: 'CRIAR_PEDIDO', payload: { salvarComoOrcamento: true } as never }),
+    ]);
+
+    // Segue o fluxo normal (a validacao do payload de teste falha por ser minimo,
+    // o que importa e' nao ter sido retido).
+    expect(resultado.status).not.toBe('PROCESSANDO');
+  });
+
+  it('com o envio ativo nao retem nada', async () => {
+    const { service } = montarComEnvio(true);
+
+    const [resultado] = await service.processar('u1', IDP_USER, [pedido()]);
+
+    expect(resultado.status).not.toBe('PROCESSANDO');
   });
 });

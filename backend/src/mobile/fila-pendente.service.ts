@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type { IdpUser } from '@copperline/idp-client';
 import { IdempotenciaAcaoService } from '../idempotencia-acao/idempotencia-acao.service';
+import { ConfiguracaoFuncionalidadesService } from '../configuracoes/configuracao-funcionalidades.service';
 import { CriarPedidoService } from '../pedidos/criar-pedido.service';
 import { RastreioService } from '../rastreio/rastreio.service';
 import { VendedorEscopoService } from '../vendedores/vendedor-escopo.service';
@@ -33,6 +34,7 @@ export class FilaPendenteService {
     private readonly visitasService: VisitasService,
     private readonly rastreioService: RastreioService,
     private readonly vendedorEscopoService: VendedorEscopoService,
+    private readonly funcionalidades: ConfiguracaoFuncionalidadesService,
   ) {}
 
   async processar(
@@ -64,6 +66,17 @@ export class FilaPendenteService {
         erro: 'Integridade: o conteúdo recebido difere do enviado - reenvie a ação',
         ack: comprovante,
       };
+    }
+
+    // Envio de pedidos desativado (Configuracoes > Funcionalidades): pedido que
+    // iria ao ERP fica RETIDO na fila do aparelho (PROCESSANDO = o app mantem
+    // PENDENTE e reenvia depois). Nao reserva o idLocal: ao religar, executa
+    // normalmente, sem ter virado ERRO congelado. Orcamento passa direto.
+    if (acao.tipo === 'CRIAR_PEDIDO' && acao.payload.salvarComoOrcamento !== true) {
+      const { envioPedidosHabilitado } = await this.funcionalidades.obter();
+      if (!envioPedidosHabilitado) {
+        return { idLocal: acao.idLocal, status: 'PROCESSANDO', ack: comprovante };
+      }
     }
 
     // Reserva o idLocal ANTES de executar (a constraint unica do banco e' a

@@ -1,5 +1,6 @@
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
+import { obterFuncionalidades } from "@/lib/funcionalidades";
 import type { ClienteResumoDto } from "@/lib/clientes";
 import type { PaginatedResult } from "@/lib/pagination";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
@@ -30,6 +31,8 @@ export default async function ClientesPage({
   const nome = params.nome?.trim() || undefined;
   const cpfCnpj = params.cpfCnpj?.trim() || undefined;
 
+  const { cadastroClientesHabilitado } = await obterFuncionalidades();
+
   let resultado: PaginatedResult<ClienteResumoDto> | null = null;
   let erro: string | null = null;
 
@@ -51,7 +54,11 @@ export default async function ClientesPage({
     <main className="flex flex-1 flex-col gap-6 p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-ink">Clientes</h1>
-        <PrimaryButton href="/clientes/novo">Novo cliente</PrimaryButton>
+        {cadastroClientesHabilitado ? (
+          <PrimaryButton href="/clientes/novo">Novo cliente</PrimaryButton>
+        ) : (
+          <p className="text-sm text-muted">Cadastro de clientes desativado pelo administrador.</p>
+        )}
       </div>
 
       <FiltroForm rota="/clientes">

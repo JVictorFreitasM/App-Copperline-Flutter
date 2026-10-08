@@ -5,6 +5,7 @@ import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
   ComunicadoPedidoPdfDto,
+  ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
@@ -31,6 +32,17 @@ export async function atualizarConfiguracaoOrcamento(
   input: Omit<ConfiguracaoOrcamentoDto, "atualizadoEm">,
 ): Promise<ConfiguracaoOrcamentoDto> {
   return apiFetch<ConfiguracaoOrcamentoDto>("/admin/configuracoes/orcamento", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+}
+
+export async function atualizarConfiguracaoFuncionalidades(
+  input: Omit<ConfiguracaoFuncionalidadesDto, "atualizadoEm">,
+): Promise<ConfiguracaoFuncionalidadesDto> {
+  return apiFetch<ConfiguracaoFuncionalidadesDto>("/admin/configuracoes/funcionalidades", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

@@ -7,6 +7,7 @@ import '../widgets/listagem_feedback.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/status_badge.dart';
 import 'cliente_detalhe_screen.dart';
+import '../core/providers/funcionalidades_provider.dart';
 import 'cliente_form_screen.dart';
 import 'verificar_conflito_screen.dart';
 
@@ -71,6 +72,8 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
   Widget build(BuildContext context) {
     final params = (pagina: _pagina, nome: _nome, cpfCnpj: _cpfCnpj, filtro: _filtro);
     final resultadoAsync = ref.watch(clientesProvider(params));
+    final cadastroHabilitado = (ref.watch(funcionalidadesProvider).value ?? Funcionalidades.padrao)
+        .cadastroClientesHabilitado;
 
     return ListaAtualizavel(
       aoAtualizar: () async {
@@ -113,21 +116,24 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Material(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
+            // Cadastro desativado pelo admin (Configurações > Funcionalidades): some o botão.
+            if (cadastroHabilitado) ...[
+              const SizedBox(width: 8),
+              Material(
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(10),
-                onTap: _novoCliente,
-                child: Container(
-                  height: 44,
-                  width: 44,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.person_add_alt_1_outlined, size: 18, color: AppColors.surface),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: _novoCliente,
+                  child: Container(
+                    height: 44,
+                    width: 44,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.person_add_alt_1_outlined, size: 18, color: AppColors.surface),
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(width: 8),
             Material(
               color: AppColors.surface,

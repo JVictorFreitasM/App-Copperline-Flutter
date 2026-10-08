@@ -255,6 +255,9 @@ function criarService(
   configuracaoTabelaPrecoService = configuracaoTabelaPrecoServiceFake(),
   configuracaoRastreioService = configuracaoRastreioServiceFake(),
   configuracaoOrcamentoService = configuracaoOrcamentoServiceFake(),
+  configuracaoFuncionalidadesService = {
+    obter: jest.fn().mockResolvedValue({ envioPedidosHabilitado: true, cadastroClientesHabilitado: true }),
+  },
 ) {
   return new CriarPedidoService(
     prisma as never,
@@ -264,6 +267,7 @@ function criarService(
     configuracaoTabelaPrecoService as never,
     configuracaoRastreioService as never,
     configuracaoOrcamentoService as never,
+    configuracaoFuncionalidadesService as never,
   );
 }
 
@@ -275,6 +279,32 @@ const INPUT_BASE: CriarPedidoInput = {
 };
 
 describe('CriarPedidoService.criar', () => {
+  it('envio de pedidos desativado: pedido que iria ao ERP e recusado antes de qualquer consulta', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      { obter: jest.fn().mockResolvedValue({ envioPedidosHabilitado: false, cadastroClientesHabilitado: true }) },
+    );
+
+    await expect(service.criar(INPUT_BASE, 'u1', ESCOPO_TODOS)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('envio de pedidos desativado: salvar como orcamento segue permitido (nao e recusado pela chave)', async () => {
+    const prisma = prismaFake();
+    const service = criarService(
+      prisma,
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      { obter: jest.fn().mockResolvedValue({ envioPedidosHabilitado: false, cadastroClientesHabilitado: true }) },
+    );
+
+    const resultado = await service
+      .criar({ ...INPUT_BASE, salvarComoOrcamento: true }, 'u1', ESCOPO_TODOS)
+      .catch((erro: unknown) => erro);
+
+    expect(resultado).not.toBeInstanceOf(ForbiddenException);
+  });
+
   // Guarda de dados (pedido explicito do usuario, 2026-09-23): o web ja
   // evita duplicata na UI (abre o item existente pra edicao), mas a API
   // tem que rejeitar de qualquer client (mobile, chamada direta). Roda

@@ -12,6 +12,7 @@ import '../core/models/pedido.dart';
 import '../core/models/produto.dart';
 import '../core/providers/aprovacoes_provider.dart';
 import '../core/providers/clientes_provider.dart';
+import '../core/providers/funcionalidades_provider.dart';
 import '../core/providers/offline_provider.dart';
 import '../core/providers/pagamento_provider.dart';
 import '../core/providers/pedidos_provider.dart';
@@ -659,6 +660,8 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
   Widget build(BuildContext context) {
     final formasAsync = ref.watch(formasPagamentoProvider);
     final condicoesAsync = ref.watch(condicoesPagamentoProvider);
+    final envioHabilitado = (ref.watch(funcionalidadesProvider).value ?? Funcionalidades.padrao)
+        .envioPedidosHabilitado;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Novo pedido')),
@@ -954,6 +957,13 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
               Text(_erro!, style: const TextStyle(color: AppColors.red)),
             ],
             const SizedBox(height: 16),
+            if (!envioHabilitado) ...[
+              const Text(
+                'O envio de pedidos está desativado no momento. Salve como orçamento e envie depois.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(
               children: [
                 // Épico 4 (config-aba-orcamento.jpg) - "Salvar como
@@ -972,7 +982,7 @@ class _CriarPedidoScreenState extends ConsumerState<CriarPedidoScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: (_enviando || !_podeSubmeter) ? null : () => _onSubmeter(),
+                    onPressed: (_enviando || !_podeSubmeter || !envioHabilitado) ? null : () => _onSubmeter(),
                     child: Text(_enviando ? 'Enviando...' : 'Confirmar pedido'),
                   ),
                 ),

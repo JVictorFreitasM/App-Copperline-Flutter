@@ -8,13 +8,16 @@ import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoe
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminConfiguracaoAlcadaAprovacaoController } from './admin-configuracao-alcada-aprovacao.controller';
 import { AdminConfiguracaoDocumentoPedidoController } from './admin-configuracao-documento-pedido.controller';
+import { AdminConfiguracaoFuncionalidadesController } from './admin-configuracao-funcionalidades.controller';
 import { AdminConfiguracaoLlmController } from './admin-configuracao-llm.controller';
 import { AdminConfiguracaoOrcamentoController } from './admin-configuracao-orcamento.controller';
 import { AdminConfiguracaoRastreioController } from './admin-configuracao-rastreio.controller';
 import { ComunicadoPedidoPdfService } from './comunicado-pedido-pdf.service';
+import { ConfiguracaoFuncionalidadesService } from './configuracao-funcionalidades.service';
 import { ConfiguracaoOrcamentoService } from './configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from './configuracao-rastreio.service';
 import { DadosEmpresaPdfService } from './dados-empresa-pdf.service';
+import { FuncionalidadesController } from './funcionalidades.controller';
 import { VendedorHorarioTrabalhoController } from './vendedor-horario-trabalho.controller';
 import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.service';
 
@@ -34,6 +37,8 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
     AdminConfiguracaoRastreioController,
     AdminConfiguracaoLlmController,
     AdminConfiguracaoDocumentoPedidoController,
+    AdminConfiguracaoFuncionalidadesController,
+    FuncionalidadesController,
     // VendedorHorarioTrabalhoController fica FORA do requireRole('admin')
     // abaixo, de proposito - e' o proprio vendedor editando o horario
     // dele, nao uma tela de admin (ver seu comentario sobre por que vive
@@ -42,6 +47,7 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
   ],
   providers: [
     ConfiguracaoOrcamentoService,
+    ConfiguracaoFuncionalidadesService,
     ConfiguracaoRastreioService,
     VendedorHorarioTrabalhoService,
     DadosEmpresaPdfService,
@@ -55,6 +61,7 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
   // ComunicadoPedidoPdfService pro cabecalho/2a pagina do PDF).
   exports: [
     ConfiguracaoOrcamentoService,
+    ConfiguracaoFuncionalidadesService,
     ConfiguracaoRastreioService,
     DadosEmpresaPdfService,
     ComunicadoPedidoPdfService,
@@ -72,10 +79,11 @@ export class ConfiguracoesModule implements NestModule {
         AdminConfiguracaoRastreioController,
         AdminConfiguracaoLlmController,
         AdminConfiguracaoDocumentoPedidoController,
+        AdminConfiguracaoFuncionalidadesController,
       );
 
     consumer
       .apply(RequireSessionMiddleware, this.idpAuth.requireAuth)
-      .forRoutes(VendedorHorarioTrabalhoController);
+      .forRoutes(VendedorHorarioTrabalhoController, FuncionalidadesController);
   }
 }

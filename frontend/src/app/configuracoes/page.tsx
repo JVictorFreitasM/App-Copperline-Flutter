@@ -5,6 +5,7 @@ import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
   ComunicadoPedidoPdfDto,
+  ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
   ConfiguracaoOrcamentoDto,
   ConfiguracaoRastreioDto,
@@ -25,7 +26,7 @@ export default async function ConfiguracoesPage() {
   }
 
   try {
-    const [alcada, orcamento, rastreio, llm, chavesLlm, empresaPdf, comunicadoPdf] = await Promise.all([
+    const [alcada, orcamento, rastreio, llm, chavesLlm, empresaPdf, comunicadoPdf, funcionalidades] = await Promise.all([
       apiFetch<AlcadaAprovacaoDto>("/admin/configuracoes/alcada-aprovacao", { cache: "no-store" }),
       apiFetch<ConfiguracaoOrcamentoDto>("/admin/configuracoes/orcamento", { cache: "no-store" }),
       apiFetch<ConfiguracaoRastreioDto>("/admin/configuracoes/rastreio", { cache: "no-store" }),
@@ -33,6 +34,9 @@ export default async function ConfiguracoesPage() {
       apiFetch<ChaveLlmDto[]>("/admin/configuracoes/llm/chaves", { cache: "no-store" }),
       apiFetch<DadosEmpresaPdfDto>("/admin/configuracoes/documento-pedido/empresa", { cache: "no-store" }),
       apiFetch<ComunicadoPedidoPdfDto>("/admin/configuracoes/documento-pedido/comunicado", {
+        cache: "no-store",
+      }),
+      apiFetch<ConfiguracaoFuncionalidadesDto>("/admin/configuracoes/funcionalidades", {
         cache: "no-store",
       }),
     ]);
@@ -48,6 +52,7 @@ export default async function ConfiguracoesPage() {
           chavesLlmIniciais={chavesLlm}
           empresaPdfInicial={empresaPdf}
           comunicadoPdfInicial={comunicadoPdf}
+          funcionalidadesInicial={funcionalidades}
         />
       </main>
     );

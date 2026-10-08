@@ -12,6 +12,15 @@ export interface AlcadaAprovacaoDto {
 }
 
 // Mesmo shape de
+// backend/src/configuracoes/configuracao-funcionalidades.service.ts - aba
+// "Funcionalidades".
+export interface ConfiguracaoFuncionalidadesDto {
+  envioPedidosHabilitado: boolean;
+  cadastroClientesHabilitado: boolean;
+  atualizadoEm: string;
+}
+
+// Mesmo shape de
 // backend/src/configuracoes/configuracao-orcamento.service.ts
 // (ConfiguracaoOrcamentoDto) - aba "Orçamento".
 export interface ConfiguracaoOrcamentoDto {

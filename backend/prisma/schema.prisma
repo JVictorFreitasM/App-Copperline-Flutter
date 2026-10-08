@@ -1389,6 +1389,20 @@ model ConfiguracaoDesconto {
 // OS-pendentes-claude-code.md) - estas 4 flags sao apenas as configuracoes
 // que a tela pede pra existir, sem ainda ligar a nenhum fluxo real de
 // orcamento (fora do escopo desta OS).
+// Tabela singleton (1 linha, service garante) - aba "Funcionalidades" da tela de
+// Configuracoes: liga/desliga partes do app sem publicar versao nova.
+model ConfiguracaoFuncionalidades {
+  id                        String   @id @default(uuid())
+  // Desligado: pedido nao vai ao ERP (so salva como orcamento); pedidos ja na
+  // fila offline ficam retidos e saem quando religar.
+  envioPedidosHabilitado    Boolean  @default(true) @map("envio_pedidos_habilitado")
+  // Desligado: POST /clientes e' recusado (edicao de cliente nao e' afetada).
+  cadastroClientesHabilitado Boolean @default(true) @map("cadastro_clientes_habilitado")
+  atualizadoEm              DateTime @updatedAt @map("atualizado_em")
+
+  @@map("configuracao_funcionalidades")
+}
+
 model ConfiguracaoOrcamento {
   id                                       String   @id @default(uuid())
   habilitarCriacaoOrcamento                Boolean  @default(true) @map("habilitar_criacao_orcamento")

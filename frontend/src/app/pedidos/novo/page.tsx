@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
+import { obterFuncionalidades } from "@/lib/funcionalidades";
 import type { CondicaoPagamentoDto, FormaPagamentoDto } from "@/lib/pagamento";
 import type { MeuVendedorDto, VendedorEquipeDto } from "@/lib/vendedores";
 import { CriarPedidoForm } from "./criar-pedido-form";
@@ -27,6 +28,27 @@ export default async function NovoPedidoPage({
   // de diferenciar os dois botões sem duplicar o formulário inteiro.
   const { orcamento } = await searchParams;
   const modoOrcamento = orcamento === "1";
+
+  // Envio de pedidos desligado (Configurações > Funcionalidades): só orçamento.
+  // O backend também recusa - isto só poupa o vendedor de montar um pedido que
+  // não poderia enviar.
+  const { envioPedidosHabilitado } = await obterFuncionalidades();
+  if (!envioPedidosHabilitado && !modoOrcamento) {
+    return (
+      <main className="flex flex-1 flex-col gap-4 p-8">
+        <Link href="/pedidos" className="text-sm font-medium text-primary hover:underline">
+          ← Voltar para pedidos
+        </Link>
+        <h1 className="text-2xl font-bold text-ink">Novo pedido</h1>
+        <p className="text-sm text-ink">
+          O envio de pedidos está desativado no momento. Você ainda pode montar e salvar um orçamento.
+        </p>
+        <Link href="/pedidos/novo?orcamento=1" className="text-sm font-medium text-primary hover:underline">
+          Criar orçamento
+        </Link>
+      </main>
+    );
+  }
 
   // Isolado (mesmo critério de resiliência já usado em outras telas) - uma
   // falha aqui não derruba a página, só deixa os seletores vazios (o

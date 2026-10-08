@@ -9,6 +9,7 @@ import {
 import type { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client';
+import { ConfiguracaoFuncionalidadesService } from '../configuracoes/configuracao-funcionalidades.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { EscopoClientes } from '../vendedores/vendedor-escopo.service';
 import {
@@ -39,6 +40,7 @@ export class ClienteCadastroService {
     private readonly prisma: PrismaService,
     private readonly enderecoClienteService: EnderecoClienteService,
     @InjectQueue(CLIENTE_ENVIO_ERP_QUEUE) private readonly fila: Queue,
+    private readonly funcionalidades: ConfiguracaoFuncionalidadesService,
   ) {}
 
   async criar(
@@ -48,6 +50,12 @@ export class ClienteCadastroService {
   ): Promise<ClienteCriadoDto> {
     if (escopo.tipo === 'NENHUM') {
       throw new ForbiddenException('Usuário sem permissão para cadastrar clientes');
+    }
+    const { cadastroClientesHabilitado } = await this.funcionalidades.obter();
+    if (!cadastroClientesHabilitado) {
+      throw new ForbiddenException(
+        'Cadastro de clientes está desativado no momento - fale com o admin (Configurações > Funcionalidades).',
+      );
     }
 
     const tipoPessoa = tipoPessoaDoDocumento(dto.cpfCnpj);

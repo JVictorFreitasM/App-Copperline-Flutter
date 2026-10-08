@@ -8,6 +8,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AxiosError } from 'axios';
+import { ConfiguracaoFuncionalidadesService } from '../configuracoes/configuracao-funcionalidades.service';
 import { ConfiguracaoOrcamentoService } from '../configuracoes/configuracao-orcamento.service';
 import { ConfiguracaoRastreioService } from '../configuracoes/configuracao-rastreio.service';
 import { registrarEventoNotificacao } from '../notificacoes/evento-notificacao.service';
@@ -132,6 +133,7 @@ export class CriarPedidoService {
     private readonly configuracaoTabelaPrecoService: ConfiguracaoTabelaPrecoService,
     private readonly configuracaoRastreioService: ConfiguracaoRastreioService,
     private readonly configuracaoOrcamentoService: ConfiguracaoOrcamentoService,
+    private readonly configuracaoFuncionalidadesService: ConfiguracaoFuncionalidadesService,
   ) {}
 
   async criar(
@@ -139,6 +141,9 @@ export class CriarPedidoService {
     usuarioId: string,
     escopo: EscopoClientes,
   ): Promise<CriarPedidoResultadoDto> {
+    if (!input.salvarComoOrcamento) {
+      await this.exigirEnvioDePedidosHabilitado();
+    }
     await this.validarItensSemDuplicata(input.itens);
 
     const vendedorAlvo = await this.resolverVendedorAlvo(
@@ -773,6 +778,17 @@ export class CriarPedidoService {
     });
   }
 
+  // Chave "Envio de pedidos" (Configuracoes > Funcionalidades): desligada, nada
+  // vai ao ERP - so' orcamento (rascunho local) continua permitido.
+  private async exigirEnvioDePedidosHabilitado(): Promise<void> {
+    const { envioPedidosHabilitado } = await this.configuracaoFuncionalidadesService.obter();
+    if (!envioPedidosHabilitado) {
+      throw new ForbiddenException(
+        'Envio de pedidos está desativado no momento - salve como orçamento e envie quando o admin reativar em Configurações > Funcionalidades.',
+      );
+    }
+  }
+
   // Transforma um orcamento (rascunho) num pedido de verdade (Epico 4,
   // "Permitir ao Vendedor transformar um Orçamento em Pedido... no
   // Aplicativo Móvel") - so' AGORA avalia desconto e (se aprovado sem
@@ -784,6 +800,7 @@ export class CriarPedidoService {
     usuarioId: string,
     escopo: EscopoClientes,
   ): Promise<CriarPedidoResultadoDto> {
+    await this.exigirEnvioDePedidosHabilitado();
     const configOrcamento = await this.configuracaoOrcamentoService.obter();
     if (!configOrcamento.permitirVendedorTransformarEmPedido) {
       throw new ForbiddenException(

@@ -1,3 +1,4 @@
+import { ConfiguracoesModule } from '../configuracoes/configuracoes.module';
 import { BullModule } from '@nestjs/bullmq';
 import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { IdpAuth } from '@copperline/idp-client';
@@ -53,6 +54,7 @@ import { ClientesService } from './clientes.service';
     ConsultaCepModule,
     MunicipioWkModule,
     ErpClientModule,
+    ConfiguracoesModule,
     BullModule.registerQueue({ name: CLIENTE_ENVIO_ERP_QUEUE }),
   ],
   controllers: [ClientesController],
