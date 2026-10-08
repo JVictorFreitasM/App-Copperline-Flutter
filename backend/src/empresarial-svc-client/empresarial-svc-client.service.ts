@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { firstValueFrom } from 'rxjs';
 import { buildBuscarTabelasPrecoBody } from './build-buscar-tabelas-preco-body';
 import { EmpresarialSvcFaultError } from './empresarial-svc-fault.error';
@@ -19,20 +19,12 @@ import { encontrarFault, encontrarTabelasPreco } from './interpretar-resposta-em
 @Injectable()
 export class EmpresarialSvcClientService {
   private readonly logger = new Logger(EmpresarialSvcClientService.name);
-  private readonly url: string;
   private readonly requestTimeoutMs: number;
-  private readonly login: { base: string; usuario: string; senha: string };
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
   ) {
-    this.url = this.configService.getOrThrow<string>('WK_RADAR_EMPRESARIAL_SVC_URL');
-    this.login = {
-      base: this.configService.getOrThrow<string>('WK_BI_BASE'),
-      usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
-      senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
-    };
     // NAO reaproveita WK_BI_REQUEST_TIMEOUT_MS (60s, calibrado pro
     // Estoque.svc) - confirmado empiricamente em 2026-09-08 que
     // BuscarTabelasPreco com filtro:{} (full refresh, todas as tabelas
@@ -44,6 +36,19 @@ export class EmpresarialSvcClientService {
     this.requestTimeoutMs = Number(
       this.configService.get('WK_RADAR_EMPRESARIAL_SVC_TIMEOUT_MS') ?? 300_000,
     );
+  }
+
+  // Lidos a cada chamada (podem mudar pelo painel, sem reiniciar).
+  private get url(): string {
+    return this.configService.getOrThrow<string>('WK_RADAR_EMPRESARIAL_SVC_URL');
+  }
+
+  private get login(): { base: string; usuario: string; senha: string } {
+    return {
+      base: this.configService.getOrThrow<string>('WK_BI_BASE'),
+      usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
+      senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
+    };
   }
 
   // Sem `codigo` (padrao) - traz TODAS as tabelas de preco ativas numa

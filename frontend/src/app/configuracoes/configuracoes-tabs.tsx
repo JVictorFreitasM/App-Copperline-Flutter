@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
+  CredencialErpDto,
   ComunicadoPedidoPdfDto,
   ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
@@ -15,11 +16,12 @@ import { Card } from "@/components/design/card";
 import { AbaAlcadaAprovacao } from "./aba-alcada-aprovacao";
 import { AbaDocumentoPedido } from "./aba-documento-pedido";
 import { AbaFuncionalidades } from "./aba-funcionalidades";
+import { AbaIntegracaoErp } from "./aba-integracao-erp";
 import { AbaLlm } from "./aba-llm";
 import { AbaOrcamento } from "./aba-orcamento";
 import { AbaRastreio } from "./aba-rastreio";
 
-type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido" | "funcionalidades";
+type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido" | "funcionalidades" | "integracao-erp";
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "orcamento", rotulo: "Orçamento" },
@@ -28,6 +30,7 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "llm", rotulo: "LLM" },
   { id: "documento-pedido", rotulo: "Documento do Pedido" },
   { id: "funcionalidades", rotulo: "Funcionalidades" },
+  { id: "integracao-erp", rotulo: "Integração ERP" },
 ];
 
 export function ConfiguracoesTabs({
@@ -39,6 +42,7 @@ export function ConfiguracoesTabs({
   empresaPdfInicial,
   comunicadoPdfInicial,
   funcionalidadesInicial,
+  credenciaisErpIniciais,
 }: {
   alcadaInicial: AlcadaAprovacaoDto;
   orcamentoInicial: ConfiguracaoOrcamentoDto;
@@ -48,6 +52,7 @@ export function ConfiguracoesTabs({
   empresaPdfInicial: DadosEmpresaPdfDto;
   comunicadoPdfInicial: ComunicadoPedidoPdfDto;
   funcionalidadesInicial: ConfiguracaoFuncionalidadesDto;
+  credenciaisErpIniciais: CredencialErpDto[];
 }) {
   const [abaAtiva, setAbaAtiva] = useState<Aba>("alcada");
 
@@ -74,6 +79,7 @@ export function ConfiguracoesTabs({
         {abaAtiva === "alcada" && <AbaAlcadaAprovacao inicial={alcadaInicial} />}
         {abaAtiva === "orcamento" && <AbaOrcamento inicial={orcamentoInicial} />}
         {abaAtiva === "funcionalidades" && <AbaFuncionalidades inicial={funcionalidadesInicial} />}
+        {abaAtiva === "integracao-erp" && <AbaIntegracaoErp inicial={credenciaisErpIniciais} />}
         {abaAtiva === "rastreio" && <AbaRastreio inicial={rastreioInicial} />}
         {abaAtiva === "llm" && (
           <AbaLlm configuracaoInicial={llmInicial} chavesIniciais={chavesLlmIniciais} />

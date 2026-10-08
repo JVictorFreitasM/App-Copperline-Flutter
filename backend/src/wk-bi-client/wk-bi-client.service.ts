@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { firstValueFrom } from 'rxjs';
 import type { WkBiRelatorioResponse } from './wk-bi-client.types';
 
@@ -17,22 +17,12 @@ const MENSAGEM_SEM_DADOS = 'Não existem dados para o relatório solicitado';
 @Injectable()
 export class WkBiClientService {
   private readonly logger = new Logger(WkBiClientService.name);
-  private readonly baseUrl: string;
   private readonly requestTimeoutMs: number;
-  private readonly login: { Base: string; Usuario: string; Senha: string };
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
   ) {
-    this.baseUrl = this.configService
-      .getOrThrow<string>('WK_BI_URL')
-      .replace(/\/+$/, '');
-    this.login = {
-      Base: this.configService.getOrThrow<string>('WK_BI_BASE'),
-      Usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
-      Senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
-    };
     // 60s (nao 30s) por padrao - confirmado na pratica: uma consulta de um
     // unico produto ja estourou 30s contra o ambiente real (o WK BI tem
     // desempenho inconsistente - o relatorio completo sem filtro nem em 4
@@ -40,6 +30,19 @@ export class WkBiClientService {
     this.requestTimeoutMs = Number(
       this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
     );
+  }
+
+  // Credenciais lidas a cada chamada (podem mudar pelo painel, sem reiniciar).
+  private get baseUrl(): string {
+    return this.configService.getOrThrow<string>('WK_BI_URL').replace(/\/+$/, '');
+  }
+
+  private get login(): { Base: string; Usuario: string; Senha: string } {
+    return {
+      Base: this.configService.getOrThrow<string>('WK_BI_BASE'),
+      Usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
+      Senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
+    };
   }
 
   async buscarRelatorioExportacaoAutomatica(

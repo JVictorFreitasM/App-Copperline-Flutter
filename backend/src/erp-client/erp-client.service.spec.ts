@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { of, throwError } from 'rxjs';
 import { ErpClientService } from './erp-client.service';
@@ -44,7 +44,7 @@ const ENV: Record<string, string> = {
   WK_RADAR_MIN_REQUEST_INTERVAL_MS: '0',
 };
 
-function buildConfigService(): ConfigService {
+function buildConfigService(): CredenciaisErpService {
   return {
     get: (key: string) => ENV[key],
     getOrThrow: (key: string) => {
@@ -52,7 +52,7 @@ function buildConfigService(): ConfigService {
       if (value === undefined) throw new Error(`Missing env ${key}`);
       return value;
     },
-  } as unknown as ConfigService;
+  } as unknown as CredenciaisErpService;
 }
 
 describe('ErpClientService', () => {
@@ -70,6 +70,20 @@ describe('ErpClientService', () => {
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('credencial nova salva no painel descarta o token antigo e reautentica', async () => {
+    const post = jest.fn().mockReturnValue(of(ok({ token: 'token-1', expiresIn: 900 })));
+    const request = jest.fn().mockReturnValue(of(ok({})));
+    const httpService = { post, request } as unknown as HttpService;
+    const config = Object.assign(buildConfigService(), { versao: 1 });
+    const service = new ErpClientService(httpService, config);
+
+    await service.get('/comercial/v1/pedido');
+    config.versao = 2;
+    await service.get('/comercial/v1/pedido');
+
+    expect(post).toHaveBeenCalledTimes(2);
   });
 
   it('autentica no endpoint correto com credenciais vindas da configuracao, nunca hardcoded', async () => {

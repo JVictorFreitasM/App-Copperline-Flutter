@@ -2,11 +2,13 @@ import { Inject, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { requireRole, type IdpAuth } from '@copperline/idp-client';
 import { RequireSessionMiddleware } from '../common/middleware/require-session.middleware';
 import { IDP_AUTH } from '../idp-auth/idp-auth.constants';
+import { ErpClientModule } from '../erp-client/erp-client.module';
 import { LlmClientModule } from '../llm-client/llm-client.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SolicitacoesDescontoModule } from '../solicitacoes-desconto/solicitacoes-desconto.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { AdminConfiguracaoAlcadaAprovacaoController } from './admin-configuracao-alcada-aprovacao.controller';
+import { AdminCredenciaisErpController } from './admin-credenciais-erp.controller';
 import { AdminConfiguracaoDocumentoPedidoController } from './admin-configuracao-documento-pedido.controller';
 import { AdminConfiguracaoFuncionalidadesController } from './admin-configuracao-funcionalidades.controller';
 import { AdminConfiguracaoLlmController } from './admin-configuracao-llm.controller';
@@ -30,7 +32,7 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
 // SolicitacoesDescontoModule (mesma tabela, mesma regra) - so' Orcamento/
 // Rastreio/LLM tem service+tabela genuinamente novos.
 @Module({
-  imports: [PrismaModule, SolicitacoesDescontoModule, UsuariosModule, LlmClientModule],
+  imports: [PrismaModule, SolicitacoesDescontoModule, UsuariosModule, LlmClientModule, ErpClientModule],
   controllers: [
     AdminConfiguracaoAlcadaAprovacaoController,
     AdminConfiguracaoOrcamentoController,
@@ -38,6 +40,7 @@ import { VendedorHorarioTrabalhoService } from './vendedor-horario-trabalho.serv
     AdminConfiguracaoLlmController,
     AdminConfiguracaoDocumentoPedidoController,
     AdminConfiguracaoFuncionalidadesController,
+    AdminCredenciaisErpController,
     FuncionalidadesController,
     // VendedorHorarioTrabalhoController fica FORA do requireRole('admin')
     // abaixo, de proposito - e' o proprio vendedor editando o horario
@@ -80,6 +83,7 @@ export class ConfiguracoesModule implements NestModule {
         AdminConfiguracaoLlmController,
         AdminConfiguracaoDocumentoPedidoController,
         AdminConfiguracaoFuncionalidadesController,
+        AdminCredenciaisErpController,
       );
 
     consumer

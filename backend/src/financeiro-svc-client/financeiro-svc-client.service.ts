@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { firstValueFrom } from 'rxjs';
 import { buildBuscarPosicaoFinanceiraBody } from './build-buscar-posicao-financeira-body';
 import { buildBuscarTokenBoletoBody } from './build-buscar-token-boleto-body';
@@ -28,25 +28,30 @@ import {
 @Injectable()
 export class FinanceiroSvcClientService {
   private readonly logger = new Logger(FinanceiroSvcClientService.name);
-  private readonly urlBase: string;
   private readonly requestTimeoutMs: number;
-  private readonly login: { base: string; usuario: string; senha: string };
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
   ) {
-    this.urlBase = this.configService
+    this.requestTimeoutMs = Number(
+      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
+    );
+  }
+
+  // Lidos a cada chamada (podem mudar pelo painel, sem reiniciar).
+  private get urlBase(): string {
+    return this.configService
       .getOrThrow<string>('WK_RADAR_FINANCEIRO_SVC_URL')
       .replace(/\/+$/, '');
-    this.login = {
+  }
+
+  private get login(): { base: string; usuario: string; senha: string } {
+    return {
       base: this.configService.getOrThrow<string>('WK_BI_BASE'),
       usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
       senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
     };
-    this.requestTimeoutMs = Number(
-      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
-    );
   }
 
   async buscarPosicaoFinanceira(

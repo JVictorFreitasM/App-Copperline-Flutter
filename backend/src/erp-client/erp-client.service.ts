@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { AxiosError, type Method } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import type { WkRadarTokenResponse } from './erp-client.types';
@@ -28,11 +28,13 @@ const BACKOFF_PADRAO_MS = 1000;
 @Injectable()
 export class ErpClientService {
   private readonly logger = new Logger(ErpClientService.name);
-  private readonly baseUrl: string;
   private readonly requestTimeoutMs: number;
   private readonly intervaloMinimoMs: number;
 
   private cachedToken: CachedToken | null = null;
+  // Versao das credenciais com que o token foi obtido: gravou credencial nova no
+  // painel, o token antigo (de outro usuario/empresa) e' descartado.
+  private tokenVersao: number | undefined;
   // Evita "thundering herd": se varias chamadas concorrentes acharem o
   // token expirado ao mesmo tempo, todas aguardam a MESMA autenticacao em
   // andamento em vez de disparar uma requisicao de token cada uma.
@@ -47,16 +49,12 @@ export class ErpClientService {
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
   ) {
     // Base fixa {host}/wk.api/api - centralizada aqui (nao em cada
     // strategy) pra corrigir de um so lugar se o padrao de rota do WK Radar
     // mudar de novo (ver skill wk-radar-client, secao "Base de URL"). As
     // strategies passam so o sufixo /{modulo}/v1/{recurso} pro get()/post().
-    const host = this.configService
-      .getOrThrow<string>('WK_RADAR_API_URL')
-      .replace(/\/+$/, '');
-    this.baseUrl = `${host}/wk.api/api`;
     // Sem timeout, uma janela de busca ampla demais (paginacao nao
     // confirmada pelo WK Radar - ver skill wk-radar-client) pode travar a
     // requisicao indefinidamente, o que trava junto o worker de sync
@@ -71,6 +69,21 @@ export class ErpClientService {
     this.intervaloMinimoMs = Number(
       this.configService.get('WK_RADAR_MIN_REQUEST_INTERVAL_MS') ?? 300,
     );
+  }
+
+  // Lida a cada chamada (nao no construtor): o host pode mudar pelo painel.
+  private get baseUrl(): string {
+    const host = this.configService
+      .getOrThrow<string>('WK_RADAR_API_URL')
+      .replace(/\/+$/, '');
+    return `${host}/wk.api/api`;
+  }
+
+  // Forca uma autenticacao nova com as credenciais atuais (botao "Testar
+  // conexao" do painel). Lanca se o Radar recusar.
+  async testarAutenticacao(): Promise<void> {
+    this.cachedToken = null;
+    await this.getToken();
   }
 
   async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
@@ -163,6 +176,9 @@ export class ErpClientService {
   }
 
   private async getToken(): Promise<string> {
+    if (this.tokenVersao !== this.configService.versao) {
+      this.cachedToken = null;
+    }
     if (this.cachedToken && Date.now() < this.cachedToken.expiresAt) {
       return this.cachedToken.value;
     }
@@ -178,6 +194,7 @@ export class ErpClientService {
 
   private async authenticate(): Promise<string> {
     await this.aguardarProximoSlot();
+    const versao = this.configService.versao;
 
     const response = await firstValueFrom(
       this.httpService.post<WkRadarTokenResponse>(
@@ -199,6 +216,7 @@ export class ErpClientService {
       value: response.data.token,
       expiresAt: Date.now() + expiresInMs - TOKEN_EXPIRY_MARGIN_MS,
     };
+    this.tokenVersao = versao;
     this.logger.log(
       `Autenticado no WK Radar (token valido por ${response.data.expiresIn}s)`,
     );

@@ -11,6 +11,19 @@ export interface AlcadaAprovacaoDto {
   atualizadoEm: string;
 }
 
+// Mesmo shape de backend/src/credenciais-erp/credenciais-erp.service.ts
+// (CredencialErpDto) - aba "Integração ERP". Senha nunca vem (valor null).
+export interface CredencialErpDto {
+  chave: string;
+  rotulo: string;
+  grupo: "RADAR" | "BI";
+  secreta: boolean;
+  obrigatoria: boolean;
+  valor: string | null;
+  definida: boolean;
+  origem: "painel" | "ambiente" | "nenhuma";
+}
+
 // Mesmo shape de
 // backend/src/configuracoes/configuracao-funcionalidades.service.ts - aba
 // "Funcionalidades".

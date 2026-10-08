@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
+  CredencialErpDto,
   ComunicadoPedidoPdfDto,
   ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
@@ -46,6 +47,25 @@ export async function atualizarConfiguracaoFuncionalidades(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    cache: "no-store",
+  });
+}
+
+export async function atualizarCredenciaisErp(
+  valores: Record<string, string>,
+): Promise<CredencialErpDto[]> {
+  return apiFetch<CredencialErpDto[]>("/admin/configuracoes/credenciais-erp", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ valores }),
+    cache: "no-store",
+  });
+}
+
+// So' autentica no WK Radar com as credenciais salvas (nao altera nada no ERP).
+export async function testarConexaoRadar(): Promise<{ ok: boolean; mensagem: string }> {
+  return apiFetch<{ ok: boolean; mensagem: string }>("/admin/configuracoes/credenciais-erp/testar-radar", {
+    method: "POST",
     cache: "no-store",
   });
 }

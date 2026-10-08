@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { firstValueFrom } from 'rxjs';
 import { buildBuscarSaldoProdutoBody } from './build-buscar-saldo-produto-body';
 import { EstoqueSvcFaultError } from './estoque-svc-fault.error';
@@ -23,26 +23,31 @@ import {
 @Injectable()
 export class EstoqueSvcClientService {
   private readonly logger = new Logger(EstoqueSvcClientService.name);
-  private readonly url: string;
   private readonly requestTimeoutMs: number;
-  private readonly login: { base: string; usuario: string; senha: string };
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
   ) {
-    this.url = this.configService.getOrThrow<string>('WK_RADAR_ESTOQUE_SVC_URL');
     // Mesmas credenciais do WK BI (Executivo.svc) - mesmo servidor Radar,
     // mesma conta (decisao confirmada com o usuario) - nenhuma env var de
     // credencial nova pra este client.
-    this.login = {
+    this.requestTimeoutMs = Number(
+      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
+    );
+  }
+
+  // Lidos a cada chamada (podem mudar pelo painel, sem reiniciar).
+  private get url(): string {
+    return this.configService.getOrThrow<string>('WK_RADAR_ESTOQUE_SVC_URL');
+  }
+
+  private get login(): { base: string; usuario: string; senha: string } {
+    return {
       base: this.configService.getOrThrow<string>('WK_BI_BASE'),
       usuario: this.configService.getOrThrow<string>('WK_BI_USUARIO'),
       senha: this.configService.getOrThrow<string>('WK_BI_SENHA'),
     };
-    this.requestTimeoutMs = Number(
-      this.configService.get('WK_BI_REQUEST_TIMEOUT_MS') ?? 60_000,
-    );
   }
 
   async buscarSaldoProduto(): Promise<SaldoProdutoBruto[]> {

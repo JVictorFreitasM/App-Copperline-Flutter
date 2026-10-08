@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import type { AxiosResponse } from 'axios';
 import { of } from 'rxjs';
 import { WkBiClientService } from './wk-bi-client.service';
@@ -25,7 +25,7 @@ function configServiceFake() {
   return {
     getOrThrow: jest.fn((chave: string) => ENV[chave]),
     get: jest.fn((chave: string) => ENV[chave]),
-  } as unknown as ConfigService;
+  } as unknown as CredenciaisErpService;
 }
 
 describe('WkBiClientService.buscarRelatorioExportacaoAutomatica', () => {

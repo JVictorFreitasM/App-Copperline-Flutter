@@ -1397,6 +1397,19 @@ model ConfiguracaoDesconto {
 // OS-pendentes-claude-code.md) - estas 4 flags sao apenas as configuracoes
 // que a tela pede pra existir, sem ainda ligar a nenhum fluxo real de
 // orcamento (fora do escopo desta OS).
+// Credenciais do ERP (WK Radar / WK BI) cadastradas pelo painel, uma linha por
+// chave (mesmo nome da env var). Valor SEMPRE cifrado (SegredoCryptoService);
+// sem linha, vale a env. Ver CredenciaisErpService.
+model CredencialErp {
+  id               String   @id @default(uuid())
+  chave            String   @unique
+  valorCifrado     String   @map("valor_cifrado")
+  atualizadoPorSub String?  @map("atualizado_por_sub")
+  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+
+  @@map("credenciais_erp")
+}
+
 // Tabela singleton (1 linha, service garante) - aba "Funcionalidades" da tela de
 // Configuracoes: liga/desliga partes do app sem publicar versao nova.
 model ConfiguracaoFuncionalidades {

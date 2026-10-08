@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../../credenciais-erp/credenciais-erp.service';
 import { parseDataHoraBr } from '../../common/parse-data-br';
 import { parseDecimalBr } from '../../common/parse-decimal-br';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -45,14 +45,14 @@ export class EstoqueLoteSyncStrategy
 {
   readonly nomeEntidade = 'estoque_lote';
 
-  private readonly wkBiEmpresa: string;
-
   constructor(
     private readonly wkBiClientService: WkBiClientService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
     private readonly prisma: PrismaService,
-  ) {
-    this.wkBiEmpresa = this.configService.getOrThrow<string>('WK_BI_EMPRESA');
+  ) {}
+
+  private get wkBiEmpresa(): string {
+    return this.configService.getOrThrow<string>('WK_BI_EMPRESA');
   }
 
   async fetch(
