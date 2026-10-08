@@ -48,6 +48,8 @@ class ApiClient implements ApiJsonClient {
             baseUrl: baseUrl,
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 15),
+            // Identifica o app para a tela Acessos do painel (aparelho conectado).
+            headers: {'x-app-cliente': 'mobile'},
           ),
         ),
         sessionStorage,

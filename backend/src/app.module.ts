@@ -32,6 +32,7 @@ import { OportunidadesModule } from './oportunidades/oportunidades.module';
 import { TabelasPrecoModule } from './tabelas-preco/tabelas-preco.module';
 import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acondicionamento.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
+import { AcessosModule } from './acessos/acessos.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
 import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
@@ -79,6 +80,7 @@ import { GeocodificacaoModule } from './geocodificacao/geocodificacao.module';
     TiposAcondicionamentoModule,
     PagamentoModule,
     ConfiguracoesModule,
+    AcessosModule,
     ConsultaCnpjModule,
     ConsultaCepModule,
     GeocodificacaoModule,

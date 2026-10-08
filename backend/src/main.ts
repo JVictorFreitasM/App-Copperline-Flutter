@@ -8,6 +8,8 @@ import { RedisStore } from 'connect-redis';
 import session from 'express-session';
 import type Redis from 'ioredis';
 import type { IdpAuth } from '@copperline/idp-client';
+import { criarMiddlewareAcesso } from './acessos/acesso-sessao.middleware';
+import { AcessosService } from './acessos/acessos.service';
 import { AppModule } from './app.module';
 import { IDP_AUTH } from './idp-auth/idp-auth.constants';
 import { REDIS_CLIENT } from './redis/redis.constants';
@@ -84,6 +86,10 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Bloqueio de conta + registro de aparelho/ultimo acesso (tela Acessos): logo
+  // depois da sessao, antes do router do IdP e de qualquer rota.
+  app.use(criarMiddlewareAcesso(app.get(AcessosService)));
 
   const idpAuth = app.get<IdpAuth>(IDP_AUTH);
   app.use(idpAuth.router);

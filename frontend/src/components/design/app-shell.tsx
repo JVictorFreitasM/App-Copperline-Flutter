@@ -96,6 +96,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
                 rotulo: "Qualidade de dados",
                 icone: <IconeEscudo />,
               },
+              { href: "/admin/acessos", rotulo: "Acessos", icone: <IconeEscudo /> },
               { href: "/admin/vendedores", rotulo: "Vendedores", icone: <IconePessoas /> },
               {
                 href: "/admin/tipos-acondicionamento",

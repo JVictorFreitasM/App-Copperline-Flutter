@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { resolverApiUrl } from "./login-url";
 
 // Utilitário central de acesso à API NestJS - toda chamada ao backend passa
@@ -28,6 +28,11 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
+  // Navegador/IP de quem usa o painel (o backend so enxerga o servidor Next):
+  // alimenta a tela Acessos, so informativo.
+  const cabecalhosEntrada = await headers();
+  const userAgent = cabecalhosEntrada.get("user-agent");
+  const ip = cabecalhosEntrada.get("x-forwarded-for")?.split(",")[0]?.trim();
   const url = `${resolverApiUrl()}${path}`;
 
   let response: Response;
@@ -36,6 +41,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       ...init,
       headers: {
         ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+        ...(userAgent ? { "x-cliente-user-agent": userAgent } : {}),
+        ...(ip ? { "x-cliente-ip": ip } : {}),
         ...init?.headers,
       },
     });

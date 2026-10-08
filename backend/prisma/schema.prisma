@@ -938,6 +938,14 @@ model Usuario {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
+  // Bloqueio de acesso a ESTE sistema (tela Acessos, admin) - nao mexe no IdP.
+  // Bloqueada, a conta perde todas as sessoes e nao consegue mais usar a API
+  // (ver AcessosService / middleware de acesso).
+  bloqueado       Boolean   @default(false)
+  bloqueadoEm     DateTime? @map("bloqueado_em")
+  bloqueadoPorSub String?   @map("bloqueado_por_sub")
+  motivoBloqueio  String?   @map("motivo_bloqueio")
+
   dispositivos              DispositivoUsuario[]
   favoritos                 ProdutoFavorito[]
   vendedores                Vendedor[]
