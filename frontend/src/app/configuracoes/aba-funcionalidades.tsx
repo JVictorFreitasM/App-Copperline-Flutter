@@ -16,7 +16,8 @@ export function AbaFuncionalidades({ inicial }: { inicial: ConfiguracaoFuncional
 
   const alterado =
     valores.envioPedidosHabilitado !== inicial.envioPedidosHabilitado ||
-    valores.cadastroClientesHabilitado !== inicial.cadastroClientesHabilitado;
+    valores.cadastroClientesHabilitado !== inicial.cadastroClientesHabilitado ||
+    valores.envioClientesErpHabilitado !== inicial.envioClientesErpHabilitado;
 
   function salvar() {
     setErro(null);
@@ -26,6 +27,7 @@ export function AbaFuncionalidades({ inicial }: { inicial: ConfiguracaoFuncional
         const atualizado = await atualizarConfiguracaoFuncionalidades({
           envioPedidosHabilitado: valores.envioPedidosHabilitado,
           cadastroClientesHabilitado: valores.cadastroClientesHabilitado,
+          envioClientesErpHabilitado: valores.envioClientesErpHabilitado,
         });
         setValores(atualizado);
         setSucesso(true);
@@ -56,6 +58,17 @@ export function AbaFuncionalidades({ inicial }: { inicial: ConfiguracaoFuncional
           checked={valores.cadastroClientesHabilitado}
           disabled={pending}
           onChange={(valor) => setValores((atual) => ({ ...atual, cadastroClientesHabilitado: valor }))}
+        />
+      </LinhaConfiguracao>
+
+      <LinhaConfiguracao
+        titulo="Envio de clientes ao ERP"
+        descricao="Desativado, clientes cadastrados ou editados ficam pendentes e só vão ao WK Radar quando for reativado. É uma escrita no ERP: ative com alguém acompanhando o primeiro envio."
+      >
+        <Switch
+          checked={valores.envioClientesErpHabilitado}
+          disabled={pending}
+          onChange={(valor) => setValores((atual) => ({ ...atual, envioClientesErpHabilitado: valor }))}
         />
       </LinhaConfiguracao>
 

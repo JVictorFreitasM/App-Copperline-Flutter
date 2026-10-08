@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import type { TipoSituacaoPedido } from '../../generated/prisma/client';
 import { ErpClientService } from '../erp-client/erp-client.service';
 import { MAPA_SITUACAO, parseDataBrWkRadar } from '../sync/strategies/pedido.sync';
@@ -76,21 +76,21 @@ interface WkRadarPedidoCabecalho {
 @Injectable()
 export class PedidoErpClientService {
   private readonly logger = new Logger(PedidoErpClientService.name);
-  private readonly idFilial: string;
-  private readonly idUnidadeVenda: string;
-
   constructor(
     private readonly erpClient: ErpClientService,
-    configService: ConfigService,
-  ) {
-    // Confirmados empiricamente contra 300 pedidos reais ja fechados pela
-    // empresa (idFilial: 100% dos casos = 16384; idUnidadeVenda: ~98.5%
-    // dos itens = 229376) - em env var, nao hardcoded, pra poder trocar
-    // sem deploy se a empresa abrir uma segunda filial/unidade de venda.
-    this.idFilial = configService.getOrThrow<string>('WK_RADAR_ID_FILIAL');
-    this.idUnidadeVenda = configService.getOrThrow<string>(
-      'WK_RADAR_ID_UNIDADE_VENDA',
-    );
+    private readonly configService: CredenciaisErpService,
+  ) {}
+
+  // Confirmados empiricamente contra 300 pedidos reais ja fechados pela empresa
+  // (idFilial: 100% = 16384; idUnidadeVenda: ~98.5% dos itens = 229376). Editaveis
+  // no painel (Configuracoes > Integracao ERP) pra a empresa trocar sem deploy se
+  // abrir uma segunda filial/unidade de venda - lidos a cada pedido.
+  private get idFilial(): string {
+    return this.configService.getOrThrow<string>('WK_RADAR_ID_FILIAL');
+  }
+
+  private get idUnidadeVenda(): string {
+    return this.configService.getOrThrow<string>('WK_RADAR_ID_UNIDADE_VENDA');
   }
 
   async criar(input: PedidoErpCriarInput): Promise<PedidoErpCriarResultado> {

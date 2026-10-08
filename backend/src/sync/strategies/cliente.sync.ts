@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '../../../generated/prisma/client';
+import { CredenciaisErpService } from '../../credenciais-erp/credenciais-erp.service';
 import { ErpClientService } from '../../erp-client/erp-client.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buscarPorJanelas } from '../paginacao-por-janela';
@@ -54,17 +54,16 @@ export class ClienteSyncStrategy implements SyncStrategy<
 > {
   readonly nomeEntidade = 'cliente';
   private readonly logger = new Logger(ClienteSyncStrategy.name);
-  private readonly tamanhoJanelaMs: number;
 
   constructor(
     private readonly erpClient: ErpClientService,
     private readonly prisma: PrismaService,
-    configService: ConfigService,
-  ) {
-    this.tamanhoJanelaMs = Number(
-      configService.get('WK_RADAR_JANELA_CLIENTE_MS') ??
-        TAMANHO_JANELA_PADRAO_MS,
-    );
+    private readonly configService: CredenciaisErpService,
+  ) {}
+
+  // Lido a cada busca (editavel no painel em Configuracoes > Integracao ERP, sem reiniciar).
+  private get tamanhoJanelaMs(): number {
+    return Number(this.configService.get('WK_RADAR_JANELA_CLIENTE_MS') ?? TAMANHO_JANELA_PADRAO_MS);
   }
 
   async fetch(janela: SyncWindow): Promise<SyncFetchResultado<WkRadarCliente>> {

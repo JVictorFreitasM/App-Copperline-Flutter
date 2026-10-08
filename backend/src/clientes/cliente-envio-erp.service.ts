@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfiguracaoFuncionalidadesService } from '../configuracoes/configuracao-funcionalidades.service';
 import { AxiosError } from 'axios';
 import { UnrecoverableError } from 'bullmq';
 import { ErpClientService } from '../erp-client/erp-client.service';
@@ -20,7 +20,7 @@ export type ResultadoEnvioErp = 'ENVIADO' | 'IGNORADO' | 'DESABILITADO' | 'ADIAD
 // ERP e' fluxo separado da leitura/sync, com fila e tratamento de erro proprios
 // (CLAUDE.md).
 //
-// Desligado por padrao (CLIENTE_ENVIO_ERP_HABILITADO): escrever num ERP e'
+// Desligado por padrao (Configuracoes > Funcionalidades; antes de decidirem la, vale a env CLIENTE_ENVIO_ERP_HABILITADO): escrever num ERP e'
 // acao irreversivel e o formato exato da resposta/validacao do POST ainda nao
 // foi confirmado contra o ambiente real - o primeiro envio e' feito de
 // proposito, com alguem acompanhando. Desligado, o cliente fica PENDENTE e o
@@ -32,16 +32,16 @@ export class ClienteEnvioErpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly erpClient: ErpClientService,
-    private readonly configService: ConfigService,
+    private readonly funcionalidades: ConfiguracaoFuncionalidadesService,
   ) {}
 
   async enviar(
     clienteId: string,
     ultimaTentativa: boolean,
   ): Promise<ResultadoEnvioErp> {
-    if (!this.envioHabilitado()) {
+    if (!(await this.envioHabilitado())) {
       this.logger.warn(
-        `Envio de cliente ao ERP desabilitado (CLIENTE_ENVIO_ERP_HABILITADO) - ${clienteId} segue PENDENTE`,
+        `Envio de cliente ao ERP desabilitado (Configuracoes > Funcionalidades) - ${clienteId} segue PENDENTE`,
       );
       return 'DESABILITADO';
     }
@@ -85,9 +85,9 @@ export class ClienteEnvioErpService {
     alteracaoId: string,
     ultimaTentativa: boolean,
   ): Promise<ResultadoEnvioErp> {
-    if (!this.envioHabilitado()) {
+    if (!(await this.envioHabilitado())) {
       this.logger.warn(
-        `Envio de cliente ao ERP desabilitado (CLIENTE_ENVIO_ERP_HABILITADO) - alteracao ${alteracaoId} segue PENDENTE`,
+        `Envio de cliente ao ERP desabilitado (Configuracoes > Funcionalidades) - alteracao ${alteracaoId} segue PENDENTE`,
       );
       return 'DESABILITADO';
     }
@@ -161,8 +161,8 @@ export class ClienteEnvioErpService {
     return 'ENVIADO';
   }
 
-  private envioHabilitado(): boolean {
-    return this.configService.get<string>('CLIENTE_ENVIO_ERP_HABILITADO') === 'true';
+  private async envioHabilitado(): Promise<boolean> {
+    return (await this.funcionalidades.obter()).envioClientesErpHabilitado;
   }
 
   private async marcarErroAlteracao(alteracaoId: string, mensagem: string): Promise<void> {

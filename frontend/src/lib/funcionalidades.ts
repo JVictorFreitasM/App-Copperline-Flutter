@@ -10,6 +10,6 @@ export async function obterFuncionalidades(): Promise<ConfiguracaoFuncionalidade
       cache: "no-store",
     });
   } catch {
-    return { envioPedidosHabilitado: true, cadastroClientesHabilitado: true, atualizadoEm: "" };
+    return { envioPedidosHabilitado: true, cadastroClientesHabilitado: true, envioClientesErpHabilitado: false, atualizadoEm: "" };
   }
 }

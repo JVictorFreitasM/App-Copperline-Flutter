@@ -16,6 +16,17 @@ const GRUPOS: { id: CredencialErpDto["grupo"]; titulo: string; descricao: string
     titulo: "WK Radar (relatórios e serviços .svc)",
     descricao: "Estoque, tabelas de preço e posição financeira.",
   },
+  {
+    id: "SINCRONIZACAO",
+    titulo: "Sincronização com o ERP",
+    descricao:
+      "Início da carga inicial e tamanho da janela de cada busca. A frequência de cada sincronização fica na Central de Sincronização.",
+  },
+  {
+    id: "AGENDAMENTOS",
+    titulo: "Agendamentos",
+    descricao: "Horários dos disparos automáticos.",
+  },
 ];
 
 // Aba "Integração ERP": cadastra as credenciais do WK Radar/WK BI pelo painel,
@@ -78,7 +89,7 @@ export function AbaIntegracaoErp({ inicial }: { inicial: CredencialErpDto[] }) {
                 <LinhaConfiguracao
                   key={credencial.chave}
                   titulo={credencial.rotulo}
-                  descricao={descricaoOrigem(credencial, credencial.chave in editados)}
+                  descricao={`${credencial.ajuda ? `${credencial.ajuda} ` : ""}${descricaoOrigem(credencial, credencial.chave in editados)}`}
                 >
                   <input
                     type={credencial.secreta ? "password" : "text"}

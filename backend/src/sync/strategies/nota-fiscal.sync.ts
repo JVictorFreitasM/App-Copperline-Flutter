@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type {
   StatusNfe,
   TipoNotaFiscal,
 } from '../../../generated/prisma/client';
+import { CredenciaisErpService } from '../../credenciais-erp/credenciais-erp.service';
 import { ErpClientService } from '../../erp-client/erp-client.service';
 import { registrarEventoNotificacao } from '../../notificacoes/evento-notificacao.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -91,17 +91,16 @@ export class NotaFiscalSyncStrategy implements SyncStrategy<
   readonly nomeEntidade = 'nota-fiscal';
   readonly agendamento = 'JANELA_FIXA_DIARIA' as const;
   private readonly logger = new Logger(NotaFiscalSyncStrategy.name);
-  private readonly tamanhoSubJanelaMs: number;
 
   constructor(
     private readonly erpClient: ErpClientService,
     private readonly prisma: PrismaService,
-    configService: ConfigService,
-  ) {
-    this.tamanhoSubJanelaMs = Number(
-      configService.get('WK_RADAR_JANELA_NOTA_FISCAL_MS') ??
-        TAMANHO_SUB_JANELA_PADRAO_MS,
-    );
+    private readonly configService: CredenciaisErpService,
+  ) {}
+
+  // Lido a cada busca (editavel no painel em Configuracoes > Integracao ERP, sem reiniciar).
+  private get tamanhoSubJanelaMs(): number {
+    return Number(this.configService.get('WK_RADAR_JANELA_NOTA_FISCAL_MS') ?? TAMANHO_SUB_JANELA_PADRAO_MS);
   }
 
   async fetch(

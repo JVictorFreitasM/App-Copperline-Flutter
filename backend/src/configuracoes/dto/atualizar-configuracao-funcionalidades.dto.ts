@@ -6,4 +6,7 @@ export class AtualizarConfiguracaoFuncionalidadesDto {
 
   @IsBoolean()
   cadastroClientesHabilitado!: boolean;
+
+  @IsBoolean()
+  envioClientesErpHabilitado!: boolean;
 }

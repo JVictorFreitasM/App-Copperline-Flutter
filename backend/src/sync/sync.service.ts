@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { SyncLogStatus } from '../../generated/prisma/client';
+import { CredenciaisErpService } from '../credenciais-erp/credenciais-erp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYNC_STRATEGIES } from './sync.constants';
 import type { SyncStrategy, SyncWindow } from './sync-strategy.interface';
@@ -15,7 +15,7 @@ export class SyncService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
+    private readonly configService: CredenciaisErpService,
     @Inject(SYNC_STRATEGIES) private readonly strategies: SyncStrategy[],
   ) {}
 

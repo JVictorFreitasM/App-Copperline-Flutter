@@ -33,9 +33,10 @@ export interface ProvedorApiDto {
 export interface CredencialErpDto {
   chave: string;
   rotulo: string;
-  grupo: "RADAR" | "BI";
+  grupo: "RADAR" | "BI" | "SINCRONIZACAO" | "AGENDAMENTOS";
   secreta: boolean;
   obrigatoria: boolean;
+  ajuda?: string;
   valor: string | null;
   definida: boolean;
   origem: "painel" | "ambiente" | "nenhuma";
@@ -47,6 +48,7 @@ export interface CredencialErpDto {
 export interface ConfiguracaoFuncionalidadesDto {
   envioPedidosHabilitado: boolean;
   cadastroClientesHabilitado: boolean;
+  envioClientesErpHabilitado: boolean;
   atualizadoEm: string;
 }
 

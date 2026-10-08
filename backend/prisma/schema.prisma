@@ -1446,6 +1446,9 @@ model ConfiguracaoFuncionalidades {
   envioPedidosHabilitado    Boolean  @default(true) @map("envio_pedidos_habilitado")
   // Desligado: POST /clientes e' recusado (edicao de cliente nao e' afetada).
   cadastroClientesHabilitado Boolean @default(true) @map("cadastro_clientes_habilitado")
+  // Envio de cliente cadastrado/editado ao WK Radar. null = nunca decidido no
+  // painel: vale a env CLIENTE_ENVIO_ERP_HABILITADO (padrao desligado).
+  envioClientesErpHabilitado Boolean? @map("envio_clientes_erp_habilitado")
   atualizadoEm              DateTime @updatedAt @map("atualizado_em")
 
   @@map("configuracao_funcionalidades")

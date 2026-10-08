@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SegredoCryptoService } from '../common/crypto/segredo-crypto.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type GrupoCredencialErp = 'RADAR' | 'BI';
+export type GrupoCredencialErp = 'RADAR' | 'BI' | 'SINCRONIZACAO' | 'AGENDAMENTOS';
 
 export interface DefinicaoCredencialErp {
   chave: string;
@@ -12,6 +12,8 @@ export interface DefinicaoCredencialErp {
   // Senha: nunca volta na API, nem mascarada alem de "definida".
   secreta: boolean;
   obrigatoria: boolean;
+  // Texto de apoio mostrado sob o campo.
+  ajuda?: string;
 }
 
 // Unicas chaves editaveis pelo painel - lista fechada de proposito (o PATCH
@@ -23,6 +25,21 @@ export const CREDENCIAIS_ERP: readonly DefinicaoCredencialErp[] = [
   { chave: 'WK_RADAR_USUARIO', rotulo: 'Usuário', grupo: 'RADAR', secreta: false, obrigatoria: true },
   { chave: 'WK_RADAR_SENHA', rotulo: 'Senha', grupo: 'RADAR', secreta: true, obrigatoria: true },
   { chave: 'WK_RADAR_ID_INTEGRADOR', rotulo: 'ID do integrador', grupo: 'RADAR', secreta: false, obrigatoria: false },
+  { chave: 'WK_RADAR_ID_FILIAL', rotulo: 'ID da filial (pedidos)', grupo: 'RADAR', secreta: false, obrigatoria: true, ajuda: 'Vai em todo pedido enviado ao ERP.' },
+  { chave: 'WK_RADAR_ID_UNIDADE_VENDA', rotulo: 'ID da unidade de venda (itens)', grupo: 'RADAR', secreta: false, obrigatoria: true, ajuda: 'Vai em todo item de pedido enviado ao ERP.' },
+  { chave: 'WK_RADAR_CLIENTE_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - clientes', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_PRODUTO_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - produtos', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_PEDIDO_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - pedidos', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_SALDO_ESTOQUE_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - saldo de estoque', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_ESTOQUE_LOTE_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - lotes de estoque', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_VENDEDOR_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - vendedores', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_NOTA_FISCAL_DATA_INICIO_CARGA', rotulo: 'Início da carga inicial - notas fiscais', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Só vale na 1a sincronização, sem cursor. Formato AAAA-MM-DD (ex: 2024-01-01).' },
+  { chave: 'WK_RADAR_JANELA_CLIENTE_MS', rotulo: 'Tamanho da janela de busca - clientes (ms)', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Cada chamada ao ERP cobre este intervalo (padrão 86400000 = 24 h). Menor = mais chamadas, respostas menores.' },
+  { chave: 'WK_RADAR_JANELA_PRODUTO_MS', rotulo: 'Tamanho da janela de busca - produtos (ms)', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Cada chamada ao ERP cobre este intervalo (padrão 21600000 = 6 h). Menor = mais chamadas, respostas menores.' },
+  { chave: 'WK_RADAR_JANELA_PEDIDO_MS', rotulo: 'Tamanho da janela de busca - pedidos (ms)', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Cada chamada ao ERP cobre este intervalo (padrão 7200000 = 2 h). Menor = mais chamadas, respostas menores.' },
+  { chave: 'WK_RADAR_JANELA_NOTA_FISCAL_MS', rotulo: 'Tamanho da janela de busca - notas fiscais (ms)', grupo: 'SINCRONIZACAO', secreta: false, obrigatoria: false, ajuda: 'Cada chamada ao ERP cobre este intervalo (padrão 86400000 = 24 h). Menor = mais chamadas, respostas menores.' },
+  { chave: 'RELATORIO_DIARIO_HORA_MANHA', rotulo: 'Relatório diário - manhã (HH:MM)', grupo: 'AGENDAMENTOS', secreta: false, obrigatoria: false, ajuda: 'Segunda a sexta, horário de Brasília. Padrão 07:00.' },
+  { chave: 'RELATORIO_DIARIO_HORA_FIM_DIA', rotulo: 'Relatório diário - fim do dia (HH:MM)', grupo: 'AGENDAMENTOS', secreta: false, obrigatoria: false, ajuda: 'Segunda a sexta, horário de Brasília. Padrão 18:00.' },
   { chave: 'WK_BI_URL', rotulo: 'URL do Executivo.svc', grupo: 'BI', secreta: false, obrigatoria: true },
   { chave: 'WK_BI_BASE', rotulo: 'Base', grupo: 'BI', secreta: false, obrigatoria: true },
   { chave: 'WK_BI_USUARIO', rotulo: 'Usuário', grupo: 'BI', secreta: false, obrigatoria: true },

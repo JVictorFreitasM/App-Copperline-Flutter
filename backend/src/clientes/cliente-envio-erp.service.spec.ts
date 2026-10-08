@@ -27,8 +27,7 @@ function montar(opcoes: { habilitado?: boolean; cliente?: unknown } = {}) {
   };
   const erpClient = { post: jest.fn().mockResolvedValue([{ id: 'ext-99' }]) };
   const configService = {
-    get: (chave: string) =>
-      chave === 'CLIENTE_ENVIO_ERP_HABILITADO' && opcoes.habilitado !== false ? 'true' : undefined,
+    obter: async () => ({ envioClientesErpHabilitado: opcoes.habilitado !== false }),
   };
   const service = new ClienteEnvioErpService(
     prisma as never,
@@ -171,8 +170,7 @@ describe('ClienteEnvioErpService.enviarAlteracao (PATCH de cliente ja no Radar)'
       patch: jest.fn().mockResolvedValue(undefined),
     };
     const configService = {
-      get: (chave: string) =>
-        chave === 'CLIENTE_ENVIO_ERP_HABILITADO' && opcoes.habilitado !== false ? 'true' : undefined,
+      obter: async () => ({ envioClientesErpHabilitado: opcoes.habilitado !== false }),
     };
     const service = new ClienteEnvioErpService(prisma as never, erpClient as never, configService as never);
     return { service, prisma, erpClient };
