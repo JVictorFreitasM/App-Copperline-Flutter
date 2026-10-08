@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/atualizacao/notas_versao.dart';
@@ -6,8 +7,10 @@ import '../screens/atualizacao_obrigatoria_screen.dart';
 
 /// Envolve o app logado: se há versão mais nova publicada, troca tudo pela tela
 /// de atualização obrigatória. Confere ao abrir (já logado - o endpoint exige
-/// sessão) e toda vez que o app volta pro primeiro plano. Enquanto confere, ou
-/// se não conseguir conferir (sem rede), mostra o app normalmente.
+/// sessão), toda vez que o app volta pro primeiro plano E a cada 5 minutos com
+/// o app aberto (sem isso, quem deixa o app aberto o dia todo só ficaria sabendo
+/// de uma versão nova quando por acaso voltasse ao app). Enquanto confere, ou se
+/// não conseguir conferir (sem rede), mostra o app normalmente.
 class AtualizacaoGate extends ConsumerStatefulWidget {
   const AtualizacaoGate({super.key, required this.child});
 
@@ -18,10 +21,20 @@ class AtualizacaoGate extends ConsumerStatefulWidget {
 }
 
 class _AtualizacaoGateState extends ConsumerState<AtualizacaoGate> with WidgetsBindingObserver {
+  /// Intervalo da reconferência com o app aberto. Cada consulta é um GET de
+  /// poucos bytes; sem rede ela falha em silêncio (nunca bloqueia o app).
+  static const intervaloDeReconferencia = Duration(minutes: 5);
+
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _timer = Timer.periodic(
+      intervaloDeReconferencia,
+      (_) => ref.invalidate(atualizacaoAppProvider),
+    );
     // Primeira abertura depois de atualizar: mostra o que há de novo (uma vez).
     WidgetsBinding.instance.addPostFrameCallback((_) => _mostrarNovidades());
   }
@@ -46,6 +59,7 @@ class _AtualizacaoGateState extends ConsumerState<AtualizacaoGate> with WidgetsB
 
   @override
   void dispose() {
+    _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

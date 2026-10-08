@@ -188,6 +188,32 @@ void main() {
       expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
     });
 
+    testWidgets('com o app ABERTO reconfere sozinho e passa a bloquear quando sai versão nova', (tester) async {
+      var publicada = false;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            atualizacaoAppProvider.overrideWith((ref) async => publicada ? nova : null),
+          ],
+          child: const MaterialApp(home: AtualizacaoGate(child: Scaffold(body: Text('APP NORMAL')))),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('APP NORMAL'), findsOneWidget);
+
+      publicada = true; // o admin publicou uma versão enquanto o app estava aberto
+      // Antes do intervalo ainda não reconferiu.
+      await tester.pump(const Duration(minutes: 4));
+      await tester.pumpAndSettle();
+      expect(find.text('Atualização necessária'), findsNothing);
+
+      await tester.pump(const Duration(minutes: 1, seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Atualização necessária'), findsOneWidget);
+      expect(find.text('APP NORMAL'), findsNothing);
+    });
+
     testWidgets('Atualizar agora baixa e abre o instalador', (tester) async {
       final m = _Montagem(publicada: _versaoPublicada());
       await tester.pumpWidget(app(atualizacao: nova, service: m.service));
