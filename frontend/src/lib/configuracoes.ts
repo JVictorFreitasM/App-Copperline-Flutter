@@ -11,6 +11,23 @@ export interface AlcadaAprovacaoDto {
   atualizadoEm: string;
 }
 
+// Mesmo shape de backend/src/provedores-api/provedor-api.types.ts (ProvedorApiDto)
+// - aba "Provedores de API". Token nunca vem (so' tokenDefinido).
+export type TipoProvedorApi = "CEP" | "CNPJ" | "GEOCODIFICACAO";
+
+export interface ProvedorApiDto {
+  id: string;
+  tipo: TipoProvedorApi;
+  formato: string;
+  rotulo: string;
+  urlBase: string;
+  tokenDefinido: boolean;
+  limiteRequisicoes: number | null;
+  janelaSegundos: number | null;
+  ordem: number;
+  ativa: boolean;
+}
+
 // Mesmo shape de backend/src/credenciais-erp/credenciais-erp.service.ts
 // (CredencialErpDto) - aba "Integração ERP". Senha nunca vem (valor null).
 export interface CredencialErpDto {

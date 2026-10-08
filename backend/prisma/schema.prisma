@@ -1397,6 +1397,33 @@ model ConfiguracaoDesconto {
 // OS-pendentes-claude-code.md) - estas 4 flags sao apenas as configuracoes
 // que a tela pede pra existir, sem ainda ligar a nenhum fluxo real de
 // orcamento (fora do escopo desta OS).
+enum TipoProvedorApi {
+  CEP
+  CNPJ
+  GEOCODIFICACAO
+
+  @@map("tipo_provedor_api")
+}
+
+// Endpoints das APIs externas de consulta (CEP, CNPJ, mapas), varios por tipo,
+// em cadeia de fallback pela `ordem` - ver ProvedoresApiService. Token cifrado.
+model ProvedorApi {
+  id                String           @id @default(uuid())
+  tipo              TipoProvedorApi
+  formato           String
+  rotulo            String
+  urlBase           String           @map("url_base")
+  token             String?
+  limiteRequisicoes Int?             @map("limite_requisicoes")
+  janelaSegundos    Int?             @map("janela_segundos")
+  ordem             Int
+  ativa             Boolean          @default(true)
+  atualizadoEm      DateTime         @updatedAt @map("atualizado_em")
+
+  @@index([tipo, ordem])
+  @@map("provedores_api")
+}
+
 // Credenciais do ERP (WK Radar / WK BI) cadastradas pelo painel, uma linha por
 // chave (mesmo nome da env var). Valor SEMPRE cifrado (SegredoCryptoService);
 // sem linha, vale a env. Ver CredenciaisErpService.

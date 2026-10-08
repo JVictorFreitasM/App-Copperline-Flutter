@@ -85,6 +85,13 @@ function montar() {
     consultar: jest.fn().mockResolvedValue({ codigoIbge: '2211001', logradouro: 'Avenida X' }),
   };
   const municipioWkService = { idPorCodigoIbge: jest.fn().mockResolvedValue('52002816') };
+  // Cadeia padrao: ReceitaWS (3 por minuto) e BrasilAPI de reserva.
+  const provedores = {
+    cadeia: jest.fn().mockResolvedValue([
+      { id: 'receitaws-id', formato: 'RECEITAWS', rotulo: 'ReceitaWS', urlBase: 'https://r.exemplo', token: 'tok', limiteRequisicoes: 3, janelaSegundos: 60 },
+      { id: 'brasilapi-id', formato: 'BRASILAPI', rotulo: 'BrasilAPI', urlBase: 'https://b.exemplo', token: null, limiteRequisicoes: null, janelaSegundos: null },
+    ]),
+  };
   const service = new ConsultaCnpjService(
     prisma as never,
     receitaWsClient as never,
@@ -93,8 +100,10 @@ function montar() {
     orcamento as never,
     consultaCepService as never,
     municipioWkService as never,
+    provedores as never,
   );
   return {
+    provedores,
     service,
     prisma,
     receitaWsClient,
@@ -248,7 +257,7 @@ describe('ConsultaCnpjService - provedores (ReceitaWS primaria, BrasilAPI reserv
     const resultado = await m.service.consultar(CNPJ);
 
     expect(m.receitaWsClient.consultar).not.toHaveBeenCalled();
-    expect(m.brasilApiClient.consultar).toHaveBeenCalledWith(CNPJ);
+    expect(m.brasilApiClient.consultar).toHaveBeenCalledWith(CNPJ, expect.objectContaining({ formato: 'BRASILAPI' }));
     expect(resultado.dados?.razaoSocial).toBe('MEGA FIOS LTDA (BRASILAPI)');
     expect(m.cache.guardar).toHaveBeenCalled();
   });
@@ -259,7 +268,7 @@ describe('ConsultaCnpjService - provedores (ReceitaWS primaria, BrasilAPI reserv
 
     const resultado = await m.service.consultar(CNPJ);
 
-    expect(m.orcamento.bloquear).toHaveBeenCalledWith('receitaws');
+    expect(m.orcamento.bloquear).toHaveBeenCalledWith('receitaws-id');
     expect(resultado.dados?.razaoSocial).toBe('MEGA FIOS LTDA (BRASILAPI)');
   });
 

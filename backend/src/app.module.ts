@@ -34,6 +34,7 @@ import { TiposAcondicionamentoModule } from './tipos-acondicionamento/tipos-acon
 import { PagamentoModule } from './pagamento/pagamento.module';
 import { AcessosModule } from './acessos/acessos.module';
 import { CredenciaisErpModule } from './credenciais-erp/credenciais-erp.module';
+import { ProvedoresApiModule } from './provedores-api/provedores-api.module';
 import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
 import { ConsultaCnpjModule } from './consulta-cnpj/consulta-cnpj.module';
 import { ConsultaCepModule } from './consulta-cep/consulta-cep.module';
@@ -83,6 +84,7 @@ import { GeocodificacaoModule } from './geocodificacao/geocodificacao.module';
     ConfiguracoesModule,
     AcessosModule,
     CredenciaisErpModule,
+    ProvedoresApiModule,
     ConsultaCnpjModule,
     ConsultaCepModule,
     GeocodificacaoModule,

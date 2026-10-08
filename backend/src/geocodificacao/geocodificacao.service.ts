@@ -12,9 +12,10 @@ import { AxiosError } from 'axios';
 import type { Redis } from 'ioredis';
 import { firstValueFrom } from 'rxjs';
 import { aguardarVagaGlobal } from '../common/limitador-global';
+import type { ProvedorApiAtivo } from '../provedores-api/provedor-api.types';
+import { ProvedoresApiService } from '../provedores-api/provedores-api.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 
-const URL_PADRAO = 'https://nominatim.openstreetmap.org/search';
 // Politica de uso do Nominatim (OpenStreetMap): no maximo 1 requisicao por
 // segundo, com User-Agent que identifique a aplicacao.
 const LIMITE_POR_SEGUNDO = 1;
@@ -48,6 +49,7 @@ export class GeocodificacaoService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly provedores: ProvedoresApiService,
   ) {}
 
   async localizar(consulta: string): Promise<GeocodificacaoDto> {
@@ -63,8 +65,7 @@ export class GeocodificacaoService {
       throw new NotFoundException('Endereço não localizado no mapa');
     }
 
-    await aguardarVagaGlobal(this.redis, 'geocode', LIMITE_POR_SEGUNDO, ESPERA_MAXIMA_MS);
-    const resultado = await this.consultarNominatim(texto);
+    const resultado = await this.consultarProvedores(texto);
 
     if (!resultado) {
       await this.redis.set(chaveNegativa, '1', 'EX', TTL_NAO_ENCONTRADO_SEGUNDOS);
@@ -80,10 +81,40 @@ export class GeocodificacaoService {
     return dto;
   }
 
+  // Cadeia de provedores de mapa (Configuracoes > Provedores de API), na ordem:
+  // sem resultado ou falha passa pro proximo; so' vira "nao localizado" se nenhum
+  // achou, e so' vira erro se nenhum respondeu.
+  private async consultarProvedores(texto: string): Promise<ResultadoNominatim | null> {
+    const cadeia = await this.provedores.cadeia('GEOCODIFICACAO');
+    if (cadeia.length === 0) {
+      throw new BadGatewayException(
+        'Nenhum provedor de mapas ativo - cadastre em Configurações > Provedores de API',
+      );
+    }
+    let algumRespondeu = false;
+    let ultimoErro: unknown = null;
+    for (const provedor of cadeia) {
+      try {
+        await aguardarVagaGlobal(this.redis, 'geocode', LIMITE_POR_SEGUNDO, ESPERA_MAXIMA_MS);
+        const resultado = await this.consultarNominatim(provedor, texto);
+        algumRespondeu = true;
+        if (resultado) return resultado;
+      } catch (error) {
+        ultimoErro = error;
+        this.logger.warn(`Provedor de mapas "${provedor.rotulo}" falhou - tentando o proximo`);
+      }
+    }
+    if (!algumRespondeu && ultimoErro) {
+      throw ultimoErro;
+    }
+    return null;
+  }
+
   private async consultarNominatim(
+    provedor: ProvedorApiAtivo,
     texto: string,
   ): Promise<ResultadoNominatim | null> {
-    const url = this.configService.get<string>('GEOCODIFICACAO_API_URL') ?? URL_PADRAO;
+    const url = provedor.urlBase;
     const userAgent =
       this.configService.get<string>('GEOCODIFICACAO_USER_AGENT') ?? 'CopperlineApp/1.0';
 

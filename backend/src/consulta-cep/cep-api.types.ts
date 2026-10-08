@@ -14,6 +14,19 @@ export interface CepApiData {
   codigoIbge: string;
 }
 
+// Shape de GET https://viacep.com.br/ws/{cep}/json/ - CEP inexistente volta 200 com
+// `{ "erro": true }`.
+export interface ViaCepResponse {
+  erro?: boolean | string;
+  logradouro?: string;
+  complemento?: string;
+  unidade?: string;
+  bairro?: string;
+  localidade?: string;
+  uf?: string;
+  ibge?: string;
+}
+
 export interface CepApiResponse {
   success: boolean;
   message: string | null;

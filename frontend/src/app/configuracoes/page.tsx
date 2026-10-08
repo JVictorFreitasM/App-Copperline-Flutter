@@ -5,6 +5,7 @@ import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
   CredencialErpDto,
+  ProvedorApiDto,
   ComunicadoPedidoPdfDto,
   ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
@@ -27,7 +28,7 @@ export default async function ConfiguracoesPage() {
   }
 
   try {
-    const [alcada, orcamento, rastreio, llm, chavesLlm, empresaPdf, comunicadoPdf, funcionalidades, credenciaisErp] = await Promise.all([
+    const [alcada, orcamento, rastreio, llm, chavesLlm, empresaPdf, comunicadoPdf, funcionalidades, credenciaisErp, provedoresApi] = await Promise.all([
       apiFetch<AlcadaAprovacaoDto>("/admin/configuracoes/alcada-aprovacao", { cache: "no-store" }),
       apiFetch<ConfiguracaoOrcamentoDto>("/admin/configuracoes/orcamento", { cache: "no-store" }),
       apiFetch<ConfiguracaoRastreioDto>("/admin/configuracoes/rastreio", { cache: "no-store" }),
@@ -41,6 +42,7 @@ export default async function ConfiguracoesPage() {
         cache: "no-store",
       }),
       apiFetch<CredencialErpDto[]>("/admin/configuracoes/credenciais-erp", { cache: "no-store" }),
+      apiFetch<ProvedorApiDto[]>("/admin/configuracoes/provedores-api", { cache: "no-store" }),
     ]);
 
     return (
@@ -56,6 +58,7 @@ export default async function ConfiguracoesPage() {
           comunicadoPdfInicial={comunicadoPdf}
           funcionalidadesInicial={funcionalidades}
           credenciaisErpIniciais={credenciaisErp}
+          provedoresApiIniciais={provedoresApi}
         />
       </main>
     );

@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   HttpException,
   HttpStatus,
@@ -11,6 +12,8 @@ import {
   variantesParaBusca,
 } from '../clientes/domain/documento';
 import { ConsultaCepService } from '../consulta-cep/consulta-cep.service';
+import type { ProvedorApiAtivo } from '../provedores-api/provedor-api.types';
+import { ProvedoresApiService } from '../provedores-api/provedores-api.service';
 import { MunicipioWkService } from '../municipio-wk/municipio-wk.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BrasilApiCnpjClientService } from './brasilapi-cnpj-client.service';
@@ -33,7 +36,6 @@ import { mapearReceitaWs } from './receitaws-mapper';
 // Espera de quem perdeu a disputa do lock pelo resultado de quem ganhou.
 const ESPERA_RESULTADO_CONCORRENTE_MS = 10_000;
 const INTERVALO_POLLING_MS = 250;
-const PROVEDOR_PRIMARIO = 'receitaws';
 
 // Orquestrador da consulta de CNPJ. A ORDEM e' a estrategia de economia de
 // requisicoes ao provedor, do mais barato ao mais caro:
@@ -42,9 +44,10 @@ const PROVEDOR_PRIMARIO = 'receitaws';
 //   3. cache no Redis (positivo/negativo/falha) - mesma consulta em 24 h/10 min;
 //   4. single-flight (lock no Redis)      - consultas simultaneas do mesmo CNPJ
 //                                           viram uma chamada (e uma falha);
-//   5. orcamento do provedor primario     - ReceitaWS aceita 3 consultas por
-//                                           MINUTO; acabou, vai pro reserva;
-//   6. provedor reserva (BrasilAPI)       - sem limite apertado, ja traz IBGE.
+//   5. cadeia de provedores (painel)      - na ordem cadastrada; provedor com
+//                                           limite proprio (ex: ReceitaWS, 3 por
+//                                           MINUTO) so entra se sobrar orcamento;
+//                                           acabou/falhou, segue pro proximo.
 @Injectable()
 export class ConsultaCnpjService {
   private readonly logger = new Logger(ConsultaCnpjService.name);
@@ -57,6 +60,7 @@ export class ConsultaCnpjService {
     private readonly orcamento: OrcamentoProvedorService,
     private readonly consultaCepService: ConsultaCepService,
     private readonly municipioWkService: MunicipioWkService,
+    private readonly provedores: ProvedoresApiService,
   ) {}
 
   async consultar(entrada: string): Promise<ConsultaCnpjResultadoDto> {
@@ -153,28 +157,61 @@ export class ConsultaCnpjService {
     }
   }
 
-  // Primario (ReceitaWS) enquanto houver orcamento; senao, ou se ele falhar,
-  // o reserva (BrasilAPI). "Nao encontrado" do primario e' definitivo.
+  // Percorre a cadeia de provedores ativos (Configuracoes > Provedores de API) na
+  // ordem. Provedor com limite proprio so' e' chamado se sobrar orcamento; 429 ou
+  // falha passam pro proximo. "Nao encontrado" de qualquer provedor e' definitivo.
   private async consultarProvedores(cnpj: string): Promise<ConsultaCnpjDto> {
-    if (await this.orcamento.tentarReservar(PROVEDOR_PRIMARIO)) {
+    const cadeia = await this.provedores.cadeia('CNPJ');
+    if (cadeia.length === 0) {
+      throw new BadGatewayException(
+        'Nenhum provedor de CNPJ ativo - cadastre em Configurações > Provedores de API',
+      );
+    }
+
+    let ultimoErro: unknown = null;
+    for (const provedor of cadeia) {
+      const comLimite = provedor.limiteRequisicoes !== null && provedor.janelaSegundos !== null;
+      if (
+        comLimite &&
+        !(await this.orcamento.tentarReservar(
+          provedor.id,
+          provedor.limiteRequisicoes as number,
+          provedor.janelaSegundos as number,
+        ))
+      ) {
+        continue;
+      }
       try {
-        return mapearReceitaWs(await this.receitaWsClient.consultar(cnpj));
+        return await this.consultarProvedor(provedor, cnpj);
       } catch (error) {
         if (error instanceof NotFoundException) {
           throw error;
         }
-        if (
-          error instanceof HttpException &&
-          error.getStatus() === HttpStatus.TOO_MANY_REQUESTS
-        ) {
-          await this.orcamento.bloquear(PROVEDOR_PRIMARIO);
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await this.orcamento.bloquear(provedor.id);
         }
         this.logger.warn(
-          `ReceitaWS indisponivel para o CNPJ (${error instanceof Error ? error.message : String(error)}) - usando o provedor reserva`,
+          `Provedor de CNPJ "${provedor.rotulo}" indisponivel (${error instanceof Error ? error.message : String(error)}) - tentando o proximo`,
         );
+        ultimoErro = error;
       }
     }
-    return this.brasilApiClient.consultar(cnpj);
+    if (ultimoErro instanceof HttpException) {
+      throw ultimoErro;
+    }
+    throw new HttpException(
+      'Limite de consultas dos provedores atingido - tente novamente em instantes',
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private async consultarProvedor(provedor: ProvedorApiAtivo, cnpj: string): Promise<ConsultaCnpjDto> {
+    switch (provedor.formato) {
+      case 'BRASILAPI':
+        return this.brasilApiClient.consultar(cnpj, provedor);
+      default:
+        return mapearReceitaWs(await this.receitaWsClient.consultar(cnpj, provedor));
+    }
   }
 
   private desembrulhar(entrada: EntradaCache): ConsultaCnpjDto {

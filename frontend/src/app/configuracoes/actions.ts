@@ -5,6 +5,8 @@ import type {
   AlcadaAprovacaoDto,
   ChaveLlmDto,
   CredencialErpDto,
+  ProvedorApiDto,
+  TipoProvedorApi,
   ComunicadoPedidoPdfDto,
   ConfiguracaoFuncionalidadesDto,
   ConfiguracaoLlmDto,
@@ -66,6 +68,59 @@ export async function atualizarCredenciaisErp(
 export async function testarConexaoRadar(): Promise<{ ok: boolean; mensagem: string }> {
   return apiFetch<{ ok: boolean; mensagem: string }>("/admin/configuracoes/credenciais-erp/testar-radar", {
     method: "POST",
+    cache: "no-store",
+  });
+}
+
+export async function criarProvedorApi(input: {
+  tipo: TipoProvedorApi;
+  formato: string;
+  rotulo: string;
+  urlBase: string;
+  token?: string;
+  limiteRequisicoes?: number;
+  janelaSegundos?: number;
+}): Promise<ProvedorApiDto> {
+  return apiFetch<ProvedorApiDto>("/admin/configuracoes/provedores-api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+}
+
+export async function atualizarProvedorApi(
+  id: string,
+  input: {
+    rotulo?: string;
+    urlBase?: string;
+    token?: string;
+    limiteRequisicoes?: number | null;
+    janelaSegundos?: number | null;
+    ativa?: boolean;
+  },
+): Promise<ProvedorApiDto> {
+  return apiFetch<ProvedorApiDto>(`/admin/configuracoes/provedores-api/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+}
+
+export async function removerProvedorApi(id: string): Promise<void> {
+  await apiFetch(`/admin/configuracoes/provedores-api/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+}
+
+// Lista inteira de ids do tipo na nova ordem (ordem = ordem de tentativa).
+export async function reordenarProvedoresApi(tipo: TipoProvedorApi, ids: string[]): Promise<ProvedorApiDto[]> {
+  return apiFetch<ProvedorApiDto[]>("/admin/configuracoes/provedores-api/ordem", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo, ids }),
     cache: "no-store",
   });
 }

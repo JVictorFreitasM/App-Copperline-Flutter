@@ -19,10 +19,20 @@ function montar() {
     ),
   };
   const configService = { get: () => undefined };
+  const cadeia = [
+    { id: 'p1', tipo: 'GEOCODIFICACAO', formato: 'NOMINATIM', rotulo: 'Nominatim', urlBase: 'https://nominatim.openstreetmap.org/search', token: null, limiteRequisicoes: null, janelaSegundos: null },
+  ];
+  const provedores = { cadeia: jest.fn().mockResolvedValue(cadeia) };
   return {
     redis,
     httpService,
-    service: new GeocodificacaoService(httpService as never, configService as never, redis as never),
+    provedores,
+    service: new GeocodificacaoService(
+      httpService as never,
+      configService as never,
+      redis as never,
+      provedores as never,
+    ),
   };
 }
 
@@ -75,5 +85,28 @@ describe('GeocodificacaoService', () => {
 
     await expect(m.service.localizar('Av Frei Serafim, Teresina PI')).rejects.toBeInstanceOf(BadGatewayException);
     expect([...m.redis.set.mock.calls.map((c) => c[0])].some((k) => String(k).includes('nao-encontrado'))).toBe(false);
+  });
+
+  it('primeiro provedor falha: usa o proximo da cadeia (fallback)', async () => {
+    const m = montar();
+    m.provedores.cadeia.mockResolvedValue([
+      { id: 'p1', formato: 'NOMINATIM', rotulo: 'A', urlBase: 'https://a.exemplo/search' },
+      { id: 'p2', formato: 'NOMINATIM', rotulo: 'B', urlBase: 'https://b.exemplo/search' },
+    ]);
+    m.httpService.get
+      .mockReturnValueOnce(throwError(() => new Error('fora do ar')))
+      .mockReturnValueOnce(of({ data: [{ lat: '1', lon: '2', display_name: 'Local B' }] }));
+
+    const resultado = await m.service.localizar('endereco qualquer');
+
+    expect(resultado.nomeExibicao).toBe('Local B');
+    expect(m.httpService.get).toHaveBeenNthCalledWith(2, 'https://b.exemplo/search', expect.anything());
+  });
+
+  it('sem nenhum provedor ativo: erro claro apontando a configuracao', async () => {
+    const m = montar();
+    m.provedores.cadeia.mockResolvedValue([]);
+
+    await expect(m.service.localizar('x y z')).rejects.toBeInstanceOf(BadGatewayException);
   });
 });

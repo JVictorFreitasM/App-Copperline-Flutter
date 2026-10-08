@@ -7,14 +7,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { mapearBrasilApi } from './brasilapi-mapper';
 import type { BrasilApiCnpjResponse } from './brasilapi.types';
 import type { ConsultaCnpjDto } from './dto/consulta-cnpj-response.dto';
 
-const URL_PADRAO = 'https://brasilapi.com.br/api/cnpj/v1';
 const TIMEOUT_MS = 15_000;
 
 // Segundo provedor (fallback da ReceitaWS, que no plano gratis so aceita 3
@@ -24,13 +22,13 @@ const TIMEOUT_MS = 15_000;
 export class BrasilApiCnpjClientService {
   private readonly logger = new Logger(BrasilApiCnpjClientService.name);
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
-  async consultar(cnpjNormalizado: string): Promise<ConsultaCnpjDto> {
-    const baseUrl = this.configService.get<string>('BRASILAPI_CNPJ_URL') ?? URL_PADRAO;
+  async consultar(
+    cnpjNormalizado: string,
+    provedor: { urlBase: string },
+  ): Promise<ConsultaCnpjDto> {
+    const baseUrl = provedor.urlBase;
     try {
       const resposta = await firstValueFrom(
         this.httpService.get<BrasilApiCnpjResponse>(`${baseUrl}/${cnpjNormalizado}`, {

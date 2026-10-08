@@ -7,12 +7,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import type { ReceitaWsResponse } from './receitaws.types';
 
-const URL_PADRAO = 'https://receitaws.com.br/v1/cnpj';
 const TIMEOUT_PADRAO_MS = 15_000;
 
 // Unico ponto que fala HTTP com a ReceitaWS (token, URL e tratamento de
@@ -22,15 +20,15 @@ const TIMEOUT_PADRAO_MS = 15_000;
 export class ReceitaWsClientService {
   private readonly logger = new Logger(ReceitaWsClientService.name);
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
-  async consultar(cnpjNormalizado: string): Promise<ReceitaWsResponse> {
-    const token = this.configService.get<string>('RECEITAWS_TOKEN');
-    const baseUrl =
-      this.configService.get<string>('RECEITAWS_API_URL') ?? URL_PADRAO;
+  // URL e token vem do provedor cadastrado no painel.
+  async consultar(
+    cnpjNormalizado: string,
+    provedor: { urlBase: string; token: string | null },
+  ): Promise<ReceitaWsResponse> {
+    const token = provedor.token;
+    const baseUrl = provedor.urlBase;
 
     try {
       const response = await firstValueFrom(
