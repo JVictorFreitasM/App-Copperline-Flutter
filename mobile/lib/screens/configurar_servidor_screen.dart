@@ -53,7 +53,7 @@ class _ConfigurarServidorScreenState extends ConsumerState<ConfigurarServidorScr
     }
     final uri = Uri.tryParse(texto);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
-      return 'Endereço inválido - use o formato http://IP:PORTA (ex: http://192.168.2.97:3010).';
+      return 'Endereço inválido - use o formato http://IP:PORTA (ex: http://IP-DO-SERVIDOR:3010).';
     }
     return null;
   }
@@ -109,7 +109,7 @@ class _ConfigurarServidorScreenState extends ConsumerState<ConfigurarServidorScr
               ),
               const SizedBox(height: 8),
               const Text(
-                'Informe o endereço da API do Copperline (ex: http://192.168.2.97:3010). '
+                'Informe o endereço da API do Copperline (ex: http://IP-DO-SERVIDOR:3010). '
                 'Se o IP do servidor mudar, volte aqui e atualize - não precisa reinstalar o app.',
                 style: TextStyle(fontSize: 13, color: AppColors.muted),
               ),
@@ -120,7 +120,7 @@ class _ConfigurarServidorScreenState extends ConsumerState<ConfigurarServidorScr
                 autocorrect: false,
                 decoration: InputDecoration(
                   labelText: 'Endereço do servidor',
-                  hintText: 'http://192.168.2.97:3010',
+                  hintText: 'http://IP-DO-SERVIDOR:3010',
                   errorText: _erro,
                   border: const OutlineInputBorder(),
                 ),

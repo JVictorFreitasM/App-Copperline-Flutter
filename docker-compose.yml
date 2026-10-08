@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: copperline
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-copperline}
     volumes:
       - copperline-postgres-data:/var/lib/postgresql/data
     # Exposto no host (backend/.env já aponta DATABASE_URL pra
@@ -39,7 +39,7 @@ services:
       # (state sempre "expira"). Sobrescrito aqui so pra esta verificacao
       # local - numa implantacao real atras de TLS, nao definir isso.
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copperline?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-copperline}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PORT: 3000
@@ -68,13 +68,13 @@ services:
       # atualizar aqui E em systems.redirect_uris no IdP (ja tem um
       # historico de IPs antigos la, nao precisa remover, so garantir que o
       # atual esteja presente).
-      IDP_AUTHORIZE_URL: http://192.168.2.202:3000
+      IDP_AUTHORIZE_URL: http://${HOST_PUBLICO:-localhost}:${IDP_PORTA:-3000}
       IDP_CLIENT_ID: ${IDP_CLIENT_ID}
       IDP_CLIENT_SECRET: ${IDP_CLIENT_SECRET}
       # Cadastrado EXATAMENTE assim em systems.redirect_uris no IdP - nao
       # mudar sem tambem atualizar o cadastro la (match tem que ser exato,
       # ver skill idp-client).
-      IDP_REDIRECT_URI: http://192.168.2.202:3010/auth/callback
+      IDP_REDIRECT_URI: http://${HOST_PUBLICO:-localhost}:3010/auth/callback
       # Destino pos-login quando NAO ha' `returnTo` salvo (ver
       # idp-auth.module.ts) - acontece sempre que o login comeca direto por
       # um card no portal do IdP, em vez de GET /auth/login desta app. Sem
@@ -83,7 +83,7 @@ services:
       # rede local (nao localhost, que so bateria no navegador rodando na
       # mesma maquina do backend), mesmo criterio de IDP_AUTHORIZE_URL/
       # IDP_REDIRECT_URI/API_PUBLIC_URL acima - muda junto se o IP mudar.
-      FRONTEND_PUBLIC_URL: http://192.168.2.202:3020
+      FRONTEND_PUBLIC_URL: http://${HOST_PUBLICO:-localhost}:3020
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       # AES-256-GCM (32 bytes em hex) - cifra/decifra segredos gravados em
       # runtime no Postgres (hoje so ConfiguracaoLlm.apiKey, ver
@@ -198,7 +198,7 @@ services:
       # nao so por porta/caminho), e a validacao de "state" (CSRF) sempre
       # falha com "Login expirado". Testando no celular fisico agora -
       # IP da rede local, mesmo motivo/valor do IDP_REDIRECT_URI.
-      API_PUBLIC_URL: http://192.168.2.202:3010
+      API_PUBLIC_URL: http://${HOST_PUBLICO:-localhost}:3010
       # Mesma chave do backend (ver ApiKeyGuard) - a Central de
       # Sincronizacao (OS-WEB-18) chama admin/sync/* server-side
       # (lib/admin-api.ts), nunca exposta ao navegador.
