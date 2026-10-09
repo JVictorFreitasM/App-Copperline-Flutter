@@ -526,63 +526,58 @@ export default async function PainelPage({
         )}
       </div>
 
-      {/* Secoes pesadas numa sanfona vertical (um painel aberto por vez, conteudo
-          montado so' quando aberto - o mapa precisa de container visivel). Abre
-          direto no comparativo quando ha vendedores escolhidos na URL. A listagem
-          de estoque critico saiu daqui (continua em /estoque e nos aneis acima). */}
-      <Sanfona
-        abertoInicial={vendedorIdsSelecionados.length > 0 ? "comparativo" : "eventos"}
-        itens={[
-          {
-            id: "eventos",
-            titulo: "Eventos recentes",
-            conteudo: (
-              <>
-                {!resumo ? (
-                  <ErroConexao mensagem={erroResumo!} />
-                ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
-                  <EstadoVazio mensagem="Nenhum evento recente." />
-                ) : (
-                  <CarrosselEventos
-                    itens={[
-                      ...resumo.pedidosRecentes.map((pedido) => {
-                        const situacao = configSituacaoPedido(pedido.situacao);
-                        const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
-                        return (
-                          <EventoCard
-                            key={`pedido-${pedido.id}`}
-                            icone={<IconeClipboard />}
-                            corIcone={situacao.enfase ? "primary" : "laranja"}
-                            titulo={`Pedido ${pedido.numero ?? "—"}`}
-                            descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
-                            horario={formatarData(pedido.dataHoraUltimaAlteracao)}
-                            acaoRotulo="Ver pedido"
-                            acaoHref={`/pedidos/${pedido.id}`}
-                          />
-                        );
-                      }),
-                      ...resumo.notasFiscaisRecentes.map((nota) => {
-                        const status = configStatusNfe(nota.statusNfe);
-                        const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
-                        return (
-                          <EventoCard
-                            key={`nota-${nota.id}`}
-                            icone={<IconeRecibo />}
-                            corIcone={status.enfase ? "primary" : "vermelho"}
-                            titulo={titulo}
-                            descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
-                            horario={formatarData(nota.dataEmissao)}
-                            acaoRotulo="Ver notas"
-                            acaoHref="/notas-fiscais"
-                          />
-                        );
-                      }),
-                    ]}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-ink">Eventos recentes</h2>
+        {!resumo ? (
+          <ErroConexao mensagem={erroResumo!} />
+        ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum evento recente." />
+        ) : (
+          <CarrosselEventos
+            itens={[
+              ...resumo.pedidosRecentes.map((pedido) => {
+                const situacao = configSituacaoPedido(pedido.situacao);
+                const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
+                return (
+                  <EventoCard
+                    key={`pedido-${pedido.id}`}
+                    icone={<IconeClipboard />}
+                    corIcone={situacao.enfase ? "primary" : "laranja"}
+                    titulo={`Pedido ${pedido.numero ?? "—"}`}
+                    descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
+                    horario={formatarData(pedido.dataHoraUltimaAlteracao)}
+                    acaoRotulo="Ver pedido"
+                    acaoHref={`/pedidos/${pedido.id}`}
                   />
-                )}
-              </>
-            ),
-          },
+                );
+              }),
+              ...resumo.notasFiscaisRecentes.map((nota) => {
+                const status = configStatusNfe(nota.statusNfe);
+                const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
+                return (
+                  <EventoCard
+                    key={`nota-${nota.id}`}
+                    icone={<IconeRecibo />}
+                    corIcone={status.enfase ? "primary" : "vermelho"}
+                    titulo={titulo}
+                    descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
+                    horario={formatarData(nota.dataEmissao)}
+                    acaoRotulo="Ver notas"
+                    acaoHref="/notas-fiscais"
+                  />
+                );
+              }),
+            ]}
+          />
+        )}
+      </section>
+
+      {/* Sanfona so' no comparativo (seletor + radar); os cards de eventos e o
+          mapa ficam sempre abertos, como antes. Abre direto quando ha vendedores
+          escolhidos na URL. */}
+      <Sanfona
+        abertoInicial={vendedorIdsSelecionados.length > 0 ? "comparativo" : null}
+        itens={[
           {
             id: "comparativo",
             titulo: "Comparativo de vendedores",
@@ -639,34 +634,30 @@ export default async function PainelPage({
               </>
             ),
           },
-          {
-            id: "mapa",
-            titulo: "Mapa de calor de vendas por região",
-            conteudo: (
-              <>
-                {!mapaCalor ? (
-                  <ErroConexao mensagem={erroMapaCalor!} />
-                ) : mapaCalor.pontos.length === 0 ? (
-                  <EstadoVazio mensagem="Nenhum cliente com localização definida e pedido no período selecionado." />
-                ) : (
-                  <>
-                    <Card className="h-[480px] overflow-hidden p-0">
-                      <MapaCalorVendasWrapper pontos={mapaCalor.pontos} />
-                    </Card>
-                    {mapaCalor.pontos.length < mapaCalor.totalClientesNoPeriodo && (
-                      <p className="text-xs text-muted">
-                        Mostrando {mapaCalor.pontos.length} de {mapaCalor.totalClientesNoPeriodo} cliente(s)
-                        com pedido no período - os demais não têm localização definida (pin manual via
-                        check-in de visita, OS-MOBILE-21).
-                      </p>
-                    )}
-                  </>
-                )}
-              </>
-            ),
-          },
         ]}
       />
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold text-ink">Mapa de calor de vendas por região</h2>
+        {!mapaCalor ? (
+          <ErroConexao mensagem={erroMapaCalor!} />
+        ) : mapaCalor.pontos.length === 0 ? (
+          <EstadoVazio mensagem="Nenhum cliente com localização definida e pedido no período selecionado." />
+        ) : (
+          <>
+            <Card className="h-[480px] overflow-hidden p-0">
+              <MapaCalorVendasWrapper pontos={mapaCalor.pontos} />
+            </Card>
+            {mapaCalor.pontos.length < mapaCalor.totalClientesNoPeriodo && (
+              <p className="text-xs text-muted">
+                Mostrando {mapaCalor.pontos.length} de {mapaCalor.totalClientesNoPeriodo} cliente(s)
+                com pedido no período - os demais não têm localização definida (pin manual via
+                check-in de visita, OS-MOBILE-21).
+              </p>
+            )}
+          </>
+        )}
+      </section>
     </main>
   );
 }
