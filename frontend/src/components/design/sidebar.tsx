@@ -103,7 +103,7 @@ export function Sidebar({
         onMouseLeave={() => !fixada && setSobreposta(false)}
         className={`flex h-screen flex-col border-r border-ink/5 bg-surface transition-transform duration-200 ease-out ${
           fixada
-            ? "sticky top-0 w-64 shrink-0"
+            ? "sticky top-0 z-40 w-64 shrink-0"
             : `fixed top-0 left-0 z-40 w-64 shadow-2xl ${
                 visivel ? "translate-x-0" : "-translate-x-full"
               }`
