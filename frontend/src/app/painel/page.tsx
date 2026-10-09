@@ -1,6 +1,5 @@
 import { apiFetch, ApiError } from "@/lib/api";
 import { exigirUsuarioAutenticado } from "@/lib/auth";
-import Form from "next/form";
 import type {
   ComparativoMensalDashboardDto,
   ComparativoVendedorDto,
@@ -19,15 +18,12 @@ import { nomeMesAbreviado, rotuloAnoMes } from "@/lib/dashboard";
 import { GraficoBarrasComparativo } from "@/components/design/grafico-barras-comparativo";
 import { MapaCalorVendasWrapper } from "@/components/design/mapa-calor-vendas-wrapper";
 import type { VendedorEquipeDto } from "@/lib/vendedores";
-import { formatarData, formatarMoeda, formatarNumero, formatarQuantidade } from "@/lib/formatacao";
+import { formatarData, formatarMoeda, formatarNumero } from "@/lib/formatacao";
 import { KpiHeaderCard } from "@/components/design/kpi-header-card";
 import { configSituacaoPedido } from "@/lib/pedidos";
 import { clienteDaNotaFiscal, configStatusNfe, rotuloTipoNotaFiscal } from "@/lib/notas-fiscais";
 import { ErroConexao, EstadoVazio } from "@/components/listagem-feedback";
-import { ListItem } from "@/components/design/list-item";
 import { Card } from "@/components/design/card";
-import { Badge } from "@/components/badge";
-import { PrimaryButton } from "@/components/design/button";
 import { FiltroForm, CampoFiltro, SelectFiltro } from "@/components/filtro";
 import { GraficoBarras } from "@/components/design/grafico-barras";
 import { GraficoRadar } from "@/components/design/grafico-radar";
@@ -36,6 +32,8 @@ import { CarrosselEventos } from "@/components/design/carrossel-eventos";
 import { DonutKpiCard } from "@/components/design/donut-kpi-card";
 import { GaugeCard } from "@/components/design/gauge-card";
 import { PainelResumo } from "@/components/design/painel-resumo";
+import { Sanfona } from "@/components/design/sanfona";
+import { SeletorVendedores } from "./seletor-vendedores";
 import { EventoCard } from "@/components/design/evento-card";
 import { IconeClipboard, IconeRecibo } from "@/components/design/icons";
 
@@ -64,7 +62,7 @@ export default async function PainelPage({
   searchParams: Promise<{
     dataInicial?: string;
     dataFinal?: string;
-    vendedorIds?: string;
+    vendedorIds?: string | string[];
     vendedorId?: string;
   }>;
 }) {
@@ -83,7 +81,11 @@ export default async function PainelPage({
     ...(vendedorId && { vendedorId }),
   }).toString();
 
-  const vendedorIdsSelecionados = (vendedorIds ?? "").split(",").filter(Boolean);
+  // Aceita "a,b" (formato do seletor) e tambem ?vendedorIds=a&vendedorIds=b (link
+  // antigo/manual): o Next entrega array quando o parametro se repete.
+  const vendedorIdsSelecionados = [
+    ...new Set((Array.isArray(vendedorIds) ? vendedorIds : [vendedorIds ?? ""]).flatMap((v) => v.split(",")).filter(Boolean)),
+  ];
 
   // OS-WEB-29: cada secao busca seu proprio dado de forma independente
   // (Promise.allSettled, nao Promise.all) - uma falha isolada num unico
@@ -524,168 +526,147 @@ export default async function PainelPage({
         )}
       </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Eventos recentes</h2>
-        {!resumo ? (
-          <ErroConexao mensagem={erroResumo!} />
-        ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum evento recente." />
-        ) : (
-          <CarrosselEventos
-            itens={[
-              ...resumo.pedidosRecentes.map((pedido) => {
-                const situacao = configSituacaoPedido(pedido.situacao);
-                const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
-                return (
-                  <EventoCard
-                    key={`pedido-${pedido.id}`}
-                    icone={<IconeClipboard />}
-                    corIcone={situacao.enfase ? "primary" : "laranja"}
-                    titulo={`Pedido ${pedido.numero ?? "—"}`}
-                    descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
-                    horario={formatarData(pedido.dataHoraUltimaAlteracao)}
-                    acaoRotulo="Ver pedido"
-                    acaoHref={`/pedidos/${pedido.id}`}
+      {/* Secoes pesadas numa sanfona vertical (um painel aberto por vez, conteudo
+          montado so' quando aberto - o mapa precisa de container visivel). Abre
+          direto no comparativo quando ha vendedores escolhidos na URL. A listagem
+          de estoque critico saiu daqui (continua em /estoque e nos aneis acima). */}
+      <Sanfona
+        abertoInicial={vendedorIdsSelecionados.length > 0 ? "comparativo" : "eventos"}
+        itens={[
+          {
+            id: "eventos",
+            titulo: "Eventos recentes",
+            conteudo: (
+              <>
+                {!resumo ? (
+                  <ErroConexao mensagem={erroResumo!} />
+                ) : resumo.pedidosRecentes.length === 0 && resumo.notasFiscaisRecentes.length === 0 ? (
+                  <EstadoVazio mensagem="Nenhum evento recente." />
+                ) : (
+                  <CarrosselEventos
+                    itens={[
+                      ...resumo.pedidosRecentes.map((pedido) => {
+                        const situacao = configSituacaoPedido(pedido.situacao);
+                        const titulo = pedido.cliente?.razaoSocial ?? "Cliente não identificado";
+                        return (
+                          <EventoCard
+                            key={`pedido-${pedido.id}`}
+                            icone={<IconeClipboard />}
+                            corIcone={situacao.enfase ? "primary" : "laranja"}
+                            titulo={`Pedido ${pedido.numero ?? "—"}`}
+                            descricao={`${titulo} · ${situacao.rotulo} · ${formatarMoeda(pedido.valorTotal)}`}
+                            horario={formatarData(pedido.dataHoraUltimaAlteracao)}
+                            acaoRotulo="Ver pedido"
+                            acaoHref={`/pedidos/${pedido.id}`}
+                          />
+                        );
+                      }),
+                      ...resumo.notasFiscaisRecentes.map((nota) => {
+                        const status = configStatusNfe(nota.statusNfe);
+                        const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
+                        return (
+                          <EventoCard
+                            key={`nota-${nota.id}`}
+                            icone={<IconeRecibo />}
+                            corIcone={status.enfase ? "primary" : "vermelho"}
+                            titulo={titulo}
+                            descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
+                            horario={formatarData(nota.dataEmissao)}
+                            acaoRotulo="Ver notas"
+                            acaoHref="/notas-fiscais"
+                          />
+                        );
+                      }),
+                    ]}
                   />
-                );
-              }),
-              ...resumo.notasFiscaisRecentes.map((nota) => {
-                const status = configStatusNfe(nota.statusNfe);
-                const titulo = `Nota ${nota.numero ?? "—"}${nota.serie ? `/${nota.serie}` : ""}`;
-                return (
-                  <EventoCard
-                    key={`nota-${nota.id}`}
-                    icone={<IconeRecibo />}
-                    corIcone={status.enfase ? "primary" : "vermelho"}
-                    titulo={titulo}
-                    descricao={`${clienteDaNotaFiscal(nota)} · ${status.rotulo} · ${rotuloTipoNotaFiscal(nota.tipo)}`}
-                    horario={formatarData(nota.dataEmissao)}
-                    acaoRotulo="Ver notas"
-                    acaoHref="/notas-fiscais"
+                )}
+              </>
+            ),
+          },
+          {
+            id: "comparativo",
+            titulo: "Comparativo de vendedores",
+            conteudo: (
+              <>
+                {!equipe ? (
+                  <ErroConexao mensagem={erroEquipe!} />
+                ) : equipe.length < MIN_VENDEDORES_COMPARATIVO ? (
+                  <EstadoVazio mensagem="Sua equipe tem menos de 2 vendedores - nada pra comparar." />
+                ) : (
+                  <SeletorVendedores
+                    vendedores={equipe.map((vendedor) => ({ id: vendedor.id, nome: vendedor.nome ?? "—" }))}
+                    selecionadosIniciais={vendedorIdsSelecionados}
+                    minimo={MIN_VENDEDORES_COMPARATIVO}
+                    maximo={MAX_VENDEDORES_COMPARATIVO}
                   />
-                );
-              }),
-            ]}
-          />
-        )}
-      </section>
+                )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">
-          Estoque crítico{estoqueCritico ? ` (${estoqueCritico.produtos.length})` : ""}
-        </h2>
-        {!estoqueCritico ? (
-          <ErroConexao mensagem={erroEstoqueCritico!} />
-        ) : estoqueCritico.produtos.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum produto com estoque crítico e pedido pendente no momento." />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {estoqueCritico.produtos.map((produto) => (
-              <ListItem
-                key={produto.produtoId}
-                href={`/produtos/${produto.produtoId}`}
-                titulo={produto.nome ?? produto.codigo}
-                subtitulo={`Código ${produto.codigo} · ${produto.quantidadePedidosPendentes} pedido(s) pendente(s)`}
-                valor={`${formatarQuantidade(produto.quantidadeDisponivel)} disponível`}
-                tag={<Badge enfase>Crítico</Badge>}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Comparativo de vendedores</h2>
-        {!equipe ? (
-          <ErroConexao mensagem={erroEquipe!} />
-        ) : equipe.length < MIN_VENDEDORES_COMPARATIVO ? (
-          <EstadoVazio mensagem="Sua equipe tem menos de 2 vendedores - nada pra comparar." />
-        ) : (
-          <Card>
-            <Form action="/painel" scroll={false} className="flex flex-col gap-3">
-              <input type="hidden" name="dataInicial" value={dataInicial ?? ""} />
-              <input type="hidden" name="dataFinal" value={dataFinal ?? ""} />
-              <p className="text-sm text-muted">
-                Escolha de {MIN_VENDEDORES_COMPARATIVO} a {MAX_VENDEDORES_COMPARATIVO} vendedores:
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {equipe.map((vendedor) => (
-                  <label key={vendedor.id} className="flex items-center gap-2 text-sm text-ink">
-                    <input
-                      type="checkbox"
-                      name="vendedorIds"
-                      value={vendedor.id}
-                      defaultChecked={vendedorIdsSelecionados.includes(vendedor.id)}
+                {vendedorIdsSelecionados.length > 0 &&
+                  vendedorIdsSelecionados.length < MIN_VENDEDORES_COMPARATIVO && (
+                    <EstadoVazio mensagem="Selecione pelo menos 2 vendedores pra comparar." />
+                  )}
+                {vendedorIdsSelecionados.length > MAX_VENDEDORES_COMPARATIVO && (
+                  <EstadoVazio mensagem={`Selecione no máximo ${MAX_VENDEDORES_COMPARATIVO} vendedores.`} />
+                )}
+                {erroComparativo && <ErroConexao mensagem={erroComparativo} />}
+                {comparativo && (
+                  <Card>
+                    <GraficoRadar
+                      eixos={[
+                        { chave: "valorVendido", rotulo: "Valor vendido" },
+                        { chave: "ticketMedio", rotulo: "Ticket médio" },
+                        { chave: "taxaAprovacaoDesconto", rotulo: "Aprovação de desconto" },
+                        { chave: "quantidadeVisitas", rotulo: "Visitas realizadas" },
+                      ]}
+                      series={comparativo.map((item) => ({
+                        nome: item.nome ?? "—",
+                        valores: {
+                          valorVendido: item.valorVendido,
+                          ticketMedio: item.ticketMedio,
+                          taxaAprovacaoDesconto: item.taxaAprovacaoDesconto ?? 0,
+                          quantidadeVisitas: item.quantidadeVisitas,
+                        },
+                      }))}
                     />
-                    {vendedor.nome ?? "—"}
-                  </label>
-                ))}
-              </div>
-              <div>
-                <PrimaryButton type="submit">Comparar</PrimaryButton>
-              </div>
-            </Form>
-          </Card>
-        )}
-
-        {vendedorIdsSelecionados.length > 0 &&
-          vendedorIdsSelecionados.length < MIN_VENDEDORES_COMPARATIVO && (
-            <EstadoVazio mensagem="Selecione pelo menos 2 vendedores pra comparar." />
-          )}
-        {vendedorIdsSelecionados.length > MAX_VENDEDORES_COMPARATIVO && (
-          <EstadoVazio mensagem={`Selecione no máximo ${MAX_VENDEDORES_COMPARATIVO} vendedores.`} />
-        )}
-        {erroComparativo && <ErroConexao mensagem={erroComparativo} />}
-        {comparativo && (
-          <Card>
-            <GraficoRadar
-              eixos={[
-                { chave: "valorVendido", rotulo: "Valor vendido" },
-                { chave: "ticketMedio", rotulo: "Ticket médio" },
-                { chave: "taxaAprovacaoDesconto", rotulo: "Aprovação de desconto" },
-                { chave: "quantidadeVisitas", rotulo: "Visitas realizadas" },
-              ]}
-              series={comparativo.map((item) => ({
-                nome: item.nome ?? "—",
-                valores: {
-                  valorVendido: item.valorVendido,
-                  ticketMedio: item.ticketMedio,
-                  taxaAprovacaoDesconto: item.taxaAprovacaoDesconto ?? 0,
-                  quantidadeVisitas: item.quantidadeVisitas,
-                },
-              }))}
-            />
-            {comparativo.some((item) => item.taxaAprovacaoDesconto === null) && (
-              <p className="mt-2 text-xs text-muted">
-                * Vendedor sem solicitação de desconto decidida no período aparece com 0% no eixo
-                de aprovação (não significa reprovação).
-              </p>
-            )}
-          </Card>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-ink">Mapa de calor de vendas por região</h2>
-        {!mapaCalor ? (
-          <ErroConexao mensagem={erroMapaCalor!} />
-        ) : mapaCalor.pontos.length === 0 ? (
-          <EstadoVazio mensagem="Nenhum cliente com localização definida e pedido no período selecionado." />
-        ) : (
-          <>
-            <Card className="h-[480px] overflow-hidden p-0">
-              <MapaCalorVendasWrapper pontos={mapaCalor.pontos} />
-            </Card>
-            {mapaCalor.pontos.length < mapaCalor.totalClientesNoPeriodo && (
-              <p className="text-xs text-muted">
-                Mostrando {mapaCalor.pontos.length} de {mapaCalor.totalClientesNoPeriodo} cliente(s)
-                com pedido no período - os demais não têm localização definida (pin manual via
-                check-in de visita, OS-MOBILE-21).
-              </p>
-            )}
-          </>
-        )}
-      </section>
+                    {comparativo.some((item) => item.taxaAprovacaoDesconto === null) && (
+                      <p className="mt-2 text-xs text-muted">
+                        * Vendedor sem solicitação de desconto decidida no período aparece com 0% no eixo
+                        de aprovação (não significa reprovação).
+                      </p>
+                    )}
+                  </Card>
+                )}
+              </>
+            ),
+          },
+          {
+            id: "mapa",
+            titulo: "Mapa de calor de vendas por região",
+            conteudo: (
+              <>
+                {!mapaCalor ? (
+                  <ErroConexao mensagem={erroMapaCalor!} />
+                ) : mapaCalor.pontos.length === 0 ? (
+                  <EstadoVazio mensagem="Nenhum cliente com localização definida e pedido no período selecionado." />
+                ) : (
+                  <>
+                    <Card className="h-[480px] overflow-hidden p-0">
+                      <MapaCalorVendasWrapper pontos={mapaCalor.pontos} />
+                    </Card>
+                    {mapaCalor.pontos.length < mapaCalor.totalClientesNoPeriodo && (
+                      <p className="text-xs text-muted">
+                        Mostrando {mapaCalor.pontos.length} de {mapaCalor.totalClientesNoPeriodo} cliente(s)
+                        com pedido no período - os demais não têm localização definida (pin manual via
+                        check-in de visita, OS-MOBILE-21).
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
+            ),
+          },
+        ]}
+      />
     </main>
   );
 }
