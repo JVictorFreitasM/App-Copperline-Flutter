@@ -45,6 +45,8 @@ export async function AppShell({ children }: { children: ReactNode }) {
     .then((meuVendedor) => meuVendedor.podeAprovar)
     .catch(() => false);
 
+  // Menu lateral por assunto (antes: 13 itens soltos no topo + 11 na
+  // "Administracao"). Mesmas telas e permissoes, so' reagrupadas e ordenadas.
   const secoes: SecaoNavSidebar[] = [
     {
       itens: [
@@ -54,12 +56,17 @@ export async function AppShell({ children }: { children: ReactNode }) {
         { href: "/pedidos", rotulo: "Pedidos", icone: <IconeClipboard /> },
         { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/notas-fiscais", rotulo: "Notas fiscais", icone: <IconeRecibo /> },
-        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ / CEP", icone: <IconeBusca /> },
         { href: "/tabelas-preco", rotulo: "Tabelas de preço", icone: <IconeMoeda /> },
+      ],
+    },
+    {
+      titulo: "Meu trabalho",
+      itens: [
+        { href: "/agendamentos", rotulo: "Minha agenda", icone: <IconeCalendario /> },
         { href: "/metas", rotulo: "Metas e ranking", icone: <IconeGrafico /> },
         { href: "/oportunidades", rotulo: "Oportunidades", icone: <IconeAlerta /> },
         { href: "/coberturas", rotulo: "Cobertura temporária", icone: <IconePessoas /> },
-        { href: "/agendamentos", rotulo: "Minha agenda", icone: <IconeCalendario /> },
+        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ / CEP", icone: <IconeBusca /> },
         { href: "/notificacoes", rotulo: "Notificações", icone: <IconeSino /> },
       ],
     },
@@ -88,35 +95,40 @@ export async function AppShell({ children }: { children: ReactNode }) {
     ...(user.role === "admin"
       ? [
           {
-            titulo: "Administração",
+            titulo: "Cadastros",
             itens: [
+              { href: "/admin/vendedores", rotulo: "Vendedores", icone: <IconePessoas /> },
+              { href: "/admin/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
+              {
+                href: "/admin/tipos-acondicionamento",
+                rotulo: "Tipos de acondicionamento",
+                icone: <IconeCamadas />,
+              },
+              {
+                href: "/admin/pagamento",
+                rotulo: "Forma e condição de pagamento",
+                icone: <IconeMoeda />,
+              },
+              { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
+              { href: "/admin/metas", rotulo: "Metas e gamificação", icone: <IconeGrafico /> },
+              { href: "/admin/coberturas", rotulo: "Coberturas temporárias", icone: <IconePessoas /> },
+            ],
+          },
+          {
+            titulo: "Sistema",
+            itens: [
+              { href: "/admin/acessos", rotulo: "Acessos", icone: <IconeEscudo /> },
               { href: "/admin/sincronizacao", rotulo: "Sincronização", icone: <IconeAtualizar /> },
               {
                 href: "/admin/qualidade-dados",
                 rotulo: "Qualidade de dados",
                 icone: <IconeEscudo />,
               },
-              { href: "/admin/acessos", rotulo: "Acessos", icone: <IconeEscudo /> },
-              { href: "/admin/vendedores", rotulo: "Vendedores", icone: <IconePessoas /> },
-              {
-                href: "/admin/tipos-acondicionamento",
-                rotulo: "Tipos de acondicionamento",
-                icone: <IconeCamadas />,
-              },
-              { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
-              { href: "/admin/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
-              {
-                href: "/admin/pagamento",
-                rotulo: "Forma e condição de pagamento",
-                icone: <IconeMoeda />,
-              },
               {
                 href: "/admin/importar-swagger",
                 rotulo: "Importar via Swagger",
                 icone: <IconeUpload />,
               },
-              { href: "/admin/metas", rotulo: "Metas e gamificação", icone: <IconeGrafico /> },
-              { href: "/admin/coberturas", rotulo: "Coberturas temporárias", icone: <IconePessoas /> },
             ],
           },
         ]

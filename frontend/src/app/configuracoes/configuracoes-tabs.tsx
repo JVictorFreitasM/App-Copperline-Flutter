@@ -25,15 +25,35 @@ import { AbaRastreio } from "./aba-rastreio";
 
 type Aba = "orcamento" | "rastreio" | "alcada" | "llm" | "documento-pedido" | "funcionalidades" | "integracao-erp" | "provedores-api";
 
-const ABAS: { id: Aba; rotulo: string }[] = [
-  { id: "orcamento", rotulo: "Orçamento" },
-  { id: "rastreio", rotulo: "Rastreio" },
-  { id: "alcada", rotulo: "Alçada de aprovação" },
-  { id: "llm", rotulo: "LLM" },
-  { id: "documento-pedido", rotulo: "Documento do Pedido" },
-  { id: "funcionalidades", rotulo: "Funcionalidades" },
-  { id: "integracao-erp", rotulo: "Integração ERP" },
-  { id: "provedores-api", rotulo: "Provedores de API" },
+// Abas agrupadas por assunto (dois niveis: grupo -> aba) - a barra unica de 8
+// abas ficou longa demais. Mesmas telas de antes, so reorganizadas.
+const GRUPOS: { id: string; rotulo: string; abas: { id: Aba; rotulo: string }[] }[] = [
+  {
+    id: "comercial",
+    rotulo: "Comercial",
+    abas: [
+      { id: "orcamento", rotulo: "Orçamento" },
+      { id: "alcada", rotulo: "Alçada de aprovação" },
+      { id: "documento-pedido", rotulo: "Documento do Pedido" },
+    ],
+  },
+  {
+    id: "operacao",
+    rotulo: "Operação",
+    abas: [
+      { id: "funcionalidades", rotulo: "Funcionalidades" },
+      { id: "rastreio", rotulo: "Rastreio" },
+    ],
+  },
+  {
+    id: "integracoes",
+    rotulo: "Integrações",
+    abas: [
+      { id: "integracao-erp", rotulo: "ERP (WK Radar)" },
+      { id: "provedores-api", rotulo: "Provedores de API" },
+      { id: "llm", rotulo: "LLM" },
+    ],
+  },
 ];
 
 export function ConfiguracoesTabs({
@@ -59,25 +79,42 @@ export function ConfiguracoesTabs({
   credenciaisErpIniciais: CredencialErpDto[];
   provedoresApiIniciais: ProvedorApiDto[];
 }) {
-  const [abaAtiva, setAbaAtiva] = useState<Aba>("alcada");
+  const [abaAtiva, setAbaAtiva] = useState<Aba>("orcamento");
+  const grupoAtivo = GRUPOS.find((grupo) => grupo.abas.some((aba) => aba.id === abaAtiva)) ?? GRUPOS[0];
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex gap-6 border-b border-ink/5">
-        {ABAS.map((aba) => (
-          <button
-            key={aba.id}
-            type="button"
-            onClick={() => setAbaAtiva(aba.id)}
-            className={`border-b-2 pb-3 text-sm font-medium transition ${
-              abaAtiva === aba.id
-                ? "border-primary text-ink"
-                : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            {aba.rotulo}
-          </button>
-        ))}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          {GRUPOS.map((grupo) => (
+            <button
+              key={grupo.id}
+              type="button"
+              onClick={() => setAbaAtiva(grupo.abas[0].id)}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                grupoAtivo.id === grupo.id ? "bg-solid text-on-solid" : "bg-surface text-muted shadow-sm hover:text-ink"
+              }`}
+            >
+              {grupo.rotulo}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-6 border-b border-ink/5">
+          {grupoAtivo.abas.map((aba) => (
+            <button
+              key={aba.id}
+              type="button"
+              onClick={() => setAbaAtiva(aba.id)}
+              className={`border-b-2 pb-3 text-sm font-medium transition ${
+                abaAtiva === aba.id
+                  ? "border-primary text-ink"
+                  : "border-transparent text-muted hover:text-ink"
+              }`}
+            >
+              {aba.rotulo}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>
