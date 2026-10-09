@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { IconeChevronDireita, IconeMenu, IconePino } from "./icons";
 
 const CHAVE_FIXADA = "sidebar_fixada";
@@ -44,9 +44,13 @@ export interface ItemNavSidebar {
   badgeNovo?: boolean;
 }
 
-export interface SecaoNavSidebar {
-  titulo?: string;
-  itens: ItemNavSidebar[];
+// Menu de primeiro nivel: ou um link direto (href) ou um grupo com submenu
+// (itens) que abre ao passar o mouse (flyout ao lado da barra).
+export interface MenuNavSidebar {
+  rotulo: string;
+  icone: ReactNode;
+  href?: string;
+  itens?: ItemNavSidebar[];
 }
 
 // Sidebar com dois modos (pedido explícito do usuário): FIXADA (parte do
@@ -63,10 +67,10 @@ export interface SecaoNavSidebar {
 // "Constructive"). Separação do conteúdo vem só do fundo `background`
 // cinza-azulado atrás da área principal, não de cor própria da sidebar.
 export function Sidebar({
-  secoes,
+  menus,
   nomeUsuario,
 }: {
-  secoes: SecaoNavSidebar[];
+  menus: MenuNavSidebar[];
   nomeUsuario: string;
 }) {
   const pathname = usePathname();
@@ -117,43 +121,14 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-6">
-          {secoes.map((secao, indice) => (
-            <div key={secao.titulo ?? indice} className="flex flex-col gap-1">
-              {secao.titulo && (
-                <p className="px-3 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
-                  {secao.titulo}
-                </p>
-              )}
-              {secao.itens.map((item) => {
-                const ativo = pathname?.startsWith(item.href) ?? false;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-                      ativo
-                        ? "bg-primary-light font-medium text-primary"
-                        : "text-muted hover:bg-background hover:text-ink"
-                    }`}
-                  >
-                    <span className="shrink-0">{item.icone}</span>
-                    <span className="flex-1 truncate">{item.rotulo}</span>
-                    {item.badgeNovo ? (
-                      <span className="rounded-full bg-accent-orange px-2 py-0.5 text-[10px] font-bold text-white">
-                        NEW
-                      </span>
-                    ) : item.badge ? (
-                      <span className="rounded-full bg-badge px-2 py-0.5 text-[10px] font-semibold text-muted">
-                        {item.badge}
-                      </span>
-                    ) : null}
-                    <IconeChevronDireita />
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-6">
+          {menus.map((menu) =>
+            menu.itens ? (
+              <GrupoMenu key={menu.rotulo} menu={menu} pathname={pathname ?? ""} />
+            ) : (
+              <LinkMenu key={menu.rotulo} menu={menu} ativo={menu.href ? (pathname?.startsWith(menu.href) ?? false) : false} />
+            ),
+          )}
         </nav>
 
         <div className="border-t border-ink/5 px-6 py-4 text-xs text-muted">
@@ -161,5 +136,107 @@ export function Sidebar({
         </div>
       </aside>
     </>
+  );
+}
+
+const CLASSE_BASE_LINHA = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition";
+
+function classeLinha(ativo: boolean, aberto = false) {
+  if (ativo) return `${CLASSE_BASE_LINHA} bg-primary-light font-medium text-primary`;
+  return `${CLASSE_BASE_LINHA} ${aberto ? "bg-background text-ink" : "text-muted hover:bg-background hover:text-ink"}`;
+}
+
+function LinkMenu({ menu, ativo }: { menu: MenuNavSidebar; ativo: boolean }) {
+  return (
+    <Link href={menu.href ?? "#"} className={classeLinha(ativo)}>
+      <span className="shrink-0">{menu.icone}</span>
+      <span className="flex-1 truncate">{menu.rotulo}</span>
+    </Link>
+  );
+}
+
+const LARGURA_BARRA_PX = 256; // w-64
+const ALTURA_ITEM_PX = 44;
+
+function Selos({ item }: { item: ItemNavSidebar }) {
+  if (item.badgeNovo) {
+    return (
+      <span className="rounded-full bg-accent-orange px-2 py-0.5 text-[10px] font-bold text-white">NEW</span>
+    );
+  }
+  if (item.badge) {
+    return (
+      <span className="rounded-full bg-badge px-2 py-0.5 text-[10px] font-semibold text-muted">{item.badge}</span>
+    );
+  }
+  return null;
+}
+
+// Menu com submenu: o painel abre ao lado da barra quando o mouse passa (ou ao
+// clicar/tocar e com Enter/Espaco), fica aberto enquanto o mouse estiver na linha
+// OU no painel (pequeno atraso ao sair evita fechar no vao entre os dois) e fecha
+// com Esc. Posicao `fixed` calculada pela linha do menu, ajustada pra nao sair
+// da tela - o `nav` rola (overflow) e cortaria um painel absoluto.
+function GrupoMenu({ menu, pathname }: { menu: MenuNavSidebar; pathname: string }) {
+  const itens = menu.itens ?? [];
+  const [aberto, setAberto] = useState(false);
+  const [topo, setTopo] = useState(0);
+  const linhaRef = useRef<HTMLButtonElement>(null);
+  const timerFechar = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const grupoAtivo = itens.some((item) => pathname.startsWith(item.href));
+
+  function abrir() {
+    if (timerFechar.current) clearTimeout(timerFechar.current);
+    const retangulo = linhaRef.current?.getBoundingClientRect();
+    if (retangulo) {
+      const alturaPainel = itens.length * ALTURA_ITEM_PX + 56;
+      setTopo(Math.max(8, Math.min(retangulo.top - 8, window.innerHeight - alturaPainel - 8)));
+    }
+    setAberto(true);
+  }
+
+  function agendarFechamento() {
+    if (timerFechar.current) clearTimeout(timerFechar.current);
+    timerFechar.current = setTimeout(() => setAberto(false), 150);
+  }
+
+  return (
+    <div onMouseEnter={abrir} onMouseLeave={agendarFechamento} onKeyDown={(e) => e.key === "Escape" && setAberto(false)}>
+      <button
+        ref={linhaRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        onClick={() => (aberto ? setAberto(false) : abrir())}
+        className={classeLinha(grupoAtivo, aberto)}
+      >
+        <span className="shrink-0">{menu.icone}</span>
+        <span className="flex-1 truncate text-left">{menu.rotulo}</span>
+        <IconeChevronDireita />
+      </button>
+
+      {aberto && (
+        <div
+          role="menu"
+          style={{ top: topo, left: LARGURA_BARRA_PX }}
+          className="fixed z-50 w-64 rounded-card border border-ink/5 bg-surface p-2 shadow-2xl"
+        >
+          <p className="px-3 pt-1 pb-2 text-xs font-semibold tracking-wide text-muted uppercase">{menu.rotulo}</p>
+          {itens.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              role="menuitem"
+              onClick={() => setAberto(false)}
+              className={classeLinha(pathname.startsWith(item.href))}
+            >
+              <span className="shrink-0">{item.icone}</span>
+              <span className="flex-1 truncate">{item.rotulo}</span>
+              <Selos item={item} />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -22,7 +22,7 @@ import {
   IconeAlerta,
   IconeSino,
 } from "./icons";
-import { Sidebar, type SecaoNavSidebar } from "./sidebar";
+import { Sidebar, type MenuNavSidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
 // Casca do app (sidebar + topbar, ver skill design-system - referência
@@ -45,49 +45,51 @@ export async function AppShell({ children }: { children: ReactNode }) {
     .then((meuVendedor) => meuVendedor.podeAprovar)
     .catch(() => false);
 
-  // Menu lateral por assunto (antes: 13 itens soltos no topo + 11 na
-  // "Administracao"). Mesmas telas e permissoes, so' reagrupadas e ordenadas.
-  const secoes: SecaoNavSidebar[] = [
+  // Menu lateral em dois niveis (menu > submenu aberto ao passar o mouse). Mesmas
+  // telas e permissoes de antes, so' agrupadas por assunto.
+  const menus: MenuNavSidebar[] = [
+    { rotulo: "Painel", href: "/painel", icone: <IconeGrade /> },
     {
+      rotulo: "Vendas",
+      icone: <IconeClipboard />,
       itens: [
-        { href: "/painel", rotulo: "Painel", icone: <IconeGrade /> },
         { href: "/clientes", rotulo: "Clientes", icone: <IconePessoas /> },
-        { href: "/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
         { href: "/pedidos", rotulo: "Pedidos", icone: <IconeClipboard /> },
-        { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/notas-fiscais", rotulo: "Notas fiscais", icone: <IconeRecibo /> },
+        { href: "/oportunidades", rotulo: "Oportunidades", icone: <IconeAlerta /> },
+        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ / CEP", icone: <IconeBusca /> },
+      ],
+    },
+    {
+      rotulo: "Produtos",
+      icone: <IconeCaixa />,
+      itens: [
+        { href: "/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
+        { href: "/estoque", rotulo: "Estoque", icone: <IconeCamadas /> },
         { href: "/tabelas-preco", rotulo: "Tabelas de preço", icone: <IconeMoeda /> },
       ],
     },
     {
-      titulo: "Meu trabalho",
+      rotulo: "Minha rotina",
+      icone: <IconeCalendario />,
       itens: [
         { href: "/agendamentos", rotulo: "Minha agenda", icone: <IconeCalendario /> },
         { href: "/metas", rotulo: "Metas e ranking", icone: <IconeGrafico /> },
-        { href: "/oportunidades", rotulo: "Oportunidades", icone: <IconeAlerta /> },
         { href: "/coberturas", rotulo: "Cobertura temporária", icone: <IconePessoas /> },
-        { href: "/consulta-cnpj", rotulo: "Consulta de CNPJ / CEP", icone: <IconeBusca /> },
         { href: "/notificacoes", rotulo: "Notificações", icone: <IconeSino /> },
       ],
     },
     ...(podeAprovar
       ? [
           {
-            titulo: "Equipe",
+            rotulo: "Equipe",
+            icone: <IconeCheck />,
             itens: [
               { href: "/aprovacoes", rotulo: "Aprovações", icone: <IconeCheck /> },
               { href: "/rastreio-equipe", rotulo: "Rastreio de equipe", icone: <IconeMapa /> },
               { href: "/admin/visitas", rotulo: "Visitas da equipe", icone: <IconeCalendario /> },
-              {
-                href: "/admin/agendamentos",
-                rotulo: "Agendamentos da equipe",
-                icone: <IconeCalendario />,
-              },
-              {
-                href: "/admin/relatorio-pedidos",
-                rotulo: "Relatório de pedidos",
-                icone: <IconeGrafico />,
-              },
+              { href: "/admin/agendamentos", rotulo: "Agendamentos da equipe", icone: <IconeCalendario /> },
+              { href: "/admin/relatorio-pedidos", rotulo: "Relatório de pedidos", icone: <IconeGrafico /> },
             ],
           },
         ]
@@ -95,40 +97,26 @@ export async function AppShell({ children }: { children: ReactNode }) {
     ...(user.role === "admin"
       ? [
           {
-            titulo: "Cadastros",
+            rotulo: "Cadastros",
+            icone: <IconePessoas />,
             itens: [
               { href: "/admin/vendedores", rotulo: "Vendedores", icone: <IconePessoas /> },
               { href: "/admin/produtos", rotulo: "Produtos", icone: <IconeCaixa /> },
-              {
-                href: "/admin/tipos-acondicionamento",
-                rotulo: "Tipos de acondicionamento",
-                icone: <IconeCamadas />,
-              },
-              {
-                href: "/admin/pagamento",
-                rotulo: "Forma e condição de pagamento",
-                icone: <IconeMoeda />,
-              },
+              { href: "/admin/tipos-acondicionamento", rotulo: "Tipos de acondicionamento", icone: <IconeCamadas /> },
+              { href: "/admin/pagamento", rotulo: "Forma e condição de pagamento", icone: <IconeMoeda /> },
               { href: "/admin/documentos", rotulo: "Documentos", icone: <IconeUpload /> },
               { href: "/admin/metas", rotulo: "Metas e gamificação", icone: <IconeGrafico /> },
               { href: "/admin/coberturas", rotulo: "Coberturas temporárias", icone: <IconePessoas /> },
             ],
           },
           {
-            titulo: "Sistema",
+            rotulo: "Sistema",
+            icone: <IconeEscudo />,
             itens: [
               { href: "/admin/acessos", rotulo: "Acessos", icone: <IconeEscudo /> },
               { href: "/admin/sincronizacao", rotulo: "Sincronização", icone: <IconeAtualizar /> },
-              {
-                href: "/admin/qualidade-dados",
-                rotulo: "Qualidade de dados",
-                icone: <IconeEscudo />,
-              },
-              {
-                href: "/admin/importar-swagger",
-                rotulo: "Importar via Swagger",
-                icone: <IconeUpload />,
-              },
+              { href: "/admin/qualidade-dados", rotulo: "Qualidade de dados", icone: <IconeEscudo /> },
+              { href: "/admin/importar-swagger", rotulo: "Importar via Swagger", icone: <IconeUpload /> },
             ],
           },
         ]
@@ -137,7 +125,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar secoes={secoes} nomeUsuario={user.name} />
+      <Sidebar menus={menus} nomeUsuario={user.name} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           nomeUsuario={user.name}
